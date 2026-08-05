@@ -64,6 +64,12 @@
   .checkgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12.5px;}
   .checkgrid label{display:flex;align-items:center;gap:6px;font-weight:normal;}
   .checkgrid input{width:auto;}
+  .diagram-block{margin-bottom:16px;text-align:center;}
+  .diagram-label{font-size:11px;font-weight:bold;color:#1F3864;margin-bottom:4px;letter-spacing:.5px;}
+  .car-diagram{width:100%;display:block;margin:0 auto;background:#f7f9fc;
+    border:1px solid #ccd0d8;border-radius:8px;cursor:crosshair;}
+  .diagram-block button{margin-top:6px;width:auto;padding:6px 12px;font-size:11px;
+    border:1px dashed var(--navy);border-radius:6px;background:#fff;color:var(--navy);}
   .bottombar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--border);
     display:flex;gap:6px;padding:8px;max-width:820px;margin:0 auto;box-shadow:0 -2px 8px rgba(0,0,0,.1);}
   .bottombar button{flex:1;padding:11px 4px;border:none;border-radius:8px;font-weight:bold;font-size:11.5px;}
@@ -97,7 +103,9 @@
   body.pdf-mode .topbar, body.pdf-mode .tabs, body.pdf-mode .bottombar,
   body.pdf-mode .banner, body.pdf-mode .no-print{display:none !important;}
   body.pdf-mode{background:#fff;}
-  body.pdf-mode .card{box-shadow:none;border:none;}
+  body.pdf-mode .card{box-shadow:none;border:none;page-break-inside:avoid;break-inside:avoid;}
+  body.pdf-mode tr, body.pdf-mode img, body.pdf-mode #printHeader{
+    page-break-inside:avoid;break-inside:avoid;}
   body.pdf-mode .app{padding:0;max-width:100%;}
   body.pdf-mode table, body.pdf-mode td, body.pdf-mode th{
     border-left:none !important;border-right:none !important;border-top:none !important;}
@@ -245,22 +253,84 @@
       </div>
 
       <label>Vehicle Damage Diagram (Scratches / Dents)</label>
-      <p style="font-size:11px;color:#666;margin:2px 0 8px;">Tap the diagram to mark a spot. Tap an existing mark to remove it.</p>
-      <svg id="carSvg" viewBox="0 0 200 400" onclick="markDamage(event)"
-           style="width:100%;max-width:240px;display:block;margin:0 auto;background:#f7f9fc;
-           border:1px solid #ccd0d8;border-radius:8px;cursor:crosshair;">
-        <rect x="30" y="20" width="140" height="360" rx="40" ry="40" fill="#ffffff" stroke="#1F3864" stroke-width="3"></rect>
-        <path d="M50,90 L150,90 L135,140 L65,140 Z" fill="#eef1f5" stroke="#1F3864" stroke-width="1.5"></path>
-        <path d="M50,310 L150,310 L135,260 L65,260 Z" fill="#eef1f5" stroke="#1F3864" stroke-width="1.5"></path>
-        <rect x="65" y="140" width="70" height="120" rx="10" fill="#f7f9fc" stroke="#1F3864" stroke-width="1.5"></rect>
-        <rect x="8" y="70" width="20" height="55" rx="6" fill="#333"></rect>
-        <rect x="172" y="70" width="20" height="55" rx="6" fill="#333"></rect>
-        <rect x="8" y="275" width="20" height="55" rx="6" fill="#333"></rect>
-        <rect x="172" y="275" width="20" height="55" rx="6" fill="#333"></rect>
-        <text x="100" y="14" text-anchor="middle" font-size="12" fill="#555">FRONT</text>
-        <text x="100" y="396" text-anchor="middle" font-size="12" fill="#555">REAR</text>
-      </svg>
-      <button class="addrow no-print" onclick="clearDamageMarks()" style="margin-top:8px;">Clear Marks</button>
+      <p style="font-size:11px;color:#666;margin:2px 0 10px;">Tap any diagram to mark a spot. Tap an existing mark to remove it.</p>
+
+      <div class="diagram-block">
+        <div class="diagram-label">TOP VIEW</div>
+        <svg id="carSvg_top" viewBox="0 0 200 400" onclick="markDamage(event,'top')" class="car-diagram" style="max-width:220px;">
+          <rect x="30" y="20" width="140" height="360" rx="40" ry="40" fill="#ffffff" stroke="#1F3864" stroke-width="3"></rect>
+          <path d="M50,90 L150,90 L135,140 L65,140 Z" fill="#eef1f5" stroke="#1F3864" stroke-width="1.5"></path>
+          <path d="M50,310 L150,310 L135,260 L65,260 Z" fill="#eef1f5" stroke="#1F3864" stroke-width="1.5"></path>
+          <rect x="65" y="140" width="70" height="120" rx="10" fill="#f7f9fc" stroke="#1F3864" stroke-width="1.5"></rect>
+          <rect x="8" y="70" width="20" height="55" rx="6" fill="#333"></rect>
+          <rect x="172" y="70" width="20" height="55" rx="6" fill="#333"></rect>
+          <rect x="8" y="275" width="20" height="55" rx="6" fill="#333"></rect>
+          <rect x="172" y="275" width="20" height="55" rx="6" fill="#333"></rect>
+          <text x="100" y="14" text-anchor="middle" font-size="12" fill="#555">FRONT</text>
+          <text x="100" y="396" text-anchor="middle" font-size="12" fill="#555">REAR</text>
+        </svg>
+        <button class="addrow no-print" onclick="clearDamageMarks('top')">Clear Top View</button>
+      </div>
+
+      <div class="diagram-block">
+        <div class="diagram-label">FRONT VIEW</div>
+        <svg id="carSvg_front" viewBox="0 0 240 170" onclick="markDamage(event,'front')" class="car-diagram" style="max-width:260px;">
+          <rect x="30" y="40" width="180" height="100" rx="26" fill="#ffffff" stroke="#1F3864" stroke-width="3"></rect>
+          <rect x="70" y="15" width="100" height="35" rx="10" fill="#eef1f5" stroke="#1F3864" stroke-width="1.5"></rect>
+          <circle cx="55" cy="95" r="14" fill="#ffffff" stroke="#1F3864" stroke-width="2"></circle>
+          <circle cx="185" cy="95" r="14" fill="#ffffff" stroke="#1F3864" stroke-width="2"></circle>
+          <rect x="90" y="115" width="60" height="15" rx="4" fill="#eef1f5" stroke="#1F3864" stroke-width="1"></rect>
+          <rect x="10" y="120" width="20" height="35" rx="6" fill="#333"></rect>
+          <rect x="210" y="120" width="20" height="35" rx="6" fill="#333"></rect>
+        </svg>
+        <button class="addrow no-print" onclick="clearDamageMarks('front')">Clear Front View</button>
+      </div>
+
+      <div class="diagram-block">
+        <div class="diagram-label">REAR VIEW</div>
+        <svg id="carSvg_rear" viewBox="0 0 240 170" onclick="markDamage(event,'rear')" class="car-diagram" style="max-width:260px;">
+          <rect x="30" y="40" width="180" height="100" rx="26" fill="#ffffff" stroke="#1F3864" stroke-width="3"></rect>
+          <rect x="70" y="15" width="100" height="35" rx="10" fill="#eef1f5" stroke="#1F3864" stroke-width="1.5"></rect>
+          <rect x="42" y="85" width="26" height="16" rx="4" fill="#ffffff" stroke="#1F3864" stroke-width="2"></rect>
+          <rect x="172" y="85" width="26" height="16" rx="4" fill="#ffffff" stroke="#1F3864" stroke-width="2"></rect>
+          <rect x="95" y="118" width="50" height="14" rx="3" fill="#eef1f5" stroke="#1F3864" stroke-width="1"></rect>
+          <rect x="10" y="120" width="20" height="35" rx="6" fill="#333"></rect>
+          <rect x="210" y="120" width="20" height="35" rx="6" fill="#333"></rect>
+        </svg>
+        <button class="addrow no-print" onclick="clearDamageMarks('rear')">Clear Rear View</button>
+      </div>
+
+      <div class="diagram-block">
+        <div class="diagram-label">LEFT SIDE VIEW</div>
+        <svg id="carSvg_left" viewBox="0 0 400 180" onclick="markDamage(event,'left')" class="car-diagram" style="max-width:340px;">
+          <path d="M20,110 Q20,80 60,78 L100,50 Q120,35 160,35 L260,35 Q290,35 305,55 L340,78 Q380,80 380,110 L380,120 Q380,135 365,135 L35,135 Q20,135 20,120 Z"
+                fill="#ffffff" stroke="#1F3864" stroke-width="3"></path>
+          <path d="M110,75 L150,50 Q165,42 185,42 L250,42 Q270,42 285,58 L310,75 Z" fill="#eef1f5" stroke="#1F3864" stroke-width="1.5"></path>
+          <line x1="205" y1="42" x2="205" y2="75" stroke="#1F3864" stroke-width="1.5"></line>
+          <circle cx="95" cy="135" r="28" fill="#333" stroke="#1F3864" stroke-width="2"></circle>
+          <circle cx="95" cy="135" r="10" fill="#eef1f5"></circle>
+          <circle cx="305" cy="135" r="28" fill="#333" stroke="#1F3864" stroke-width="2"></circle>
+          <circle cx="305" cy="135" r="10" fill="#eef1f5"></circle>
+        </svg>
+        <button class="addrow no-print" onclick="clearDamageMarks('left')">Clear Left View</button>
+      </div>
+
+      <div class="diagram-block">
+        <div class="diagram-label">RIGHT SIDE VIEW</div>
+        <svg id="carSvg_right" viewBox="0 0 400 180" onclick="markDamage(event,'right')" class="car-diagram" style="max-width:340px;">
+          <g transform="scale(-1,1) translate(-400,0)">
+            <path d="M20,110 Q20,80 60,78 L100,50 Q120,35 160,35 L260,35 Q290,35 305,55 L340,78 Q380,80 380,110 L380,120 Q380,135 365,135 L35,135 Q20,135 20,120 Z"
+                  fill="#ffffff" stroke="#1F3864" stroke-width="3"></path>
+            <path d="M110,75 L150,50 Q165,42 185,42 L250,42 Q270,42 285,58 L310,75 Z" fill="#eef1f5" stroke="#1F3864" stroke-width="1.5"></path>
+            <line x1="205" y1="42" x2="205" y2="75" stroke="#1F3864" stroke-width="1.5"></line>
+            <circle cx="95" cy="135" r="28" fill="#333" stroke="#1F3864" stroke-width="2"></circle>
+            <circle cx="95" cy="135" r="10" fill="#eef1f5"></circle>
+            <circle cx="305" cy="135" r="28" fill="#333" stroke="#1F3864" stroke-width="2"></circle>
+            <circle cx="305" cy="135" r="10" fill="#eef1f5"></circle>
+          </g>
+        </svg>
+        <button class="addrow no-print" onclick="clearDamageMarks('right')">Clear Right View</button>
+      </div>
 
       <label style="margin-top:10px;display:block;">Items Received With Vehicle</label>
       <div class="checkgrid">
@@ -433,28 +503,29 @@ const COMPANIES = [
   }
 ];
 
-/* ===================== Vehicle Damage Diagram ===================== */
-let damageMarks = []; // [{x,y}] in the SVG's own 0-200 / 0-400 coordinate space
+/* ===================== Vehicle Damage Diagram (5 views) ===================== */
+const DAMAGE_VIEWS = ['top','front','rear','left','right'];
+let damageMarks = { top: [], front: [], rear: [], left: [], right: [] };
 
-function markDamage(evt){
-  const svg = document.getElementById('carSvg');
+function markDamage(evt, view){
+  const svg = document.getElementById('carSvg_' + view);
   if(evt.target.classList && evt.target.classList.contains('dmg-mark')){
     const idx = parseInt(evt.target.dataset.idx, 10);
-    damageMarks.splice(idx, 1);
-    redrawDamageMarks();
+    damageMarks[view].splice(idx, 1);
+    redrawDamageMarks(view);
     return;
   }
   const pt = svg.createSVGPoint();
   pt.x = evt.clientX; pt.y = evt.clientY;
   const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
-  damageMarks.push({ x: Math.round(loc.x), y: Math.round(loc.y) });
-  redrawDamageMarks();
+  damageMarks[view].push({ x: Math.round(loc.x), y: Math.round(loc.y) });
+  redrawDamageMarks(view);
 }
-function redrawDamageMarks(){
-  const svg = document.getElementById('carSvg');
+function redrawDamageMarks(view){
+  const svg = document.getElementById('carSvg_' + view);
   if(!svg) return;
   svg.querySelectorAll('.dmg-mark').forEach(el => el.remove());
-  damageMarks.forEach((m, i) => {
+  (damageMarks[view] || []).forEach((m, i) => {
     const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     c.setAttribute('cx', m.x);
     c.setAttribute('cy', m.y);
@@ -467,9 +538,16 @@ function redrawDamageMarks(){
     svg.appendChild(c);
   });
 }
-function clearDamageMarks(){
-  damageMarks = [];
-  redrawDamageMarks();
+function redrawAllDamageMarks(){
+  DAMAGE_VIEWS.forEach(v => redrawDamageMarks(v));
+}
+function clearDamageMarks(view){
+  damageMarks[view] = [];
+  redrawDamageMarks(view);
+}
+function clearAllDamageMarks(){
+  damageMarks = { top: [], front: [], rear: [], left: [], right: [] };
+  redrawAllDamageMarks();
 }
 
 function applyCompany(idx){
@@ -731,7 +809,7 @@ async function newDocument(){
   ['custName','custAddress','custContact','custPhone','vehReg','vehVin','vehMakeModel','vehKm'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('paymentTerms').value = '50% deposit to commence work, balance on completion';
   ['jcEta','jcTech','jcComplaint','jcObservations','jcOtherItems'].forEach(id=>document.getElementById(id).value='');
-  clearDamageMarks();
+  clearAllDamageMarks();
   document.getElementById('jcFuel').value = '';
   ['jcSpare','jcJack','jcRadio','jcCaps','jcMats','jcExt','jcDocs'].forEach(id=>document.getElementById(id).checked=false);
   document.getElementById('jcAuth1').checked = true;
@@ -779,7 +857,7 @@ function collectDoc(idOverride, docNoOverride){
     jcTech: document.getElementById('jcTech').value,
     jcComplaint: document.getElementById('jcComplaint').value,
     jcObservations: document.getElementById('jcObservations').value,
-    jcDamageMarks: damageMarks.slice(),
+    jcDamageMarks: JSON.parse(JSON.stringify(damageMarks)),
     jcItems: {
       spare: document.getElementById('jcSpare').checked,
       jack: document.getElementById('jcJack').checked,
@@ -865,8 +943,14 @@ function loadDoc(id){
   document.getElementById('jcTech').value = doc.jcTech || '';
   document.getElementById('jcComplaint').value = doc.jcComplaint || '';
   document.getElementById('jcObservations').value = doc.jcObservations || '';
-  damageMarks = (doc.jcDamageMarks || []).slice();
-  redrawDamageMarks();
+  const savedMarks = doc.jcDamageMarks;
+  if(savedMarks && Array.isArray(savedMarks)){
+    // Backward compatibility with older records saved before multi-view support
+    damageMarks = { top: savedMarks, front: [], rear: [], left: [], right: [] };
+  } else {
+    damageMarks = { top: [], front: [], rear: [], left: [], right: [], ...(savedMarks || {}) };
+  }
+  redrawAllDamageMarks();
   const items = doc.jcItems || {};
   document.getElementById('jcSpare').checked = !!items.spare;
   document.getElementById('jcJack').checked = !!items.jack;
@@ -1027,7 +1111,7 @@ async function generatePdfBlob(){
     image: { type: 'jpeg', quality: 0.95 },
     html2canvas: { scale: 2, useCORS: true },
     jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
-    pagebreak: { mode: ['css', 'legacy'], avoid: ['.card', 'tr', 'img', '#printHeader'] }
+    pagebreak: { mode: ['css'] }
   };
   let blob;
   try{
