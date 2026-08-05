@@ -8,6 +8,7 @@
 <meta name="theme-color" content="#d60000">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="manifest" href="manifest.webmanifest">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
   :root{
     --navy:#1F3864; --red:#E30613; --grey:#808080; --lightfill:#FFF7DA;
@@ -55,6 +56,13 @@
   .totals .row.grand{background:var(--navy);color:#fff;border-radius:6px;font-size:15px;
     font-weight:bold;padding:10px 8px;margin-top:4px;}
   .vatToggle{display:flex;align-items:center;gap:8px;}
+  .jobcard-only{display:none;}
+  body.mode-jobcard .jobcard-only{display:block;}
+  body.mode-jobcard .price-col{display:none;}
+  body.mode-jobcard #totalsCard{display:none;}
+  .checkgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12.5px;}
+  .checkgrid label{display:flex;align-items:center;gap:6px;font-weight:normal;}
+  .checkgrid input{width:auto;}
   .bottombar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--border);
     display:flex;gap:6px;padding:8px;max-width:820px;margin:0 auto;box-shadow:0 -2px 8px rgba(0,0,0,.1);}
   .bottombar button{flex:1;padding:11px 4px;border:none;border-radius:8px;font-weight:bold;font-size:11.5px;}
@@ -62,6 +70,7 @@
   .btn-conv{background:#fce8e8;color:var(--red);}
   .btn-save{background:var(--navy);color:#fff;}
   .btn-pdf{background:var(--red);color:#fff;}
+  .btn-share{background:#128C7E;color:#fff;}
   .searchbox{display:flex;gap:6px;margin-bottom:10px;}
   .searchbox input{flex:1;}
   .rec{border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;font-size:12.5px;}
@@ -84,6 +93,17 @@
     input, select, textarea{border:none !important;background:transparent !important;padding:2px 0 !important;}
     .rec{border:none;}
   }
+  body.pdf-mode .topbar, body.pdf-mode .tabs, body.pdf-mode .bottombar,
+  body.pdf-mode .banner, body.pdf-mode .no-print{display:none !important;}
+  body.pdf-mode{background:#fff;}
+  body.pdf-mode .card{box-shadow:none;border:none;}
+  body.pdf-mode .app{padding:0;max-width:100%;}
+  body.pdf-mode table, body.pdf-mode td, body.pdf-mode th{
+    border-left:none !important;border-right:none !important;border-top:none !important;}
+  body.pdf-mode td, body.pdf-mode th{border-bottom:1px solid #ddd !important;}
+  body.pdf-mode input, body.pdf-mode select, body.pdf-mode textarea{
+    border:none !important;background:transparent !important;padding:2px 0 !important;}
+  body.pdf-mode .rec{border:none;}
   #toastBox{position:fixed;left:0;right:0;bottom:70px;display:flex;flex-direction:column;
     align-items:center;gap:6px;z-index:200;pointer-events:none;}
   .toast{background:#1F3864;color:#fff;padding:10px 16px;border-radius:8px;font-size:13px;
@@ -151,6 +171,7 @@
         <div style="flex:1;">
           <label>Document Type</label>
           <select id="docType" onchange="onDocTypeChange()">
+            <option value="JOB CARD">JOB CARD</option>
             <option value="QUOTATION">QUOTATION</option>
             <option value="INVOICE">INVOICE</option>
           </select>
@@ -199,12 +220,53 @@
       </div>
     </div>
 
+    <div class="card jobcard-only">
+      <h2 class="red">JOB CARD DETAILS</h2>
+      <div class="grid2">
+        <div class="field"><label>Estimated Completion Date</label><input id="jcEta" type="date"></div>
+        <div class="field"><label>Fuel Level</label>
+          <select id="jcFuel">
+            <option value="">--</option>
+            <option value="E">E (Empty)</option>
+            <option value="1/4">¼</option>
+            <option value="1/2">½</option>
+            <option value="3/4">¾</option>
+            <option value="F">F (Full)</option>
+          </select>
+        </div>
+      </div>
+      <div class="field"><label>Technician Assigned</label><input id="jcTech"></div>
+      <div class="field"><label>Customer's Complaint / Description of Problem</label>
+        <textarea id="jcComplaint" rows="3" placeholder="What the customer reports is wrong with the vehicle"></textarea>
+      </div>
+      <label>Items Received With Vehicle</label>
+      <div class="checkgrid">
+        <label><input type="checkbox" id="jcSpare"> Spare Wheel</label>
+        <label><input type="checkbox" id="jcJack"> Jack &amp; Tools</label>
+        <label><input type="checkbox" id="jcRadio"> Radio / Stereo</label>
+        <label><input type="checkbox" id="jcCaps"> Wheel Caps</label>
+        <label><input type="checkbox" id="jcMats"> Floor Mats</label>
+        <label><input type="checkbox" id="jcExt"> Fire Extinguisher</label>
+        <label><input type="checkbox" id="jcDocs"> Vehicle Documents</label>
+      </div>
+      <div class="field" style="margin-top:8px;"><label>Other Items / Notes</label><input id="jcOtherItems"></div>
+      <label>Authorization</label>
+      <div style="font-size:13px;">
+        <label style="display:block;margin-bottom:4px;"><input type="radio" name="jcAuth" id="jcAuth1" checked> Proceed without further authority</label>
+        <label style="display:block;"><input type="radio" name="jcAuth" id="jcAuth2"> Await customer's telephone/written authority</label>
+      </div>
+    </div>
+
+    <div class="card jobcard-only" style="font-size:11px;color:#555;">
+      I, the undersigned (or the customer named above), agree to the vehicle described being worked on as detailed in this Job Card.
+    </div>
+
     <div class="card">
       <h2 class="red">SPARE PARTS / MATERIALS</h2>
       <div class="tbl-wrap">
         <table id="partsTable">
           <thead><tr><th style="width:8%;">S/N</th><th style="width:12%;">QTY</th>
-          <th>DESCRIPTION</th><th style="width:22%;">UNIT PRICE (₦)</th><th style="width:22%;">AMOUNT (₦)</th></tr></thead>
+          <th>DESCRIPTION</th><th class="price-col" style="width:22%;">UNIT PRICE (₦)</th><th class="price-col" style="width:22%;">AMOUNT (₦)</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -216,14 +278,14 @@
       <div class="tbl-wrap">
         <table id="labourTable">
           <thead><tr><th style="width:8%;">S/N</th><th style="width:12%;">HRS/QTY</th>
-          <th>LABOUR ACTIVITY</th><th style="width:22%;">UNIT PRICE (₦)</th><th style="width:22%;">AMOUNT (₦)</th></tr></thead>
+          <th>LABOUR ACTIVITY</th><th class="price-col" style="width:22%;">UNIT PRICE (₦)</th><th class="price-col" style="width:22%;">AMOUNT (₦)</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
       <button class="addrow no-print" onclick="addRow('labour')">+ Add Labour Item</button>
     </div>
 
-    <div class="card">
+    <div class="card" id="totalsCard">
       <h2>TOTALS</h2>
       <div class="totals">
         <div class="row"><span>Subtotal (Parts + Labour)</span><span id="subtotalOut">₦0.00</span></div>
@@ -306,9 +368,10 @@
 
 <div class="bottombar no-print">
   <button class="btn-new" onclick="newDocument()">New</button>
-  <button class="btn-conv" onclick="convertToInvoice()">Convert→Invoice</button>
+  <button id="convertBtn" class="btn-conv" onclick="convertTo('INVOICE')">Convert→Invoice</button>
   <button class="btn-save" onclick="saveRecord()">Save Record</button>
-  <button class="btn-pdf" onclick="doPrint()">Print / PDF</button>
+  <button class="btn-pdf" onclick="doPrint()">Print</button>
+  <button class="btn-share" onclick="sharePdf()">📤 Share PDF</button>
 </div>
 
 <script>
@@ -393,16 +456,22 @@ function askConfirm(message){
 }
 
 /* ===================== LOCAL (OFFLINE) STORAGE ===================== */
+const TYPE_FIELD = { 'JOB CARD':'jobcard', 'QUOTATION':'quote', 'INVOICE':'invoice' };
+const TYPE_PREFIX = { 'JOB CARD':'JC', 'QUOTATION':'QT', 'INVOICE':'INV' };
+
 function getCountersLocal(){
   let c = JSON.parse(localStorage.getItem(LS_COUNTERS) || 'null');
-  if(!c){ c = {quote:1, invoice:1}; localStorage.setItem(LS_COUNTERS, JSON.stringify(c)); }
+  if(!c){ c = {quote:1, invoice:1, jobcard:1}; localStorage.setItem(LS_COUNTERS, JSON.stringify(c)); }
+  if(c.jobcard === undefined) c.jobcard = 1;
   return c;
 }
 function bumpCounterLocal(type){
   const c = getCountersLocal();
-  if(type==='QUOTATION') c.quote++; else c.invoice++;
+  const field = TYPE_FIELD[type] || 'quote';
+  const current = c[field];
+  c[field] = current + 1;
   localStorage.setItem(LS_COUNTERS, JSON.stringify(c));
-  return type==='QUOTATION' ? c.quote-1 : c.invoice-1;
+  return current;
 }
 function getDocsLocal(){ return JSON.parse(localStorage.getItem(LS_DOCS) || '[]'); }
 function setDocsLocal(arr){ localStorage.setItem(LS_DOCS, JSON.stringify(arr)); }
@@ -513,8 +582,8 @@ function makeRow(tableId){
     <td class="sn">1</td>
     <td><input type="number" min="0" step="1" class="qty" oninput="calcAll()"></td>
     <td class="desc"><input type="text" class="desc-input" placeholder="Description"></td>
-    <td><input type="number" min="0" step="0.01" class="price" oninput="calcAll()"></td>
-    <td class="amt"><input type="text" class="amount" readonly value="0.00"></td>`;
+    <td class="price-col"><input type="number" min="0" step="0.01" class="price" oninput="calcAll()"></td>
+    <td class="amt price-col"><input type="text" class="amount" readonly value="0.00"></td>`;
   tbody.appendChild(tr);
   return tr;
 }
@@ -553,21 +622,38 @@ function calcAll(){
 /* ===================== Doc number / type ===================== */
 function refreshDocNoDisplay(num, type){
   const yr = new Date(document.getElementById('docDate').value || todayISO()).getFullYear();
-  const prefix = type==='QUOTATION' ? 'QT' : 'INV';
+  const prefix = TYPE_PREFIX[type] || 'DOC';
   document.getElementById('docNo').value = `${prefix}-${yr}-${String(num).padStart(3,'0')}`;
 }
 function refreshDocNoPreview(){
   // Non-committal preview using current local counters (does not consume a number)
   const c = getCountersLocal();
   const type = document.getElementById('docType').value;
-  const num = type==='QUOTATION' ? c.quote : c.invoice;
+  const num = c[TYPE_FIELD[type] || 'quote'];
   refreshDocNoDisplay(num, type);
   document.getElementById('docNo').dataset.savedId = '';
 }
-function onDocTypeChange(){ refreshDocNoPreview(); }
-function convertToInvoice(){
-  document.getElementById('docType').value = 'INVOICE';
+function updateModeUI(){
+  const type = document.getElementById('docType').value;
+  document.body.classList.toggle('mode-jobcard', type === 'JOB CARD');
+  const btn = document.getElementById('convertBtn');
+  if(type === 'JOB CARD'){
+    btn.style.display = 'block';
+    btn.textContent = 'Convert→Quotation';
+    btn.onclick = ()=>convertTo('QUOTATION');
+  } else if(type === 'QUOTATION'){
+    btn.style.display = 'block';
+    btn.textContent = 'Convert→Invoice';
+    btn.onclick = ()=>convertTo('INVOICE');
+  } else {
+    btn.style.display = 'none';
+  }
+}
+function onDocTypeChange(){ refreshDocNoPreview(); updateModeUI(); }
+function convertTo(newType){
+  document.getElementById('docType').value = newType;
   refreshDocNoPreview();
+  updateModeUI();
   showTab('doc');
   window.scrollTo({top:0, behavior:'smooth'});
 }
@@ -576,11 +662,15 @@ function convertToInvoice(){
 async function newDocument(){
   const ok = await askConfirm('Start a new blank document? Unsaved changes will be lost.');
   if(!ok) return;
-  document.getElementById('docType').value = 'QUOTATION';
+  document.getElementById('docType').value = 'JOB CARD';
   document.getElementById('docDate').value = todayISO();
   document.getElementById('docStatus').value = 'Draft';
   ['custName','custAddress','custContact','custPhone','vehReg','vehVin','vehMakeModel','vehKm'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('paymentTerms').value = '50% deposit to commence work, balance on completion';
+  ['jcEta','jcTech','jcComplaint','jcOtherItems'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('jcFuel').value = '';
+  ['jcSpare','jcJack','jcRadio','jcCaps','jcMats','jcExt','jcDocs'].forEach(id=>document.getElementById(id).checked=false);
+  document.getElementById('jcAuth1').checked = true;
   document.querySelector('#partsTable tbody').innerHTML='';
   document.querySelector('#labourTable tbody').innerHTML='';
   for(let i=0;i<3;i++) makeRow('parts');
@@ -588,6 +678,7 @@ async function newDocument(){
   document.getElementById('vatToggle').value='NO';
   document.getElementById('notes').value = 'This Quotation is valid for 7 days from the date of issue. Prices are subject to change if not converted to an Invoice within this period.';
   refreshDocNoPreview();
+  updateModeUI();
   calcAll();
   showTab('doc');
   toast('New document started.');
@@ -619,6 +710,21 @@ function collectDoc(idOverride, docNoOverride){
     vehMakeModel: document.getElementById('vehMakeModel').value,
     vehKm: document.getElementById('vehKm').value,
     paymentTerms: document.getElementById('paymentTerms').value,
+    jcEta: document.getElementById('jcEta').value,
+    jcFuel: document.getElementById('jcFuel').value,
+    jcTech: document.getElementById('jcTech').value,
+    jcComplaint: document.getElementById('jcComplaint').value,
+    jcItems: {
+      spare: document.getElementById('jcSpare').checked,
+      jack: document.getElementById('jcJack').checked,
+      radio: document.getElementById('jcRadio').checked,
+      caps: document.getElementById('jcCaps').checked,
+      mats: document.getElementById('jcMats').checked,
+      ext: document.getElementById('jcExt').checked,
+      docs: document.getElementById('jcDocs').checked
+    },
+    jcOtherItems: document.getElementById('jcOtherItems').value,
+    jcAuth: document.getElementById('jcAuth1').checked ? 'proceed' : 'await',
     parts, labour,
     subtotal: totals.subtotal, vat: totals.vat, grand: totals.grand,
     vatApplied: document.getElementById('vatToggle').value,
@@ -688,6 +794,22 @@ function loadDoc(id){
   document.getElementById('vehMakeModel').value = doc.vehMakeModel;
   document.getElementById('vehKm').value = doc.vehKm;
   document.getElementById('paymentTerms').value = doc.paymentTerms;
+  document.getElementById('jcEta').value = doc.jcEta || '';
+  document.getElementById('jcFuel').value = doc.jcFuel || '';
+  document.getElementById('jcTech').value = doc.jcTech || '';
+  document.getElementById('jcComplaint').value = doc.jcComplaint || '';
+  const items = doc.jcItems || {};
+  document.getElementById('jcSpare').checked = !!items.spare;
+  document.getElementById('jcJack').checked = !!items.jack;
+  document.getElementById('jcRadio').checked = !!items.radio;
+  document.getElementById('jcCaps').checked = !!items.caps;
+  document.getElementById('jcMats').checked = !!items.mats;
+  document.getElementById('jcExt').checked = !!items.ext;
+  document.getElementById('jcDocs').checked = !!items.docs;
+  document.getElementById('jcOtherItems').value = doc.jcOtherItems || '';
+  if(doc.jcAuth === 'await') document.getElementById('jcAuth2').checked = true;
+  else document.getElementById('jcAuth1').checked = true;
+  updateModeUI();
   document.querySelector('#partsTable tbody').innerHTML='';
   document.querySelector('#labourTable tbody').innerHTML='';
   (doc.parts && doc.parts.length ? doc.parts : [{}]).forEach(p=>{
@@ -781,6 +903,61 @@ function doPrint(){
   setTimeout(()=>window.print(), 300);
 }
 
+/* ===================== Share as PDF (WhatsApp / Email / etc.) ===================== */
+async function generatePdfBlob(){
+  showTab('doc');
+  document.body.classList.add('pdf-mode');
+  await new Promise(r=>setTimeout(r, 80)); // let layout settle
+  const element = document.querySelector('.app');
+  const docNo = (document.getElementById('docNo').value || 'document').replace(/[^A-Za-z0-9_-]/g,'_');
+  const filename = docNo + '.pdf';
+  const opt = {
+    margin: 0.3,
+    filename: filename,
+    image: { type: 'jpeg', quality: 0.95 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+  };
+  let blob;
+  try{
+    blob = await html2pdf().set(opt).from(element).outputPdf('blob');
+  } finally {
+    document.body.classList.remove('pdf-mode');
+  }
+  return { blob, filename };
+}
+
+async function sharePdf(){
+  if(typeof html2pdf === 'undefined'){
+    toast('PDF library did not load — check your internet connection and try again.', true);
+    return;
+  }
+  toast('Preparing PDF…');
+  try{
+    const { blob, filename } = await generatePdfBlob();
+    const docType = document.getElementById('docType').value;
+    const docNo = document.getElementById('docNo').value;
+    const company = document.getElementById('companyNameDisplay').textContent;
+    const shareText = `${docType} ${docNo} from ${company}`;
+    const file = new File([blob], filename, { type: 'application/pdf' });
+
+    if(navigator.canShare && navigator.canShare({ files: [file] })){
+      await navigator.share({ files: [file], title: docNo, text: shareText });
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      toast('PDF downloaded — attach it manually in WhatsApp Web or your email.');
+    }
+  }catch(err){
+    if(err && err.name === 'AbortError') return; // user cancelled the share sheet
+    console.error(err);
+    toast('Could not generate or share PDF: ' + (err && err.message ? err.message : err), true);
+  }
+}
+
 /* ===================== Init ===================== */
 window.addEventListener('load', ()=>{
   document.getElementById('docDate').value = todayISO();
@@ -788,6 +965,7 @@ window.addEventListener('load', ()=>{
   for(let i=0;i<3;i++) makeRow('parts');
   for(let i=0;i<2;i++) makeRow('labour');
   refreshDocNoPreview();
+  updateModeUI();
   calcAll();
   tryAutoConnect();
   setupInstallability();
