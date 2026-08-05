@@ -58,6 +58,7 @@
   .vatToggle{display:flex;align-items:center;gap:8px;}
   .jobcard-only{display:none;}
   body.mode-jobcard .jobcard-only{display:block;}
+  body.mode-jobcard .hide-in-jobcard{display:none;}
   body.mode-jobcard .price-col{display:none;}
   body.mode-jobcard #totalsCard{display:none;}
   .checkgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12.5px;}
@@ -237,9 +238,31 @@
       </div>
       <div class="field"><label>Technician Assigned</label><input id="jcTech"></div>
       <div class="field"><label>Customer's Complaint / Description of Problem</label>
-        <textarea id="jcComplaint" rows="3" placeholder="What the customer reports is wrong with the vehicle"></textarea>
+        <textarea id="jcComplaint" rows="6" placeholder="What the customer reports is wrong with the vehicle"></textarea>
       </div>
-      <label>Items Received With Vehicle</label>
+      <div class="field"><label>Workshop Observations</label>
+        <textarea id="jcObservations" rows="5" placeholder="Technician's own findings on inspection (separate from what the customer reported)"></textarea>
+      </div>
+
+      <label>Vehicle Damage Diagram (Scratches / Dents)</label>
+      <p style="font-size:11px;color:#666;margin:2px 0 8px;">Tap the diagram to mark a spot. Tap an existing mark to remove it.</p>
+      <svg id="carSvg" viewBox="0 0 200 400" onclick="markDamage(event)"
+           style="width:100%;max-width:240px;display:block;margin:0 auto;background:#f7f9fc;
+           border:1px solid #ccd0d8;border-radius:8px;cursor:crosshair;">
+        <rect x="30" y="20" width="140" height="360" rx="40" ry="40" fill="#ffffff" stroke="#1F3864" stroke-width="3"></rect>
+        <path d="M50,90 L150,90 L135,140 L65,140 Z" fill="#eef1f5" stroke="#1F3864" stroke-width="1.5"></path>
+        <path d="M50,310 L150,310 L135,260 L65,260 Z" fill="#eef1f5" stroke="#1F3864" stroke-width="1.5"></path>
+        <rect x="65" y="140" width="70" height="120" rx="10" fill="#f7f9fc" stroke="#1F3864" stroke-width="1.5"></rect>
+        <rect x="8" y="70" width="20" height="55" rx="6" fill="#333"></rect>
+        <rect x="172" y="70" width="20" height="55" rx="6" fill="#333"></rect>
+        <rect x="8" y="275" width="20" height="55" rx="6" fill="#333"></rect>
+        <rect x="172" y="275" width="20" height="55" rx="6" fill="#333"></rect>
+        <text x="100" y="14" text-anchor="middle" font-size="12" fill="#555">FRONT</text>
+        <text x="100" y="396" text-anchor="middle" font-size="12" fill="#555">REAR</text>
+      </svg>
+      <button class="addrow no-print" onclick="clearDamageMarks()" style="margin-top:8px;">Clear Marks</button>
+
+      <label style="margin-top:10px;display:block;">Items Received With Vehicle</label>
       <div class="checkgrid">
         <label><input type="checkbox" id="jcSpare"> Spare Wheel</label>
         <label><input type="checkbox" id="jcJack"> Jack &amp; Tools</label>
@@ -261,7 +284,7 @@
       I, the undersigned (or the customer named above), agree to the vehicle described being worked on as detailed in this Job Card.
     </div>
 
-    <div class="card">
+    <div class="card hide-in-jobcard">
       <h2 class="red">SPARE PARTS / MATERIALS</h2>
       <div class="tbl-wrap">
         <table id="partsTable">
@@ -273,7 +296,7 @@
       <button class="addrow no-print" onclick="addRow('parts')">+ Add Part</button>
     </div>
 
-    <div class="card">
+    <div class="card hide-in-jobcard">
       <h2 class="red">LABOUR</h2>
       <div class="tbl-wrap">
         <table id="labourTable">
@@ -328,7 +351,8 @@
         <input id="searchInput" placeholder="Search customer, reg. number, VIN, part..." oninput="renderRecords()">
         <button onclick="manualRefresh()" style="width:auto;padding:8px 12px;background:#1F3864;color:#fff;border:none;border-radius:6px;">🔄</button>
       </div>
-      <div id="recordsList"></div>
+      <button class="addrow" onclick="exportRecordsCSV()">⬇ Export CSV (accounting software)</button>
+      <div id="recordsList" style="margin-top:10px;"></div>
     </div>
   </div>
 
@@ -408,6 +432,45 @@ const COMPANIES = [
     bankAcctNo: ""
   }
 ];
+
+/* ===================== Vehicle Damage Diagram ===================== */
+let damageMarks = []; // [{x,y}] in the SVG's own 0-200 / 0-400 coordinate space
+
+function markDamage(evt){
+  const svg = document.getElementById('carSvg');
+  if(evt.target.classList && evt.target.classList.contains('dmg-mark')){
+    const idx = parseInt(evt.target.dataset.idx, 10);
+    damageMarks.splice(idx, 1);
+    redrawDamageMarks();
+    return;
+  }
+  const pt = svg.createSVGPoint();
+  pt.x = evt.clientX; pt.y = evt.clientY;
+  const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+  damageMarks.push({ x: Math.round(loc.x), y: Math.round(loc.y) });
+  redrawDamageMarks();
+}
+function redrawDamageMarks(){
+  const svg = document.getElementById('carSvg');
+  if(!svg) return;
+  svg.querySelectorAll('.dmg-mark').forEach(el => el.remove());
+  damageMarks.forEach((m, i) => {
+    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    c.setAttribute('cx', m.x);
+    c.setAttribute('cy', m.y);
+    c.setAttribute('r', 7);
+    c.setAttribute('fill', '#E30613');
+    c.setAttribute('stroke', '#fff');
+    c.setAttribute('stroke-width', '1.5');
+    c.setAttribute('class', 'dmg-mark');
+    c.dataset.idx = i;
+    svg.appendChild(c);
+  });
+}
+function clearDamageMarks(){
+  damageMarks = [];
+  redrawDamageMarks();
+}
 
 function applyCompany(idx){
   idx = parseInt(idx, 10) || 0;
@@ -667,7 +730,8 @@ async function newDocument(){
   document.getElementById('docStatus').value = 'Draft';
   ['custName','custAddress','custContact','custPhone','vehReg','vehVin','vehMakeModel','vehKm'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('paymentTerms').value = '50% deposit to commence work, balance on completion';
-  ['jcEta','jcTech','jcComplaint','jcOtherItems'].forEach(id=>document.getElementById(id).value='');
+  ['jcEta','jcTech','jcComplaint','jcObservations','jcOtherItems'].forEach(id=>document.getElementById(id).value='');
+  clearDamageMarks();
   document.getElementById('jcFuel').value = '';
   ['jcSpare','jcJack','jcRadio','jcCaps','jcMats','jcExt','jcDocs'].forEach(id=>document.getElementById(id).checked=false);
   document.getElementById('jcAuth1').checked = true;
@@ -714,6 +778,8 @@ function collectDoc(idOverride, docNoOverride){
     jcFuel: document.getElementById('jcFuel').value,
     jcTech: document.getElementById('jcTech').value,
     jcComplaint: document.getElementById('jcComplaint').value,
+    jcObservations: document.getElementById('jcObservations').value,
+    jcDamageMarks: damageMarks.slice(),
     jcItems: {
       spare: document.getElementById('jcSpare').checked,
       jack: document.getElementById('jcJack').checked,
@@ -798,6 +864,9 @@ function loadDoc(id){
   document.getElementById('jcFuel').value = doc.jcFuel || '';
   document.getElementById('jcTech').value = doc.jcTech || '';
   document.getElementById('jcComplaint').value = doc.jcComplaint || '';
+  document.getElementById('jcObservations').value = doc.jcObservations || '';
+  damageMarks = (doc.jcDamageMarks || []).slice();
+  redrawDamageMarks();
   const items = doc.jcItems || {};
   document.getElementById('jcSpare').checked = !!items.spare;
   document.getElementById('jcJack').checked = !!items.jack;
@@ -843,14 +912,17 @@ async function deleteDoc(id){
   }
 }
 
-function renderRecords(){
+function getFilteredRecords(){
   const q = (document.getElementById('searchInput').value||'').toLowerCase().trim();
   const docs = cloudConnected ? recordsCache : getDocsLocal();
-  const filtered = !q ? docs : docs.filter(d=>{
+  return !q ? docs : docs.filter(d=>{
     const hay = [d.docNo,d.custName,d.custPhone,d.vehReg,d.vehVin,d.vehMakeModel,d.companyName,
       ...(d.parts||[]).map(p=>p.desc), ...(d.labour||[]).map(p=>p.desc)].join(' ').toLowerCase();
     return hay.includes(q);
   });
+}
+function renderRecords(){
+  const filtered = getFilteredRecords();
   const list = document.getElementById('recordsList');
   if(!filtered.length){ list.innerHTML = '<div class="empty">No saved records found.</div>'; return; }
   list.innerHTML = filtered.map(d=>`
@@ -862,6 +934,41 @@ function renderRecords(){
       <button onclick="loadDoc('${d.id}')">Open</button>
       <button onclick="deleteDoc('${d.id}')" style="background:#c0392b;">Delete</button>
     </div>`).join('');
+}
+
+/* ===================== Export CSV (for accounting software / spreadsheets) ===================== */
+function csvEscape(val){
+  const s = (val===undefined||val===null) ? '' : String(val);
+  if(/[",\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+  return s;
+}
+function exportRecordsCSV(){
+  const docs = getFilteredRecords();
+  if(!docs.length){ toast('No records to export — adjust your search or save some records first.', true); return; }
+  const headers = [
+    'Date','Document Type','Document No','Company','Customer Name','Customer Address',
+    'Customer Phone','Vehicle Reg No','Vehicle Make/Model','Items (Parts + Labour)',
+    'Subtotal (NGN)','VAT (NGN)','Grand Total (NGN)','VAT Applied','Status'
+  ];
+  const rows = docs.map(d=>{
+    const items = [...(d.parts||[]), ...(d.labour||[])]
+      .map(p=>`${p.qty||''}x ${p.desc||''} @ ${p.price||0}`).join(' | ');
+    return [
+      d.date, d.type, d.docNo, d.companyName, d.custName, d.custAddress,
+      d.custPhone, d.vehReg, d.vehMakeModel, items,
+      (d.subtotal||0).toFixed(2), (d.vat||0).toFixed(2), (d.grand||0).toFixed(2),
+      d.vatApplied, d.status
+    ];
+  });
+  const csv = [headers, ...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'robotik_fix_records_' + todayISO() + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  toast('CSV exported — ' + docs.length + ' record(s). Open it in Excel/Sheets, or use it as your reference for Frappe Books.');
 }
 
 /* ===================== Tabs ===================== */
