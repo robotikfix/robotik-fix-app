@@ -909,6 +909,9 @@ async function generatePdfBlob(){
   document.body.classList.add('pdf-mode');
   await new Promise(r=>setTimeout(r, 80)); // let layout settle
   const element = document.querySelector('.app');
+  const imgs = Array.from(element.querySelectorAll('img'));
+  await Promise.all(imgs.map(img => img.decode ? img.decode().catch(()=>{}) : Promise.resolve()));
+  await new Promise(r=>setTimeout(r, 50)); // extra paint frame after decode
   const docNo = (document.getElementById('docNo').value || 'document').replace(/[^A-Za-z0-9_-]/g,'_');
   const filename = docNo + '.pdf';
   const opt = {
@@ -916,7 +919,8 @@ async function generatePdfBlob(){
     filename: filename,
     image: { type: 'jpeg', quality: 0.95 },
     html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
+    pagebreak: { mode: ['css', 'legacy'], avoid: ['.card', 'tr', 'img', '#printHeader'] }
   };
   let blob;
   try{
