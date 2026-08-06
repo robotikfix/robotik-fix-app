@@ -206,22 +206,28 @@
 
     <div class="card">
       <h2>CUSTOMER INFORMATION</h2>
-      <div class="field"><label>Customer Name</label><input id="custName"></div>
-      <div class="field"><label>Address</label><input id="custAddress"></div>
+      <div class="field"><label>Customer Name</label>
+        <input id="custName" list="dlCustName" autocomplete="off" onchange="autofillCustomer()">
+        <datalist id="dlCustName"></datalist>
+      </div>
+      <div class="field"><label>Address</label><input id="custAddress" list="dlCustAddress" autocomplete="off"></div>
       <div class="grid2">
-        <div class="field"><label>Contact Person</label><input id="custContact"></div>
-        <div class="field"><label>Phone Number</label><input id="custPhone" type="tel"></div>
+        <div class="field"><label>Contact Person</label><input id="custContact" list="dlCustContact" autocomplete="off"></div>
+        <div class="field"><label>Phone Number</label><input id="custPhone" type="tel" list="dlCustPhone" autocomplete="off"></div>
       </div>
     </div>
 
     <div class="card">
       <h2>VEHICLE INFORMATION</h2>
       <div class="grid2">
-        <div class="field"><label>Registration Number</label><input id="vehReg"></div>
-        <div class="field"><label>VIN</label><input id="vehVin"></div>
+        <div class="field"><label>Registration Number</label>
+          <input id="vehReg" list="dlVehReg" autocomplete="off" onchange="autofillVehicle()">
+          <datalist id="dlVehReg"></datalist>
+        </div>
+        <div class="field"><label>VIN</label><input id="vehVin" list="dlVehVin" autocomplete="off"></div>
       </div>
       <div class="grid2">
-        <div class="field"><label>Vehicle Make &amp; Model</label><input id="vehMakeModel"></div>
+        <div class="field"><label>Vehicle Make &amp; Model</label><input id="vehMakeModel" list="dlVehMakeModel" autocomplete="off"></div>
         <div class="field"><label>Kilometer Reading</label><input id="vehKm" type="number"></div>
       </div>
       <div class="field"><label>Payment Conditions</label>
@@ -244,7 +250,7 @@
           </select>
         </div>
       </div>
-      <div class="field"><label>Technician Assigned</label><input id="jcTech"></div>
+      <div class="field"><label>Technician Assigned</label><input id="jcTech" list="dlTech" autocomplete="off"></div>
       <div class="field"><label>Customer's Complaint / Description of Problem</label>
         <textarea id="jcComplaint" rows="6" placeholder="What the customer reports is wrong with the vehicle"></textarea>
       </div>
@@ -550,6 +556,58 @@ function clearAllDamageMarks(){
   redrawAllDamageMarks();
 }
 
+/* ===================== Customer / Vehicle autocomplete ===================== */
+function getAllKnownRecords(){
+  return cloudConnected ? recordsCache : getDocsLocal();
+}
+function escapeAttr(s){
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+}
+function refreshAutocompleteLists(){
+  const docs = getAllKnownRecords();
+  const names = [...new Set(docs.map(d => (d.custName||'').trim()).filter(Boolean))];
+  const regs = [...new Set(docs.map(d => (d.vehReg||'').trim()).filter(Boolean))];
+  const nameList = document.getElementById('dlCustName');
+  const regList = document.getElementById('dlVehReg');
+  if(nameList) nameList.innerHTML = names.map(n => `<option value="${escapeAttr(n)}">`).join('');
+  if(regList) regList.innerHTML = regs.map(r => `<option value="${escapeAttr(r)}">`).join('');
+}
+function mostRecentMatch(matches){
+  return matches.slice().sort((a,b) => (b.savedAt||'').localeCompare(a.savedAt||''))[0];
+}
+function autofillCustomer(){
+  const val = document.getElementById('custName').value.trim().toLowerCase();
+  if(!val) return;
+  const matches = getAllKnownRecords().filter(d => (d.custName||'').trim().toLowerCase() === val);
+  if(!matches.length) return;
+  const d = mostRecentMatch(matches);
+  document.getElementById('custAddress').value = d.custAddress || '';
+  document.getElementById('custContact').value = d.custContact || '';
+  document.getElementById('custPhone').value = d.custPhone || '';
+  if(!document.getElementById('vehReg').value){
+    document.getElementById('vehReg').value = d.vehReg || '';
+    document.getElementById('vehVin').value = d.vehVin || '';
+    document.getElementById('vehMakeModel').value = d.vehMakeModel || '';
+  }
+  toast('Filled in from a previous record for this customer.');
+}
+function autofillVehicle(){
+  const val = document.getElementById('vehReg').value.trim().toLowerCase();
+  if(!val) return;
+  const matches = getAllKnownRecords().filter(d => (d.vehReg||'').trim().toLowerCase() === val);
+  if(!matches.length) return;
+  const d = mostRecentMatch(matches);
+  document.getElementById('vehVin').value = d.vehVin || '';
+  document.getElementById('vehMakeModel').value = d.vehMakeModel || '';
+  if(!document.getElementById('custName').value){
+    document.getElementById('custName').value = d.custName || '';
+    document.getElementById('custAddress').value = d.custAddress || '';
+    document.getElementById('custContact').value = d.custContact || '';
+    document.getElementById('custPhone').value = d.custPhone || '';
+  }
+  toast("Filled in from this vehicle's last visit.");
+}
+
 function applyCompany(idx){
   idx = parseInt(idx, 10) || 0;
   const c = COMPANIES[idx];
@@ -680,7 +738,7 @@ function fetchRecordsCloud(){
   fetch(sheetsUrl + '?action=list')
     .then(r=>r.json())
     .then(data=>{
-      if(data.ok){ recordsCache = data.docs || []; renderRecords(); }
+      if(data.ok){ recordsCache = data.docs || []; renderRecords(); refreshAutocompleteLists(); }
     })
     .catch(err=>console.error('Sheets fetch failed', err));
 }
@@ -915,6 +973,7 @@ async function saveRecord(){
     const idx = docs.findIndex(d=>d.id===doc.id);
     if(idx>=0) docs[idx]=doc; else docs.unshift(doc);
     setDocsLocal(docs);
+    refreshAutocompleteLists();
     toast('Saved locally: '+doc.docNo+' (this device only — use Sync Setup to share with other phones)');
   }
 }
@@ -992,6 +1051,7 @@ async function deleteDoc(id){
   } else {
     setDocsLocal(getDocsLocal().filter(d=>d.id!==id));
     renderRecords();
+    refreshAutocompleteLists();
     toast('Record deleted.');
   }
 }
@@ -1103,13 +1163,14 @@ async function generatePdfBlob(){
   const imgs = Array.from(element.querySelectorAll('img'));
   await Promise.all(imgs.map(img => img.decode ? img.decode().catch(()=>{}) : Promise.resolve()));
   await new Promise(r=>setTimeout(r, 50)); // extra paint frame after decode
+
   const docNo = (document.getElementById('docNo').value || 'document').replace(/[^A-Za-z0-9_-]/g,'_');
   const filename = docNo + '.pdf';
   const opt = {
     margin: 0.3,
     filename: filename,
     image: { type: 'jpeg', quality: 0.95 },
-    html2canvas: { scale: 2, useCORS: true },
+    html2canvas: { scale: 2, useCORS: true, allowTaint: true, foreignObjectRendering: true },
     jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
     pagebreak: { mode: ['css'] }
   };
@@ -1163,6 +1224,7 @@ window.addEventListener('load', ()=>{
   updateModeUI();
   calcAll();
   tryAutoConnect();
+  refreshAutocompleteLists();
   setupInstallability();
 });
 
