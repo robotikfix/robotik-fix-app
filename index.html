@@ -103,9 +103,7 @@
   body.pdf-mode .topbar, body.pdf-mode .tabs, body.pdf-mode .bottombar,
   body.pdf-mode .banner, body.pdf-mode .no-print{display:none !important;}
   body.pdf-mode{background:#fff;}
-  body.pdf-mode .card{box-shadow:none;border:none;page-break-inside:avoid;break-inside:avoid;}
-  body.pdf-mode tr, body.pdf-mode img, body.pdf-mode #printHeader{
-    page-break-inside:avoid;break-inside:avoid;}
+  body.pdf-mode .card{box-shadow:none;border:none;}
   body.pdf-mode .app{padding:0;max-width:100%;}
   body.pdf-mode table, body.pdf-mode td, body.pdf-mode th{
     border-left:none !important;border-right:none !important;border-top:none !important;}
@@ -1306,8 +1304,7 @@ async function generatePdfBlob(){
     filename: filename,
     image: { type: 'jpeg', quality: 0.95 },
     html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
-    pagebreak: { mode: ['css'] }
+    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
   };
   let blob;
   try{
