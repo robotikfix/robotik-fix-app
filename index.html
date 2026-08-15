@@ -1267,8 +1267,10 @@ async function svgToPngDataUrl(svgEl, scale){
 
 async function generatePdfBlob(){
   showTab('doc');
+  const savedScrollY = window.scrollY;
+  window.scrollTo(0, 0);
   document.body.classList.add('pdf-mode');
-  await new Promise(r=>setTimeout(r, 80)); // let layout settle
+  await new Promise(r=>setTimeout(r, 100)); // let scroll reset + layout settle
   const element = document.querySelector('.app');
   const imgs = Array.from(element.querySelectorAll('img'));
   await Promise.all(imgs.map(img => img.decode ? img.decode().catch(()=>{}) : Promise.resolve()));
@@ -1303,7 +1305,7 @@ async function generatePdfBlob(){
     margin: 0.3,
     filename: filename,
     image: { type: 'jpeg', quality: 0.95 },
-    html2canvas: { scale: 2, useCORS: true },
+    html2canvas: { scale: 2, useCORS: true, scrollX: 0, scrollY: 0 },
     jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
   };
   let blob;
@@ -1312,6 +1314,7 @@ async function generatePdfBlob(){
   } finally {
     svgReplacements.forEach(({svgEl, img}) => { img.remove(); svgEl.style.display = ''; });
     document.body.classList.remove('pdf-mode');
+    window.scrollTo(0, savedScrollY);
   }
   return { blob, filename };
 }
