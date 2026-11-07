@@ -2466,7 +2466,7 @@ body.role-technician #paymentPanel,body.role-technician #convertBtn{display:none
 =========================================================================================== */
 const RF_VERSION = '3.1';
 /* Multi-user team database: built, but switched OFF for now. Set to true to turn it back on. */
-const TEAM_ENABLED = false;
+const TEAM_ENABLED = true;
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const N = v => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
