@@ -1,4 +1,4 @@
-const CACHE_NAME = 'robotik-fix-v2';
+const CACHE_NAME = 'robotik-fix-v3';
 const urlsToCache = [
   './',
   './index.html',
@@ -9,8 +9,9 @@ const urlsToCache = [
 
 self.addEventListener('install', event => {
   self.skipWaiting();
+  // Cache each file on its own, so one missing file (e.g. an icon) can't stop offline mode working.
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache))
+    caches.open(CACHE_NAME).then(cache => Promise.all(urlsToCache.map(u => cache.add(u).catch(() => null))))
   );
 });
 
@@ -23,6 +24,11 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  // Never cache the team database (Supabase) or WhatsApp — always go to the network.
+  if (url.origin !== self.location.origin) return;
+
   // Network-first for the app page itself, so a new version shows as soon as
   // the phone/laptop is online, instead of being stuck on an old cached copy.
   // Falls back to the cached copy when offline.
@@ -38,7 +44,7 @@ self.addEventListener('fetch', event => {
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
           return response;
         })
-        .catch(() => caches.match(event.request))
+        .catch(() => caches.match(event.request).then(r => r || caches.match('./index.html')))
     );
     return;
   }
