@@ -1,10 +1,12 @@
-const CACHE_NAME = 'robotik-fix-v3';
+const CACHE_NAME = 'robotik-fix-v3-3';
 const urlsToCache = [
   './',
   './index.html',
   './manifest.webmanifest',
   './icons/icon-192.png',
-  './icons/icon-512.png'
+  './icons/icon-512.png',
+  './icons/maskable-512.png',
+  './icons/apple-touch-icon.png'
 ];
 
 self.addEventListener('install', event => {
