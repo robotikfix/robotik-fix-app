@@ -2549,6 +2549,7 @@ img.rf-sig{position:absolute;bottom:100%;left:0;right:0;margin:0 auto 2px;height
 .bot-chips button{flex:0 0 auto;border:1px solid #c5d1e6;background:#fff;color:#1F3864;border-radius:16px;padding:5px 10px;font-size:12px;}
 .bot-in{display:flex;gap:6px;align-items:flex-end;}.bot-in textarea{flex:1;min-height:44px;}
 .bot-btns{display:flex;flex-direction:column;gap:4px;}.bot-btns .rf-btn{text-align:center;}
+body.role-technician .price-col,body.role-technician #totalsCard,body.role-technician #rfWsDoc{display:none !important;}
 </style>
 <script>
 (function(){
@@ -2560,7 +2561,7 @@ img.rf-sig{position:absolute;bottom:100%;left:0;right:0;margin:0 auto 2px;height
    database (Supabase) with staff logins and roles (admin / cashier / technician).
    Without the team database everything still works on this device alone, as before.
 =========================================================================================== */
-const RF_VERSION = '5.0';
+const RF_VERSION = '5.1';
 /* Multi-user team database: built, but switched OFF for now. Set to true to turn it back on. */
 const EDITION = 'partner';      // build script switches this to 'partner' for the partner-garage app
 const TEAM_ENABLED = EDITION === 'robotik' && true;
@@ -2623,7 +2624,7 @@ const bucket = k => mem[k] || (mem[k] = new Map());
 const listeners = [];
 let emitTimer = null;
 function emit(kinds){ clearTimeout(emitTimer); emitTimer = setTimeout(() => listeners.forEach(fn => { try{ fn(kinds); }catch(e){ console.error(e); } }), 60); }
-const LOCAL_KINDS = ['porder', 'income', 'transfer', 'item','stockmove','labour','bundle','po','expense','appt','reminder','truck','tyreevent','timelog','payconfirm','setting','counter','joblink','jobpart','comeback','tow','supplier','supbill','suppay','worker','staffpay','tool','toolmove','corp','jobtrack','assetlog','msglog','diag','vehspec'];
+const LOCAL_KINDS = ['consent', 'porder', 'income', 'transfer', 'item','stockmove','labour','bundle','po','expense','appt','reminder','truck','tyreevent','timelog','payconfirm','setting','counter','joblink','jobpart','comeback','tow','supplier','supbill','suppay','worker','staffpay','tool','toolmove','corp','jobtrack','assetlog','msglog','diag','vehspec'];
 function loadLocal(){
   LOCAL_KINDS.forEach(k => {
     const b = bucket(k); b.clear();
@@ -2637,13 +2638,15 @@ function allDocs(){
   if(mode === 'sheets') return (recordsCache || []).slice();
   return getDocsLocal();
 }
+function canon(v){ return Array.isArray(v) ? '[' + v.map(canon).join(',') + ']' : v && typeof v === 'object' ? '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}' : JSON.stringify(v == null ? null : v); }
+function stripMeta(d){ const o = Object.assign({}, d || {}); ['_rev', '_baseRev', '_base', '_at', '_by', '_srv', 'id', '_deleted'].forEach(k => delete o[k]); return o; }
 const Store = {
   list(kind){ if(kind === 'doc') return allDocs(); return [...bucket(kind).values()].filter(d => !d._deleted); },
   get(kind, id){ if(kind === 'doc') return allDocs().find(d => d.id === id) || null; const d = bucket(kind).get(id); return d && !d._deleted ? d : null; },
   put(kind, data, opts){
     const d = Object.assign({}, data);
     if(!d.id) d.id = uid(kind.slice(0, 3));
-    const prevRec = bucket(kind).get(d.id); d._base = (prevRec && (prevRec._srv || prevRec._base)) || ''; delete d._srv;
+    const prevRec = bucket(kind).get(d.id); d._base = (prevRec && (prevRec._srv || prevRec._base)) || ''; delete d._srv; if(d._rev == null && prevRec && prevRec._rev != null) d._rev = prevRec._rev;
     d._at = nowIso(); d._by = myName() || 'Unspecified staff';
     if(!(opts && opts.keepDeleted)) delete d._deleted;
     if(kind === 'doc' && mode !== 'cloud') throw new Error('Documents are saved by the document screen');
@@ -2760,7 +2763,7 @@ const Cloud = {
     return me;
   },
   rowToData(row){ const d = Object.assign({}, row.data || {}, {id:row.id}); if(row.deleted) d._deleted = true; if(row.updated_at && row.updated_at !== 'local') d._srv = row.updated_at; return d; },
-  dataToRow(kind, d){ const data = Object.assign({}, d); const del = !!data._deleted; delete data._deleted; delete data._srv; return {id:d.id, kind, data, deleted:del}; },
+  dataToRow(kind, d){ const data = Object.assign({}, d); const del = !!data._deleted; delete data._deleted; delete data._srv; delete data._baseRev; if(data._rev != null && data._rev !== '') data._baseRev = Number(data._rev); return {id:d.id, kind, data, deleted:del}; },
   async loadCache(){
     const [recs, out] = await Promise.all([idbAll('records'), idbAll('outbox')]);
     Object.keys(mem).forEach(k => mem[k].clear());
@@ -2775,6 +2778,23 @@ const Cloud = {
     this.pending = (await idbAll('outbox')).length; updateStatusBadge();
     this.flush();
   },
+  // After the team database accepted a batch: take its copy (new revision number), keep newer edits made meanwhile,
+  // and tell the user when the database kept someone else's version (a conflict, kept for review under Conflicts).
+  async afterWrite(sent, back){
+    const byId = new Map((back || []).map(r => [r.id, r])), clashes = [];
+    for(const r of sent){
+      const now = (await idbAll('outbox')).find(x => x.id === r.id);
+      const newer = now && now.data && r.data && now.data._at !== r.data._at;
+      if(!newer) await idbDel('outbox', r.id);
+      const sv = byId.get(r.id); if(!sv || r.kind === 'photo') continue;
+      const same = sv.data && r.data && sv.data._at === r.data._at && !!sv.deleted === !!r.deleted;
+      if(!same && sv.data && r.data && canon(stripMeta(sv.data)) !== canon(stripMeta(r.data))) clashes.push(r);
+      if(!newer){ bucket(sv.kind).set(sv.id, this.rowToData(sv)); await idbPutMany('records', [sv]); if(sv.kind === 'doc') syncDocsCache(); emit([sv.kind]); }
+    }
+    if(clashes.length){ this.conflictsSeen = (this.conflictsSeen || 0) + clashes.length;
+      toast('⚠ ' + clashes.map(r => (r.data && (r.data.docNo || r.data.name || r.data.custName)) || r.kind).slice(0, 3).join(', ') + ' — someone else saved a newer version first. Both versions are kept; an Admin or Cashier chooses under Change Log & Sync → Conflicts.', true);
+      try{ window.dispatchEvent(new CustomEvent('rf-conflict', {detail:clashes.length})); }catch(e){} }
+  },
   async flush(){
     if(this.flushing || mode !== 'cloud') return;
     this.flushing = true;
@@ -2784,13 +2804,13 @@ const Cloud = {
         const small = items.filter(r => r.kind !== 'photo').slice(0, 25);
         const batch = small.length ? small : items.slice(0, 1);
         try{
-          await this.rest('POST', 'rf_records?on_conflict=id', batch, 'resolution=merge-duplicates,return=minimal');
-          for(const r of batch) await idbDel('outbox', r.id);
+          const back = await this.rest('POST', 'rf_records?on_conflict=id' + (batch[0].kind === 'photo' ? '' : '&select=id,kind,data,deleted,updated_at,rev'), batch, 'resolution=merge-duplicates,' + (batch[0].kind === 'photo' ? 'return=minimal' : 'return=representation'));
+          await this.afterWrite(batch, back);
         }catch(e){
           if(e.status === 0 || e.status >= 500 || e.status === 401){ this.lastErr = e.message; break; }
           // Rejected (e.g. role not allowed): try one by one so good changes still go through
           for(const r of batch){
-            try{ await this.rest('POST', 'rf_records?on_conflict=id', [r], 'resolution=merge-duplicates,return=minimal'); }
+            try{ const back1 = await this.rest('POST', 'rf_records?on_conflict=id' + (r.kind === 'photo' ? '' : '&select=id,kind,data,deleted,updated_at,rev'), [r], 'resolution=merge-duplicates,' + (r.kind === 'photo' ? 'return=minimal' : 'return=representation')); await this.afterWrite([r], back1); continue; }
             catch(e2){ if(e2.status === 0 || e2.status >= 500) throw e2; toast('Not saved to team database (' + (r.data && (r.data.docNo || r.data.name || r.kind)) + '): ' + e2.message + ' — kept under Setup → Sync problems.', true);
               try{ const rej = (await idbGetMeta('rejected')) || []; rej.unshift({row:r, error:e2.message, status:e2.status, at:nowIso(), by:myName()}); await idbSetMeta('rejected', rej.slice(0, 200)); }catch(e3){}
               // show the team database's real copy again, so the screen never pretends the refused change was saved
@@ -2864,7 +2884,7 @@ window.postToSheets = function(payload){
   if(mode !== 'cloud') return prevPost(payload);
   try{
     if(payload.action === 'save'){
-      const d = Object.assign({}, payload.doc); const pv = bucket('doc').get(d.id); d._base = (pv && (pv._srv || pv._base)) || ''; delete d._srv; d._at = nowIso(); d._by = myName();
+      const d = Object.assign({}, payload.doc); const pv = bucket('doc').get(d.id); d._base = (pv && (pv._srv || pv._base)) || ''; delete d._srv; if(d._rev == null && pv && pv._rev != null) d._rev = pv._rev; d._at = nowIso(); d._by = myName();
       if(myRole() === 'technician' && !['JOB CARD','INSPECTION REPORT','DIAGNOSTIC REPORT'].includes(d.type)) return Promise.resolve({ok:false, error:'Technicians can save job cards and inspection/diagnostic reports only.'});
       bucket('doc').set(d.id, d); Cloud.queue('doc', d); syncDocsCache(); emit(['doc']);
       return Promise.resolve({ok:true});
@@ -2930,7 +2950,7 @@ function teamStatusHtml(){
 function buildLogin(){
   const logo = ($('logoImg') || {}).src || '';
   const d = document.createElement('div'); d.id = 'rfLogin';
-  d.innerHTML = `<div class="inner"><div class="brand"><img src="${logo}" alt=""><h2 style="margin:8px 0 0;">${esc(brandVals().biz.toUpperCase())}</h2><div class="rf-note">Staff sign in</div></div>
+  d.innerHTML = `<div class="inner"><div class="brand"><img src="${esc(logo)}" alt=""><h2 style="margin:8px 0 0;">${esc(brandVals().biz.toUpperCase())}</h2><div class="rf-note">Staff sign in</div></div>
   <div class="card"><h2 id="rfLoginTitle">SIGN IN</h2>
    <div id="rfLoginMsg" class="banner" style="display:none"></div>
    <div id="rfLoginForm">
@@ -3682,9 +3702,10 @@ function renderMoney(){
   const v = $('view-money');
   if(!can('cashier')){ v.innerHTML = wrap('MONEY', '<p>Only cashier or admin can see this screen.</p>'); return; }
   const s = segState.money, pend = payments().filter(p => isTransfer(p.method) && !bucket('payconfirm').has('pc_' + p.id)).length;
-  let h = seg('money', [['reports', 'Reports'], ['cashbook', 'Cash book'], ['summary', 'Profit & loss'], ['exp', 'Expenses'], ['confirm', 'Confirm transfers' + (pend ? ' (' + pend + ')' : '')], ['owed', 'Owed to us'], ['acct', 'Accounting export']], s);
+  let h = seg('money', [['reports', 'Reports'], ['cashbook', 'Cash book'], ['summary', 'Profit & loss'], ['exp', 'Expenses'], ['confirm', 'Confirm transfers' + (pend ? ' (' + pend + ')' : '')], ['owed', 'Owed to us'], ['fin', 'Financial summary'], ['acct', 'Accounting export']], s);
   if(s === 'reports' || s === 'cashbook'){ v.innerHTML = h + '<div id="rfBooks"></div>'; renderBooks(s); return; }
   if(s === 'acct'){ v.innerHTML = h + '<div id="rfAcct"></div>'; renderAcct(); return; }
+  if(s === 'fin'){ v.innerHTML = h + '<div id="rfFin"></div>'; renderFin(); return; }
   if(s === 'summary') h += summaryHtml(); else if(s === 'exp') h += expHtml(); else if(s === 'confirm') h += confirmHtml(); else h += owedHtml();
   v.innerHTML = h;
   const ps = $('rfPeriod'); if(ps) ps.onchange = e => { moneyPeriod = e.target.value; renderMoney(); };
@@ -3982,6 +4003,24 @@ const QUICK = {
     lines:[['Alloy rim straightening (per rim)', 'labour'], ['Steel rim straightening (per rim)', 'labour'], ['Crack welding – aluminium (per crack)', 'labour'], ['Lip repair / build-up welding', 'labour'], ['Tyre removal & refitting', 'labour'], ['Wheel balancing', 'labour'], ['Valve stem', 'part'], ['Rim polishing / touch-up', 'labour']],
     notes:'Straightened or welded rims are repaired to the best achievable standard. Check tyre pressure regularly. Robotik Fix is not liable for failure caused by new impact damage or hidden cracks not visible at the time of repair.'}
 };
+const TYRE_POS = ['LF', 'RF', 'LR', 'RR', 'SPARE'];
+const ALIGN_KEYS = [['fCamL', 'Front camber L (°)'], ['fCamR', 'Front camber R (°)'], ['fCasL', 'Caster L (°)'], ['fCasR', 'Caster R (°)'], ['fToe', 'Front total toe (mm)'], ['rCamL', 'Rear camber L (°)'], ['rCamR', 'Rear camber R (°)'], ['rToe', 'Rear total toe (mm)'], ['thrust', 'Thrust angle (°)']];
+// DOT code "WWYY" → age in years
+function dotAge(dot){ const m = /(\d{2})(\d{2})\s*$/.exec(String(dot || '').replace(/\D/g, '').slice(-4)); if(!m) return null; const wk = +m[1], yr = 2000 + +m[2]; if(wk < 1 || wk > 53) return null; const made = new Date(yr, 0, 1 + (wk - 1) * 7); return Math.max(0, (Date.now() - made) / (365.25 * 864e5)); }
+function tyreFlags(t){ const f = [], age = dotAge(t.dot), tread = t.tread === '' || t.tread == null ? null : N(t.tread);
+  if(tread != null && tread < 1.6) f.push('Tread ' + tread + ' mm — below the 1.6 mm legal minimum, replace'); else if(tread != null && tread < 3) f.push('Tread ' + tread + ' mm — plan replacement');
+  if(age != null && age >= 6) f.push('Tyre is ' + Math.floor(age) + ' years old — advise replacement'); else if(age != null && age >= 5) f.push('Tyre is ' + Math.floor(age) + ' years old — inspect closely');
+  return f; }
+function tyreReadingsForm(q){
+  const tl = q.tyreLog || [], al = q.align || {}, row = p => tl.find(t => t.pos === p) || {pos:p};
+  return `<div class="card"><h2>TYRE READINGS</h2><p class="rf-note">One line per wheel. DOT = the last 4 digits on the tyre wall (week + year). Tread in mm (legal minimum 1.6 mm).</p>
+    <div class="tbl-wrap"><table class="rf-table" id="qTyreLog"><tr><th>Wheel</th><th>Size</th><th>DOT</th><th>Tread mm</th><th>psi in</th><th>psi set</th></tr>${TYRE_POS.map(p => { const t = row(p); return `<tr data-tp="${p}"><td><b>${p}</b></td><td><input class="ts" value="${esc(t.size || '')}" style="width:90px"></td><td><input class="td" value="${esc(t.dot || '')}" style="width:56px" inputmode="numeric"></td><td><input class="tt" type="number" step="0.1" value="${esc(t.tread == null ? '' : t.tread)}" style="width:60px"></td><td><input class="tpi" type="number" value="${esc(t.psiIn || '')}" style="width:52px"></td><td><input class="tpo" type="number" value="${esc(t.psiOut || '')}" style="width:52px"></td></tr>`; }).join('')}</table></div>
+    <div id="qTyreFlags" class="rf-note"></div></div>
+    <div class="card"><h2>ALIGNMENT MEASUREMENTS</h2><p class="rf-note">Fill in when alignment is done: readings before and after adjustment.</p>
+    <div class="tbl-wrap"><table class="rf-table" id="qAlign"><tr><th>Measurement</th><th>Before</th><th>After</th><th>Spec</th></tr>${ALIGN_KEYS.map(([k, l]) => `<tr data-ak="${k}"><td>${esc(l)}</td><td><input class="ab" value="${esc((al.before || {})[k] || '')}" style="width:64px"></td><td><input class="aa" value="${esc((al.after || {})[k] || '')}" style="width:64px"></td><td><input class="as" value="${esc((al.spec || {})[k] || '')}" style="width:64px"></td></tr>`).join('')}</table></div></div>`;
+}
+function readTyreLog(){ return [...document.querySelectorAll('#qTyreLog tr[data-tp]')].map(tr => ({pos:tr.dataset.tp, size:tr.querySelector('.ts').value.trim(), dot:tr.querySelector('.td').value.trim(), tread:tr.querySelector('.tt').value, psiIn:tr.querySelector('.tpi').value, psiOut:tr.querySelector('.tpo').value})).filter(t => t.size || t.dot || t.tread !== '' || t.psiIn || t.psiOut).map(t => Object.assign(t, {flags:tyreFlags(t)})); }
+function readAlign(){ const a = {before:{}, after:{}, spec:{}}; let any = false; document.querySelectorAll('#qAlign tr[data-ak]').forEach(tr => { const k = tr.dataset.ak; [['ab', 'before'], ['aa', 'after'], ['as', 'spec']].forEach(([c, w]) => { const v = tr.querySelector('.' + c).value.trim(); if(v){ a[w][k] = v; any = true; } }); }); return any ? a : null; }
 const DISC_POS = ['Front pair', 'Rear pair', 'FL', 'FR', 'RL', 'RR', 'Flywheel', 'Drum'];
 const DISC_RESULT = ['Resurfaced — OK', 'Below minimum — replace', 'Cracked / heat-damaged — replace', 'Not done'];
 const RIM_DAMAGE = ['Bent', 'Buckled', 'Cracked', 'Lip damage', 'Kerbed / scratched', 'Bent + cracked'];
@@ -4084,7 +4123,7 @@ function renderQuick(){
       <div class="q-car">${POS5.map(p => `<button type="button" class="q-pos${(q.positions || []).includes(p) ? ' on' : ''}" data-qp="${p}">${p === 'SPARE' ? 'S' : p}</button>`).join('')}<div class="q-body">FRONT ▲</div></div>
       <div class="grid2"><div class="field"><label>Tyre size</label><input id="qSize" value="${esc(x.size || '')}" placeholder="205/55R16"></div><div class="field"><label>Tyre brand / pattern</label><input id="qBrand" value="${esc(x.brand || '')}"></div></div>
       <div class="grid2"><div class="field"><label>DOT / manufacture week</label><input id="qDot" value="${esc(x.dot || '')}" placeholder="e.g. 2425"></div><div class="field"><label>Pressure set (psi) F / R</label><input id="qPsi" value="${esc(x.psi || '')}" placeholder="32 / 32"></div></div>
-      <div class="field"><label>Wheel nut torque (Nm)</label><input id="qTorque" value="${esc(x.torque || '')}" placeholder="e.g. 110"></div></div>`;
+      <div class="field"><label>Wheel nut torque (Nm)</label><input id="qTorque" value="${esc(x.torque || '')}" placeholder="e.g. 110"></div></div>` + tyreReadingsForm(q);
   }
   if(q.tpl === 'brake'){
     h += `<div class="card"><h2>DISC LOG</h2><p class="rf-note">One row per vehicle / pair. Thickness in mm — min. thickness is usually stamped on the disc.</p><div id="qDiscs">${(q.discs || []).map(discRow).join('')}</div><button class="addrow" id="qAddDisc">＋ Add disc / pair</button></div>`;
@@ -4117,7 +4156,12 @@ function renderQuick(){
   if($('qAllOk')) $('qAllOk').onclick = () => T.checks.forEach((c, i) => { if(!$('qChk' + i).value) $('qChk' + i).value = 'OK'; });
   if($('qKm') && $('qNextKm')) $('qKm').addEventListener('change', () => { if(!$('qNextKm').value && N($('qKm').value)) $('qNextKm').value = N($('qKm').value) + 5000; });
   bind(v, '[data-qp]', 'click', el => el.classList.toggle('on'));
+  if($('qTyreLog')){ const showFlags = () => { const f = readTyreLog().filter(t => t.flags.length); $('qTyreFlags').innerHTML = f.map(t => '⚠ <b>' + esc(t.pos) + '</b>: ' + t.flags.map(esc).join('; ')).join('<br>'); }; $('qTyreLog').addEventListener('input', showFlags); showFlags(); }
   if($('qAddDisc')) $('qAddDisc').onclick = () => $('qDiscs').insertAdjacentHTML('beforeend', discRow({}));
+  if($('qDiscs')) $('qDiscs').addEventListener('input', e => { const row = e.target.closest('.q-log'); if(!row || e.target.classList.contains('dk') || e.target.classList.contains('dv')) return;
+    const x = {before:row.querySelector('.db').value, after:row.querySelector('.da').value, min:row.querySelector('.dm').value, runAfter:row.querySelector('.dra').value, result:row.querySelector('.dr').value};
+    if(e.target.classList.contains('dr') === false && /Below minimum|Runout too high/.test(x.result)) x.result = DISC_RESULT[0];
+    const v = discVerdict(x), w = row.querySelector('.dwarn'); if(v.auto || !e.target.classList.contains('dr')) row.querySelector('.dr').value = v.result; w.style.display = v.auto ? '' : 'none'; w.querySelector('span').textContent = v.why; });
   if($('qAddRim')) $('qAddRim').onclick = () => $('qRims').insertAdjacentHTML('beforeend', rimRow({}));
   v.addEventListener('click', e => { const b = e.target.closest('[data-qdel]'); if(b) b.closest('.rf-row').remove(); });
   $('qSave').onclick = () => saveQuick();
@@ -4127,10 +4171,24 @@ function renderQuick(){
     openWhatsApp(doc.custPhone, fillTemplate(st.payMsg, {name:doc.custContact || doc.custName || 'Customer', docNo:doc.docNo, total:money(doc.grand), paid:money(doc.paymentsReceived), balance:money(bal), bank:doc.bankName, acctNo:doc.bankAcctNo, acctName:doc.bankAcctName, link:st.payLink ? '\nOr pay online (card / transfer / USSD): ' + st.payLink : ''})); };
   updateQuickTotals();
 }
+// Disc safety rules: the disc is rejected automatically if it is (or would end up) below the minimum thickness
+// stamped on it, or if runout after machining is above the limit (default 0.05 mm).
+function discLimit(){ return N(Store.setting().discRunoutLimit) || 0.05; }
+function discVerdict(r){
+  const b = N(r.before), a = N(r.after), m = N(r.min), ro = r.runAfter === '' || r.runAfter == null ? null : N(r.runAfter), lim = discLimit();
+  if(r.result === 'Not done' || r.result === 'Cracked / heat-damaged — replace') return {result:r.result, auto:false, why:''};
+  if(m && r.before !== '' && r.before != null && b && b < m) return {result:'Below minimum — replace', auto:true, why:'Incoming ' + b + ' mm is already below the minimum ' + m + ' mm.'};
+  if(m && r.after !== '' && r.after != null && a && a < m) return {result:'Below minimum — replace', auto:true, why:'Final ' + a + ' mm is below the minimum ' + m + ' mm.'};
+  if(ro != null && ro > lim) return {result:'Runout too high — re-machine or replace', auto:true, why:'Runout after machining ' + ro + ' mm is above the ' + lim + ' mm limit.'};
+  return {result:r.result || DISC_RESULT[0], auto:false, why:''};
+}
 function discRow(r){
+  const v = discVerdict(r || {});
   return `<div class="rf-row q-log"><div class="grid2"><div class="field"><label>Vehicle / reg. no.</label><input class="dv" value="${esc(r.vehicle || '')}" placeholder="Corolla · KJA 123 AB"></div><div class="field"><label>Position</label><select class="dp">${qOpts(DISC_POS, r.pos || 'Front pair')}</select></div></div>
-    <div class="grid2" style="grid-template-columns:1fr 1fr 1fr"><div class="field"><label>Before (mm)</label><input class="db" type="number" step="0.1" value="${esc(r.before || '')}"></div><div class="field"><label>After (mm)</label><input class="da" type="number" step="0.1" value="${esc(r.after || '')}"></div><div class="field"><label>Min. (mm)</label><input class="dm" type="number" step="0.1" value="${esc(r.min || '')}"></div></div>
-    <div class="grid2"><div class="field"><label>Result</label><select class="dr">${qOpts(DISC_RESULT, r.result || DISC_RESULT[0])}</select></div><div class="field"><label>Remark</label><input class="dk" value="${esc(r.remark || '')}" placeholder="e.g. deep scoring, warped"></div></div>
+    <div class="grid2" style="grid-template-columns:1fr 1fr 1fr"><div class="field"><label>Incoming (mm)</label><input class="db" type="number" step="0.01" value="${esc(r.before || '')}"></div><div class="field"><label>Final (mm)</label><input class="da" type="number" step="0.01" value="${esc(r.after || '')}"></div><div class="field"><label>Min. stamped (mm)</label><input class="dm" type="number" step="0.01" value="${esc(r.min || '')}"></div></div>
+    <div class="grid2"><div class="field"><label>Runout before (mm)</label><input class="drb" type="number" step="0.01" value="${esc(r.runBefore || '')}"></div><div class="field"><label>Runout after (mm, limit ${discLimit()})</label><input class="dra" type="number" step="0.01" value="${esc(r.runAfter || '')}"></div></div>
+    <div class="grid2"><div class="field"><label>Result</label><select class="dr">${qOpts(DISC_RESULT.concat(['Runout too high — re-machine or replace']), v.result)}</select></div><div class="field"><label>Remark</label><input class="dk" value="${esc(r.remark || '')}" placeholder="e.g. deep scoring, warped"></div></div>
+    <div class="banner dwarn" style="background:#fdecea;border-color:#e6b0aa;${v.auto ? '' : 'display:none'}">⛔ <span>${esc(v.why)}</span> Unsafe disc — rejected automatically.</div>
     <button type="button" class="rf-btn red" data-qdel>Remove row</button></div>`;
 }
 function rimRow(r){
@@ -4151,9 +4209,10 @@ function collectQuick(){
   else Object.assign(extra, {workPhone:qVal('qWork'), city:qVal('qCity'), state:qVal('qState'), make:qVal('qMake'), model:qVal('qModel'), year:qVal('qYear')});
   if(q.tpl === 'lube') Object.assign(extra, {oil:qVal('qOil'), oilQty:qVal('qOilQty'), nextKm:qVal('qNextKm'), nextDate:qVal('qNextDate')});
   if(q.tpl === 'tyre') Object.assign(extra, {size:qVal('qSize'), brand:qVal('qBrand'), dot:qVal('qDot'), psi:qVal('qPsi'), torque:qVal('qTorque')});
+  const tyreLog = q.tpl === 'tyre' && $('qTyreLog') ? readTyreLog() : (q.tyreLog || []), align = q.tpl === 'tyre' && $('qAlign') ? readAlign() : (q.align || null);
   const checks = {}; if(q.tpl === 'lube') T.checks.forEach((c, i) => { const v = qVal('qChk' + i); if(v) checks[c] = v; });
   const positions = [...document.querySelectorAll('[data-qp].on')].map(b => b.dataset.qp);
-  const discs = [...document.querySelectorAll('#qDiscs .q-log')].map(r => ({vehicle:r.querySelector('.dv').value.trim(), pos:r.querySelector('.dp').value, before:r.querySelector('.db').value, after:r.querySelector('.da').value, min:r.querySelector('.dm').value, result:r.querySelector('.dr').value, remark:r.querySelector('.dk').value.trim()})).filter(r => r.vehicle || r.before || r.after || r.remark);
+  const discs = [...document.querySelectorAll('#qDiscs .q-log')].map(r => { const x = {vehicle:r.querySelector('.dv').value.trim(), pos:r.querySelector('.dp').value, before:r.querySelector('.db').value, after:r.querySelector('.da').value, min:r.querySelector('.dm').value, runBefore:r.querySelector('.drb') ? r.querySelector('.drb').value : '', runAfter:r.querySelector('.dra') ? r.querySelector('.dra').value : '', result:r.querySelector('.dr').value, remark:r.querySelector('.dk').value.trim()}; const v = discVerdict(x); x.result = v.result; x.rejectReason = v.why; x.cut = x.before !== '' && x.after !== '' ? Math.round((N(x.before) - N(x.after)) * 100) / 100 : ''; return x; }).filter(r => r.vehicle || r.before || r.after || r.remark);
   const rims = [...document.querySelectorAll('#qRims .q-log')].map(r => ({pos:r.querySelector('.rp').value, size:r.querySelector('.rs').value.trim(), type:r.querySelector('.rt').value, damage:r.querySelector('.rd').value, work:r.querySelector('.rw').value, remark:r.querySelector('.rk').value.trim()}));
   const pays = (d.paymentEntries || []).map(p => Object.assign({}, p));
   const newAmt = N(qVal('qPayAmt')), method = qVal('qPayMethod');
@@ -4176,7 +4235,7 @@ function collectQuick(){
     advancePct:0, advanceAmt:0, balanceDue:t.balance, showNetBalance:'NO', notes:qVal('qNotes'),
     bankName:co.bankName, bankAcctName:co.bankAcctName, bankAcctNo:co.bankAcctNo,
     paymentEntries:pays, paymentsReceived:paid, outstandingBalance:t.balance, savedAt:nowIso(),
-    quick:Object.assign({}, q, {salesPerson:qVal('qSales'), extra, checks, positions, discs, rims, lines})
+    quick:Object.assign({}, q, {salesPerson:qVal('qSales'), extra, checks, positions, discs, rims, lines, tyreLog, align})
   });
 }
 async function allocInvoiceNo(dateIso){
@@ -4239,13 +4298,13 @@ function quickHtml(doc){
     .qi .foot{display:flex;gap:16px;margin-top:10px}.qi .foot>div{flex:1}.qi .sig{display:flex;gap:30px;margin-top:58px}.qi .sig div{flex:1;border-top:1px solid #111;padding-top:3px;font-size:10px;text-align:center;color:#444}
     .qi .note{font-size:10px;color:#333;margin-top:6px;white-space:pre-wrap}.qi .bad{color:#c0392b;font-weight:bold}
   </style>
-  <div class="hd"><img src="${logo}" alt=""><div class="co"><b>${esc(co.name)}</b><div>${esc(co.address)}</div><div>Tel: ${esc(co.tel)} · ${esc(co.email)}</div>${co.tin ? `<div>TIN: ${esc(co.tin)}</div>` : ''}</div>
+  <div class="hd"><img src="${esc(logo)}" alt=""><div class="co"><b>${esc(co.name)}</b><div>${esc(co.address)}</div><div>Tel: ${esc(co.tel)} · ${esc(co.email)}</div>${co.tin ? `<div>TIN: ${esc(co.tin)}</div>` : ''}</div>
   <div class="tt"><h1>${esc(T.title)}</h1><div>No: <b>${esc(doc.docNo)}</b></div><div>Date: <b>${esc(fmtDate(doc.date))}</b></div><div>Status: <b>${esc(doc.status)}</b></div></div></div>`;
   if(q.tpl === 'brake'){
     h += `<table><tr>${cell('Customer (' + (x.custType || '') + ')', doc.custName, '50%')}${cell('Contact person', doc.custContact)}${cell('Phone', doc.custPhone)}</tr>
       <tr>${cell('Pickup / delivery address', doc.custAddress)}${cell('Their job ref.', doc.serviceOrderNo)}${cell('Handled by', q.salesPerson)}</tr>
       <tr>${cell('Pickup & delivery', x.pickup ? 'By ' + brandVals().biz : 'Dropped at our shop')}${cell('Collected', fmtDate(x.collected))}${cell('Returned', fmtDate(x.returned))}</tr></table>`;
-    if((q.discs || []).length) h += `<div class="sec">DISC LOG</div><table><tr><th>#</th><th>Vehicle / reg.</th><th>Position</th><th class="n">Before mm</th><th class="n">After mm</th><th class="n">Min mm</th><th>Result</th><th>Remark</th></tr>${q.discs.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.vehicle)}</td><td>${esc(r.pos)}</td><td class="n">${esc(r.before)}</td><td class="n">${esc(r.after)}</td><td class="n">${esc(r.min)}</td><td class="${/replace/i.test(r.result) ? 'bad' : ''}">${esc(r.result)}</td><td>${esc(r.remark)}</td></tr>`).join('')}</table>`;
+    if((q.discs || []).length) h += `<div class="sec">DISC LOG</div><table><tr><th>#</th><th>Vehicle / reg.</th><th>Position</th><th class="n">In mm</th><th class="n">Final mm</th><th class="n">Min mm</th><th class="n">Runout mm</th><th>Result</th><th>Remark</th></tr>${q.discs.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.vehicle)}</td><td>${esc(r.pos)}</td><td class="n">${esc(r.before)}</td><td class="n">${esc(r.after)}</td><td class="n">${esc(r.min)}</td><td class="n">${esc(r.runAfter || '')}</td><td class="${/replace|too high/i.test(r.result) ? 'bad' : ''}">${esc(r.result)}${r.rejectReason ? '<br><small>' + esc(r.rejectReason) + '</small>' : ''}</td><td>${esc(r.remark)}</td></tr>`).join('')}</table>`;
   } else {
     h += `<table><tr>${cell('Customer name', doc.custName, '46%')}${cell('Sales person', q.salesPerson)}</tr>
       <tr>${cell('Address', doc.custAddress)}${cell('City / State', [x.city, x.state].filter(Boolean).join(', '))}</tr>
@@ -4256,6 +4315,8 @@ function quickHtml(doc){
     const on = p => (q.positions || []).includes(p) ? ' on' : '';
     h += `<div style="display:flex;gap:14px;align-items:flex-start;margin-top:8px"><div class="car"><div class="w${on('LF')}">LF</div><div class="bd">FRONT</div><div class="w${on('RF')}">RF</div><div class="w${on('LR')}">LR</div><div class="w${on('RR')}">RR</div><div class="w sp${on('SPARE')}">S — SPARE</div></div>
       <table style="margin-top:0"><tr>${cell('Tyre size', x.size)}${cell('Brand / pattern', x.brand)}</tr><tr>${cell('DOT / week', x.dot)}${cell('Pressure set (psi)', x.psi)}</tr><tr>${cell('Wheel nut torque (Nm)', x.torque)}${cell('Positions serviced', (q.positions || []).join(', '))}</tr></table></div>`;
+    if((q.tyreLog || []).length) h += `<div class="sec">TYRE READINGS</div><table><tr><th>Wheel</th><th>Size</th><th>DOT</th><th class="n">Tread mm</th><th class="n">psi in</th><th class="n">psi set</th><th>Advice</th></tr>${q.tyreLog.map(t => `<tr><td>${esc(t.pos)}</td><td>${esc(t.size)}</td><td>${esc(t.dot)}</td><td class="n">${esc(t.tread)}</td><td class="n">${esc(t.psiIn)}</td><td class="n">${esc(t.psiOut)}</td><td class="${(t.flags || []).some(f => /replace/.test(f)) ? 'bad' : ''}">${(t.flags || []).map(esc).join('<br>')}</td></tr>`).join('')}</table>`;
+    if(q.align) h += `<div class="sec">ALIGNMENT MEASUREMENTS</div><table><tr><th>Measurement</th><th class="n">Before</th><th class="n">After</th><th class="n">Spec</th></tr>${ALIGN_KEYS.filter(([k]) => q.align.before[k] || q.align.after[k]).map(([k, l]) => `<tr><td>${esc(l)}</td><td class="n">${esc(q.align.before[k] || '')}</td><td class="n">${esc(q.align.after[k] || '')}</td><td class="n">${esc((q.align.spec || {})[k] || '')}</td></tr>`).join('')}</table>`;
   }
   if(q.tpl === 'lube'){
     const ch = Object.entries(q.checks || {});
@@ -4421,7 +4482,7 @@ function myBusinessHtml(){
   const f = (id, label, v, ph) => `<div class="field"><label>${label}</label><input id="${id}" value="${esc(v || '')}" placeholder="${esc(ph || '')}"></div>`;
   return `<div class="card"><h2 class="red">MY BUSINESS</h2>
     ${EDITION === 'partner' && !brandSetting() ? '<div class="banner">Welcome! Enter your garage details once — they appear on your job cards, quotations and invoices.</div>' : ''}
-    <div class="rf-tools"><img src="${logo}" alt="" style="height:64px;max-width:120px;border:1px solid #ddd;border-radius:6px;background:#fff;${logo ? '' : 'display:none'}" id="rfBLogoPrev"><label class="rf-btn grey" style="cursor:pointer">📷 ${logo ? 'Change' : 'Upload'} logo<input type="file" accept="image/*" id="rfBLogo" style="display:none"></label></div>
+    <div class="rf-tools"><img src="${esc(logo)}" alt="" style="height:64px;max-width:120px;border:1px solid #ddd;border-radius:6px;background:#fff;${logo ? '' : 'display:none'}" id="rfBLogoPrev"><label class="rf-btn grey" style="cursor:pointer">📷 ${logo ? 'Change' : 'Upload'} logo<input type="file" accept="image/*" id="rfBLogo" style="display:none"></label></div>
     ${f('rfBShort', 'Short name (used in WhatsApp messages)', b.short || (EDITION === 'partner' ? '' : 'Robotik Fix'), 'e.g. Mama Tunde Motors')}
     ${f('rfB1Name', 'Business name on documents *', c1.name, 'e.g. MAMA TUNDE MOTORS')}
     ${f('rfB1Addr', 'Address', c1.address, 'Street, area, city')}
@@ -4853,7 +4914,7 @@ function printBooks(title, label, body){
   const w = window.open('', '_blank'); if(!w){ toast('Allow pop-ups to print.', true); return; }
   const co = bkCo === 'all' ? COMPANIES[0] : COMPANIES[N(bkCo)] || COMPANIES[0], logo = ($('logoImg') || {}).src || '';
   w.document.write(`<!doctype html><html><head><title>${esc(title)} ${esc(label)}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>@page{size:A4;margin:12mm}body{font:12px Arial;color:#111;padding:16px}.hd{display:flex;gap:12px;align-items:center;border-bottom:3px solid #E30613;padding-bottom:8px;margin-bottom:10px}.hd img{height:56px}h1{font-size:16px;color:#1F3864;margin:0}h2{font-size:14px;margin:4px 0 0}.rf-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.rf-kpi{border:1px solid #ccc;border-radius:6px;padding:6px}.l{font-size:9px;color:#555;text-transform:uppercase}.v{font-size:14px;font-weight:bold;color:#1F3864}.v.neg{color:#c0392b}.v.pos{color:#1e8449}table{width:100%;border-collapse:collapse;margin:4px 0}th{background:#1F3864;color:#fff;text-align:left;padding:4px;font-size:10px}td{border:1px solid #ccc;padding:4px}.n{text-align:right}.tot td{font-weight:bold;background:#f2f4f8}.rf-note{font-size:10px;color:#555}.rf-badge{font-size:9px;font-weight:bold}.rf-badge.green{color:#1e8449}.rf-badge.red{color:#c0392b}h3{page-break-after:avoid}table,svg{page-break-inside:avoid}@media print{.np{display:none}}</style></head><body>
-    <div class="hd"><img src="${logo}" alt=""><div><h1>${esc(bkCo === 'all' ? brandVals().bizFull : co.name)}</h1><h2>${esc(title)} — ${esc(label)}</h2><div class="rf-note">${esc(coLabel(bkCo))} · printed ${esc(new Date().toLocaleString('en-NG'))} by ${esc(myName() || 'staff')}</div></div></div>
+    <div class="hd"><img src="${esc(logo)}" alt=""><div><h1>${esc(bkCo === 'all' ? brandVals().bizFull : co.name)}</h1><h2>${esc(title)} — ${esc(label)}</h2><div class="rf-note">${esc(coLabel(bkCo))} · printed ${esc(new Date().toLocaleString('en-NG'))} by ${esc(myName() || 'staff')}</div></div></div>
     ${body}<p class="np" style="text-align:center"><button onclick="print()" style="padding:10px 20px">Print / Save as PDF</button></p><script>setTimeout(function(){print()},500)<\/script></body></html>`);
   w.document.close();
 }
@@ -4935,7 +4996,7 @@ function workers(all){ return Store.list('worker').filter(w => all || w.active !
 function wsPrint(title, body){
   const w = window.open('', '_blank'); if(!w){ toast('Allow pop-ups to print.', true); return; }
   const logo = ($('logoImg') || {}).src || '';
-  w.document.write(`<!doctype html><html><head><title>${esc(title)}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>@page{size:A4;margin:12mm}body{font:12px Arial;color:#111;padding:16px}.hd{display:flex;gap:12px;align-items:center;border-bottom:3px solid #E30613;padding-bottom:8px;margin-bottom:10px}.hd img{height:56px}h1{font-size:16px;color:#1F3864;margin:0}h2{font-size:13px;margin:2px 0}h3{font-size:12.5px;color:#1F3864}table{width:100%;border-collapse:collapse;margin:8px 0}th,td{border:1px solid #ccc;padding:5px;text-align:left;vertical-align:top}th{background:#1F3864;color:#fff}.n{text-align:right}.tot td{font-weight:bold;background:#f3f5f9}.rf-note{color:#666;font-size:11px}@media print{.np{display:none}}</style></head><body><div class="hd">${logo ? `<img src="${logo}" alt="">` : ''}<div><h1>${esc(brandVals().bizFull)}</h1><h2>${esc(title)}</h2><div class="rf-note">Printed ${esc(new Date().toLocaleString('en-NG'))} by ${esc(myName() || 'staff')}</div></div></div>${body}<p class="np" style="text-align:center"><button onclick="print()" style="padding:10px 20px">Print / Save as PDF</button></p></body></html>`);
+  w.document.write(`<!doctype html><html><head><title>${esc(title)}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>@page{size:A4;margin:12mm}body{font:12px Arial;color:#111;padding:16px}.hd{display:flex;gap:12px;align-items:center;border-bottom:3px solid #E30613;padding-bottom:8px;margin-bottom:10px}.hd img{height:56px}h1{font-size:16px;color:#1F3864;margin:0}h2{font-size:13px;margin:2px 0}h3{font-size:12.5px;color:#1F3864}table{width:100%;border-collapse:collapse;margin:8px 0}th,td{border:1px solid #ccc;padding:5px;text-align:left;vertical-align:top}th{background:#1F3864;color:#fff}.n{text-align:right}.tot td{font-weight:bold;background:#f3f5f9}.rf-note{color:#666;font-size:11px}@media print{.np{display:none}}</style></head><body><div class="hd">${logo ? `<img src="${esc(logo)}" alt="">` : ''}<div><h1>${esc(brandVals().bizFull)}</h1><h2>${esc(title)}</h2><div class="rf-note">Printed ${esc(new Date().toLocaleString('en-NG'))} by ${esc(myName() || 'staff')}</div></div></div>${body}<p class="np" style="text-align:center"><button onclick="print()" style="padding:10px 20px">Print / Save as PDF</button></p></body></html>`);
   w.document.close();
 }
 function wsLists(){
@@ -5174,7 +5235,7 @@ function comeSeg(box){
   /* under warranty now */
   const wd = warrantyDays(), live = Store.list('doc').filter(d => isInv(d) && d.date && d.date >= addDays(today(), -wd)).sort((a, b) => String(a.date).localeCompare(String(b.date)));
   h += `<h3 style="font-size:12.5px;color:#1F3864;margin-top:14px">Under warranty now (${live.length})</h3>` + (live.slice(0, 40).map(d => `<div class="rf-row"><div class="t"><span>${esc(d.docNo)} · ${esc(d.vehReg || '')}</span><span class="rf-badge blue">until ${esc(fmtDate(addDays(d.date, wd)))}</span></div><div class="m">${esc(d.custName || '')} · ${esc(fmtDate(d.date))}</div></div>`).join('') || '<div class="rf-empty">None.</div>');
-  h += `<div class="need-admin" style="margin-top:12px"><h3 style="font-size:12.5px;color:#1F3864">Warranty terms</h3><div class="grid2"><div class="field"><label>Workmanship warranty (days)</label><input id="wsWd" type="number" value="${wd}"></div><div class="field"><label>…or kilometres</label><input id="wsWk" type="number" value="${warrantyKm()}"></div></div><label class="chk"><input type="checkbox" id="wsWp" style="width:auto"${wsSet('warrantyPrint', true) !== false ? ' checked' : ''}> Print the warranty line on invoices</label><div class="rf-tools"><button class="rf-btn" id="wsWSave">Save warranty terms</button></div></div>`;
+  h += `<div class="need-admin" style="margin-top:12px"><h3 style="font-size:12.5px;color:#1F3864">Warranty terms</h3><div class="grid2"><div class="field"><label>Workmanship warranty (days)</label><input id="wsWd" type="number" value="${esc(wd)}"></div><div class="field"><label>…or kilometres</label><input id="wsWk" type="number" value="${warrantyKm()}"></div></div><label class="chk"><input type="checkbox" id="wsWp" style="width:auto"${wsSet('warrantyPrint', true) !== false ? ' checked' : ''}> Print the warranty line on invoices</label><div class="rf-tools"><button class="rf-btn" id="wsWSave">Save warranty terms</button></div></div>`;
   box.innerHTML = wrap('WARRANTY &amp; COMEBACKS', h, true);
   $('wsCbAdd').onclick = () => { formModal('Comeback — which vehicle?', [{k:'vehReg', label:'Reg. number', req:true}], {}, v => { setTimeout(() => editComeback(null, {vehReg:v.vehReg}), 50); }); };
   bind(box, '[data-cb]', 'click', el => editComeback(el.dataset.cb));
@@ -5886,7 +5947,7 @@ renderWorkshop = function(){
 let sysSeg = 'sync', logQ = '', logKind = '';
 async function renderSystem(){
   const v = $('view-system'); if(!v) return;
-  let h = seg('system', [['sync', 'Sync problems'], ['security', 'Security'], ['backup', 'Backup', 'need-admin'], ['conflicts', 'Conflicts', 'need-admin'], ['log', 'Change log', 'need-admin'], ['errors', 'Errors & device']], sysSeg);
+  let h = seg('system', [['sync', 'Sync problems'], ['security', 'Security'], ['backup', 'Backup', 'need-admin'], ['conflicts', 'Conflicts', 'need-cashier'], ['log', 'Change log', 'need-admin'], ['errors', 'Errors & device']], sysSeg);
   v.innerHTML = h + '<div id="sysBody"><div class="rf-empty">Loading…</div></div>';
   v.querySelectorAll('[data-seg=system]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); sysSeg = b.dataset.k; renderSystem(); }));
   const box = $('sysBody');
@@ -6234,7 +6295,7 @@ afterSave = function(doc, prev){ prevAfterSave3(doc, prev); try{ ruleReminder(do
 
 // one-by-one WhatsApp queue (works without any plug-in)
 function reminderQueue(){
-  const due = Store.list('reminder').filter(r => r.status === 'pending' && r.dueDate <= addDays(today(), N(Store.setting().autoRemDaysBefore == null ? 3 : Store.setting().autoRemDaysBefore)) && r.phone).sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)));
+  const due = Store.list('reminder').filter(r => r.status === 'pending' && r.dueDate <= addDays(today(), N(Store.setting().autoRemDaysBefore == null ? 3 : Store.setting().autoRemDaysBefore)) && r.phone && !remBlocked(r)).sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)));
   if(!due.length){ toast('No due reminders with a phone number.'); return; }
   let i = 0;
   const show = () => {
@@ -6245,7 +6306,7 @@ function reminderQueue(){
     box.querySelector('#rqGo').onclick = () => {
       const when = r.dueDate < today() ? ' (it was due on ' + fmtDate(r.dueDate) + ')' : ' on ' + fmtDate(r.dueDate);
       openWhatsApp(r.phone, fillTemplate(Store.setting().reminderMsg, {name:r.custName || 'Customer', vehicle:r.vehicle || 'vehicle', reg:r.vehReg || '', service:lc(r.service), when}));
-      Store.put('reminder', Object.assign({}, r, {status:'sent', sentAt:today(), sentBy:myName() || 'Staff'})); i++; setTimeout(show, 400);
+      Store.put('reminder', Object.assign({}, r, {status:'sent', sentAt:today(), sentBy:myName() || 'Staff'})); logManualReminder(r); i++; setTimeout(show, 400);
     };
   };
   show();
@@ -6292,7 +6353,7 @@ function renderPlugins(){
   h += wrap('🔔 AUTOMATIC SERVICE REMINDERS', `<div class="grid2"><div class="field"><label>Send automatically by</label><select id="plRm"${can('admin') ? '' : ' disabled'}>${[['off', 'Off — I send them from the app'], ['whatsapp', 'WhatsApp Business (Supabase)'], ['sms', 'SMS — Termii (Supabase)'], ['whatsapp_sms', 'WhatsApp, then SMS if it fails']].map(([k, l]) => `<option value="${k}"${k === (s.autoRemMode || 'off') ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
     <div class="field"><label>Send this many days before the due date</label><input id="plRd" type="number" value="${N(s.autoRemDaysBefore == null ? 3 : s.autoRemDaysBefore)}"${can('admin') ? '' : ' disabled'}></div></div>
     <h3 style="font-size:12.5px;color:#1F3864">Reminder rules (days after the job; 0 = off)</h3><p class="rf-note">Jobs in your labour price guide with their own reminder period use that period instead.</p>
-    <table class="rf-table">${REM_RULES.map(([k, l, svc]) => `<tr><td>${esc(l)}<div class="rf-note" style="margin:0">→ “${esc(svc)}”</div></td><td class="n" style="width:90px"><input data-rr="${esc(k)}" type="number" value="${rr[k]}" style="width:80px"${can('admin') ? '' : ' disabled'}></td></tr>`).join('')}</table>
+    <table class="rf-table">${REM_RULES.map(([k, l, svc]) => `<tr><td>${esc(l)}<div class="rf-note" style="margin:0">→ “${esc(svc)}”</div></td><td class="n" style="width:90px"><input data-rr="${esc(k)}" type="number" value="${esc(rr[k])}" style="width:80px"${can('admin') ? '' : ' disabled'}></td></tr>`).join('')}</table>
     <div class="rf-tools">${can('admin') ? '<button class="rf-btn" id="plRSave">Save reminder settings</button>' : ''}<button class="rf-btn wa" id="plQueue">💬 Send all due, one by one (free)</button>${cloud ? '<button class="rf-btn green" id="plSendNow">⚡ Send due reminders now (Supabase)</button>' : ''}</div>
     ${last.length ? '<h3 style="font-size:12.5px;color:#1F3864">Last automatic messages</h3>' + last.map(l => `<div class="rf-row"><div class="t"><span>${esc(l.custName || l.to)} · ${esc(l.service || '')}</span><span class="rf-badge ${l.ok ? 'green' : 'red'}">${l.ok ? esc(l.channel) : 'failed'}</span></div><div class="m">${esc(fmtDate(l.at))} ${esc(new Date(l.at).toLocaleTimeString('en-NG', {hour:'2-digit', minute:'2-digit'}))}${l.error ? ' · ' + esc(l.error) : ''}</div></div>`).join('') : ''}
     <details><summary class="rf-note" style="cursor:pointer"><b>Setup (once) — fully automatic sending every morning</b></summary><ol class="rf-note">
@@ -7159,6 +7220,393 @@ renderPlugins = function(){
   $('plAiOpen').onclick = () => { techOpen = null; techSeg = 'bot'; showTab('tech'); };
 };
 window.RF.parseVehicle = parseVehicle; window.RF.answerFree = answerFree; window.RF.mdLite = mdLite;
+/* ===================== v5.1: conflict review, trusted change log, reception & QC sign-off, partner tracking,
+   approval revisions, stock reservations, financial summary, safety warnings, reminder consent ===================== */
+
+/* ---------- 1. Conflicts: both versions kept by the database until an Admin/Cashier chooses ---------- */
+const showVal = v => { const s = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v); return s.length > 120 ? s.slice(0, 118) + '…' : s; };
+function diffKeys(a, b){ const o = stripMeta(a), n = stripMeta(b); return Object.keys(Object.assign({}, o, n)).filter(k => canon(o[k]) !== canon(n[k])); }
+sysConflicts = async function(box){
+  if(mode !== 'cloud'){ box.innerHTML = wrap('CONFLICTS', '<p class="rf-note">Conflicts can only happen when several people use the team database. On a single device there are none.</p>', true); return; }
+  let rows;
+  try{ rows = await Cloud.rest('GET', 'rf_conflicts?select=*&status=eq.open&order=created_at.desc&limit=100') || []; }
+  catch(e){ box.innerHTML = wrap('CONFLICTS', '<p>' + esc(/rf_conflicts|404|does not exist/.test(e.message + e.status) ? 'Run the v5.1 database update (upgrade-5.0-to-5.1.sql) in Supabase first.' : e.message) + '</p>', true); return; }
+  const canResolve = can('cashier');
+  let h = '<p class="rf-note">A conflict is when someone saved a record that another person had already changed (for example a phone that was offline). The team database <b>kept the version already saved</b> and stored the other one here, so nothing is lost. Choose which to keep, or pick field by field.</p>';
+  h += rows.map(c => { const keys = diffKeys(c.server_data, c.incoming_data).slice(0, 14);
+    return `<div class="rf-row" data-cf="${c.id}"><div class="t"><span>${esc(c.kind)} · ${esc(recLabel(c.kind, c.server_data || c.incoming_data || {}))}</span><span class="rf-badge amber">conflict</span></div>
+      <div class="m">${esc(fmtDate(c.created_at))} ${esc(new Date(c.created_at).toLocaleTimeString('en-NG', {hour:'2-digit', minute:'2-digit'}))} · sent by <b>${esc(c.by_name || '?')}</b> from revision ${esc(c.base_rev == null ? 'unknown' : c.base_rev)} · team copy is revision ${esc(c.server_rev)}${c.incoming_deleted ? ' · <b>they deleted it</b>' : ''}</div>
+      <div style="overflow-x:auto"><table class="rf-table"><tr><th>Field</th><th>Saved (kept)</th><th>Their version</th>${canResolve ? '<th>Use</th>' : ''}</tr>${keys.map(k => `<tr><td>${esc(k)}</td><td>${esc(showVal((c.server_data || {})[k]))}</td><td>${esc(showVal((c.incoming_data || {})[k]))}</td>${canResolve ? `<td><select data-fk="${esc(k)}"><option value="s">Saved</option><option value="i">Theirs</option></select></td>` : ''}</tr>`).join('') || '<tr><td colspan=4>Only internal fields differ.</td></tr>'}</table></div>
+      ${canResolve ? `<div class="acts"><button class="rf-btn green" data-cfk="server">Keep saved</button><button class="rf-btn" data-cfk="incoming">Use their version</button>${keys.length > 1 ? '<button class="rf-btn grey" data-cfk="merged">Save my field choices</button>' : ''}</div>` : '<div class="rf-note">An Admin or Cashier will choose which version to keep.</div>'}</div>`; }).join('') || '<div class="rf-empty">No open conflicts. 👍</div>';
+  box.innerHTML = wrap('CONFLICTS', h, true);
+  bind(box, '[data-cfk]', 'click', async el => {
+    const row = el.closest('[data-cf]'), c = rows.find(x => String(x.id) === row.dataset.cf), choice = el.dataset.cfk; let data = null;
+    if(choice === 'merged'){ data = Object.assign({}, c.server_data); row.querySelectorAll('[data-fk]').forEach(s => { if(s.value === 'i'){ const k = s.dataset.fk; if((c.incoming_data || {})[k] === undefined) delete data[k]; else data[k] = c.incoming_data[k]; } }); }
+    if(choice !== 'server' && !(await askConfirm(choice === 'incoming' ? 'Replace the saved record with ' + (c.by_name || 'their') + '’s version?' : 'Save the record with your field choices?'))) return;
+    try{ await Cloud.rest('POST', 'rpc/rf_conflict_resolve', {p_id:c.id, p_choice:choice, p_data:data}); toast(choice === 'server' ? 'Kept the saved version.' : 'Saved.'); await Cloud.sync(); renderSystem(); }
+    catch(e){ toast(e.message, true); }
+  });
+};
+async function openConflictCount(){ if(mode !== 'cloud' || !can('cashier')) return 0; try{ const r = await Cloud.rest('GET', 'rf_conflicts?select=id&status=eq.open&limit=50'); return (r || []).length; }catch(e){ return 0; } }
+window.addEventListener('rf-conflict', () => { if(curTab === 'system') renderSystem(); });
+
+/* ---------- 2. Change log: the name comes from the login, not from what the app typed ---------- */
+sysLog = async function(box){
+  let rows = [];
+  if(mode === 'cloud'){
+    const q = 'rf_history?select=hid,at,record_id,kind,action,by_name,by_user,actor_name,actor_role,via,claimed_by,rev,new_data,old_data&order=at.desc&limit=300' + (logKind ? '&kind=eq.' + encodeURIComponent(logKind) : '');
+    let raw; try{ raw = await Cloud.rest('GET', q) || []; }catch(e){ raw = await Cloud.rest('GET', q.replace('actor_name,actor_role,via,claimed_by,rev,', '')) || []; }
+    rows = raw.map(r => { const who = r.actor_name || (r.actor_role === 'system' ? 'System' : r.actor_role === 'sql' ? 'Database console' : r.by_name || '?');
+      const claimed = r.claimed_by && r.actor_name && lc(r.claimed_by) !== lc(r.actor_name) ? r.claimed_by : '';
+      return {at:r.at, by:who, role:r.actor_role || '', via:r.via || '', claimed, verified:!!r.actor_name || r.actor_role === 'system', rev:r.rev, kind:r.kind, id:r.record_id, action:r.action, label:recLabel(r.kind, r.new_data || r.old_data), amt:(r.new_data || {}).grand || (r.new_data || {}).amount, oldAmt:(r.old_data || {}).grand || (r.old_data || {}).amount}; });
+  } else rows = JSON.parse(localStorage.getItem(LOG_KEY) || '[]').filter(r => !logKind || r.kind === logKind);
+  if(logQ) rows = rows.filter(r => lc([r.by, r.label, r.kind, r.action, r.claimed].join(' ')).includes(lc(logQ)));
+  const kinds = ['doc', 'expense', 'income', 'transfer', 'item', 'stockmove', 'po', 'jobtrack', 'jobpart', 'staffpay', 'suppay', 'supbill', 'worker', 'tool', 'toolmove', 'comeback', 'tow', 'corp', 'appt', 'reminder', 'labour', 'setting', 'consent'];
+  let h = `<div class="rf-tools"><input id="lgQ" placeholder="Search person, invoice no., name…" value="${esc(logQ)}"><select id="lgK"><option value="">Everything</option>${kinds.map(k => `<option${k === logKind ? ' selected' : ''}>${k}</option>`).join('')}</select><button class="rf-btn grey" id="lgCsv">⬇ CSV</button></div>`;
+  h += `<p class="rf-note">${mode === 'cloud' ? 'Every change saved to the team database. The name shown is the <b>signed-in account</b> that made the change (✓), or “System” for plug-ins such as Paystack. The log is written by the database itself and cannot be edited from the app.' : 'Changes made on this device.'} Changed amounts and deletions are highlighted.</p>`;
+  const icon = {create:'＋', update:'✎', delete:'🗑', restore:'↺', conflict:'⚠'};
+  h += rows.slice(0, 300).map(r => { const amtChg = r.oldAmt != null && r.amt != null && N(r.oldAmt) !== N(r.amt);
+    return `<div class="rf-row"${r.action === 'delete' || amtChg || r.claimed ? ' style="border-left:3px solid #E30613"' : ''}><div class="t"><span>${icon[r.action] || ''} ${esc(r.label || r.id)}</span><span class="rf-note" style="margin:0">${esc(r.kind)}${r.rev ? ' · rev ' + esc(r.rev) : ''}</span></div><div class="m">${esc(fmtDate(r.at))} ${esc(new Date(r.at).toLocaleTimeString('en-NG', {hour:'2-digit', minute:'2-digit'}))} · <b>${esc(r.by || '?')}</b>${r.verified ? ' ✓' : ''}${r.role ? ' (' + esc(r.role) + ')' : ''}${r.via && r.via !== 'app' ? ' · ' + esc(r.via) : ''} · ${esc(r.action)}${amtChg ? ' · amount ' + money(r.oldAmt) + ' → ' + money(r.amt) : ''}${r.claimed ? ` · <span style="color:#E30613">app said “${esc(r.claimed)}”</span>` : ''}</div></div>`; }).join('') || '<div class="rf-empty">No changes recorded yet.</div>';
+  box.innerHTML = wrap('CHANGE LOG', h, true);
+  const q = $('lgQ'); q.onchange = () => { logQ = q.value; renderSystem(); };
+  $('lgK').onchange = e => { logKind = e.target.value; renderSystem(); };
+  $('lgCsv').onclick = () => downloadCsv('change_log_' + today() + '.csv', [['When', 'Signed-in account', 'Role', 'Via', 'Name typed in app', 'What', 'Action', 'Record', 'Revision', 'Old amount', 'New amount']].concat(rows.map(r => [r.at, r.by, r.role, r.via, r.claimed, r.kind, r.action, r.label, r.rev || '', r.oldAmt == null ? '' : r.oldAmt, r.amt == null ? '' : r.amt])));
+};
+
+/* ---------- 3. Job cards: mandatory reception checklist, job owner, quality-control sign-off ---------- */
+const RECEPTION_CHECKS = ['Walk-around done with the customer and damage marked on the diagram', 'Customer belongings / valuables noted (or none)', 'Warning lights on the dashboard noted', 'Spare tyre, jack, tools and documents checked', 'Customer told the estimated time and how approval works'];
+const QC_CHECKS = ['Road test done (or not needed for this job)', 'Wheel nuts torqued / all fasteners tight', 'Brakes and pedal feel checked', 'No fluid leaks; levels topped up', 'No new warning lights', 'Customer complaint fixed and re-checked', 'Old parts kept for the customer / disposed as agreed', 'Vehicle clean; customer items returned'];
+let pendingReception = null;
+function receptionModal(onOk){
+  const box = modal(`<h3>🚗 Vehicle reception checklist</h3><p class="rf-note">Required before a job card is saved. Tick each item with the customer present.</p>
+    ${RECEPTION_CHECKS.map((c, i) => `<label class="chk" style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="checkbox" class="rcp" data-i="${i}" style="width:auto;margin-top:3px"> <span>${esc(c)}</span></label>`).join('')}
+    <div class="field"><label>Received by</label><input id="rcpBy" value="${esc(myName() || '')}"></div>
+    <div class="rf-tools"><button class="rf-btn green big" id="rcpOk">Confirm & save job card</button><button class="rf-btn grey" id="rcpX">Cancel</button></div>`);
+  box.querySelector('#rcpX').onclick = closeModal;
+  box.querySelector('#rcpOk').onclick = () => { const all = [...box.querySelectorAll('.rcp')]; if(all.some(x => !x.checked)){ toast('Tick every item on the checklist first.', true); return; }
+    const by = box.querySelector('#rcpBy').value.trim(); if(!by){ toast('Enter who received the vehicle.', true); return; }
+    pendingReception = {by, at:nowIso(), checks:RECEPTION_CHECKS.slice()}; closeModal(); onOk(); };
+}
+if(typeof window.collectDoc === 'function'){
+  const prevCollect = window.collectDoc;
+  window.collectDoc = function(){ const d = prevCollect.apply(this, arguments); try{ const old = d && d.id ? Store.get('doc', d.id) : null;
+      if((d.type || '') === 'JOB CARD'){ const r = pendingReception || (old && old.jcReception); if(r) d.jcReception = r; } }catch(e){} return d; };
+}
+if(typeof window.saveRecord === 'function'){
+  const prevSaveRecord = window.saveRecord;
+  window.saveRecord = async function(){
+    try{
+      if($('docType') && $('docType').value === 'JOB CARD'){
+        const miss = [];
+        if(!$('custName').value.trim() && !$('vehReg').value.trim()) miss.push('customer or registration no.');
+        if(!$('vehKm').value.trim()) miss.push('odometer (km)');
+        if(!$('jcFuel').value.trim()) miss.push('fuel level');
+        if(!$('jcComplaint').value.trim()) miss.push('customer complaint');
+        if(!$('jcTech').value.trim()) miss.push('technician (job owner)');
+        if(miss.length){ toast('Job card reception: fill in ' + miss.join(', ') + '.', true); const f = {'odometer (km)':'vehKm', 'fuel level':'jcFuel', 'customer complaint':'jcComplaint', 'technician (job owner)':'jcTech'}[miss[0]]; if(f && $(f)) $(f).focus(); return; }
+        const id = $('docNo').dataset.savedId, old = id ? Store.get('doc', id) : null;
+        if(!pendingReception && !(old && old.jcReception)){ receptionModal(() => prevSaveRecord.apply(this, arguments)); return; }
+      }
+    }catch(e){ console.error(e); }
+    return prevSaveRecord.apply(this, arguments);
+  };
+}
+['loadDoc', 'newDocument'].forEach(fn => { const prev = window[fn]; if(typeof prev === 'function') window[fn] = async function(){ pendingReception = null; return prev.apply(this, arguments); }; });
+
+function qcModal(rootId, cur, onOk){
+  const tech = cur.tech || (Store.get('doc', rootId) || {}).jcTech || '';
+  const box = modal(`<h3>✅ Quality-control sign-off</h3><p class="rf-note">Required before the vehicle is marked ready or delivered. Job owner: <b>${esc(tech || 'not set')}</b>.</p>
+    ${QC_CHECKS.map((c, i) => `<label class="chk" style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="checkbox" class="qcc" data-i="${i}" style="width:auto;margin-top:3px"> <span>${esc(c)}</span></label>`).join('')}
+    <div class="grid2"><div class="field"><label>Final odometer (km)</label><input id="qcKm" type="number"></div><div class="field"><label>Checked by</label><input id="qcBy" value="${esc(myName() || '')}"></div></div>
+    <div class="field"><label>Notes</label><input id="qcNote" placeholder="Anything the customer should know"></div>
+    <div class="rf-tools"><button class="rf-btn green big" id="qcOk">Pass — sign off</button><button class="rf-btn red" id="qcFail">Fail — back to work</button><button class="rf-btn grey" id="qcX">Cancel</button></div>`);
+  box.querySelector('#qcX').onclick = closeModal;
+  box.querySelector('#qcFail').onclick = () => { closeModal(); onOk(null); };
+  box.querySelector('#qcOk').onclick = () => { if([...box.querySelectorAll('.qcc')].some(x => !x.checked)){ toast('Tick every quality-control item, or tap Fail.', true); return; }
+    const by = box.querySelector('#qcBy').value.trim(); if(!by){ toast('Enter who did the quality check.', true); return; }
+    if(tech && lc(by) === lc(tech) && !can('admin') && !(window.confirm && confirm('The quality check is usually done by someone other than the job owner. Sign off anyway?'))) return;
+    closeModal(); onOk({passed:true, by, at:nowIso(), km:box.querySelector('#qcKm').value, note:box.querySelector('#qcNote').value.trim(), checks:QC_CHECKS.slice()}); };
+}
+const prevSaveTrack51 = saveTrack;
+saveTrack = function(rootId, vals, note){
+  const cur = trackOf(rootId) || {stage:'Received'};
+  const docNow = Store.get('doc', rootId) || {};
+  // job owner is required once work starts
+  if(vals.stage && JOB_STAGES.indexOf(vals.stage) >= JOB_STAGES.indexOf('In progress') && !(vals.tech || cur.tech || docNow.jcTech)){ toast('Assign the technician (job owner) first.', true); return cur; }
+  // QC sign-off before ready / delivered
+  if(vals.stage && ['Ready for pickup', 'Delivered'].includes(vals.stage) && !(cur.qc && cur.qc.passed) && !vals.qc){
+    qcModal(rootId, cur, qc => { if(qc) prevSaveTrack51(rootId, Object.assign({}, vals, {qc}), (note || 'Stage → ' + vals.stage) + ' · QC passed by ' + qc.by);
+      else prevSaveTrack51(rootId, {stage:'In progress', qc:null}, 'Quality check FAILED — back to work');
+      setTimeout(() => { try{ renderJobTrack(true); }catch(e){} }, 80); });
+    return cur;
+  }
+  // approvals: remember exactly which priced version the customer approved
+  const extra = {};
+  if(vals.approval === 'Pending' && vals.approvalToken !== undefined){ const id = $('docNo') && $('docNo').dataset.savedId; const d = id ? Store.get('doc', id) : null; if(d){ extra.approvalSentHash = quoteHash(d); extra.approvalDocId = d.id; extra.approvalSentRev = d._rev || ''; } }
+  if(vals.approval === 'Approved' && cur.approval !== 'Approved'){
+    if(vals.approvalDecided && cur.approvalSentHash){ extra.approvedHash = cur.approvalSentHash; extra.approvedDocId = cur.approvalDocId; }
+    else { const id = $('docNo') && $('docNo').dataset.savedId; const d = id ? Store.get('doc', id) : null; if(d){ extra.approvedHash = quoteHash(d); extra.approvedDocId = d.id; } }
+  }
+  if(vals.stage === 'In progress' && cur.qc) extra.qc = null;
+  return prevSaveTrack51(rootId, Object.assign({}, vals, extra), note);
+};
+const prevRenderJobTrack51 = renderJobTrack;
+renderJobTrack = function(force){
+  prevRenderJobTrack51(force);
+  const box = $('rfJobTrack'); if(!box || box.style.display === 'none' || $('rfJtExtra')) return;
+  const id = $('docNo').dataset.savedId, root = jobRoot(id), t = trackOf(root) || {}, d = Store.get('doc', root) || {}, cur = Store.get('doc', id) || {};
+  const bits = [];
+  if(d.type === 'JOB CARD') bits.push(d.jcReception ? `✓ Reception checklist — ${esc(d.jcReception.by)}, ${esc(fmtDate(d.jcReception.at))}` : '⚠ Reception checklist not recorded (older job card)');
+  bits.push(`Job owner: <b>${esc(t.tech || d.jcTech || 'not assigned')}</b>`);
+  if(t.qc && t.qc.passed) bits.push(`✓ QC passed — ${esc(t.qc.by)}, ${esc(fmtDate(t.qc.at))}`);
+  if(t.approval === 'Approved' && t.approvedHash && t.approvedDocId === cur.id && quoteHash(cur) !== t.approvedHash) bits.push('<span style="color:#E30613">⚠ Prices or work changed after the customer approved — send a new approval.</span>');
+  box.insertAdjacentHTML('beforeend', `<div id="rfJtExtra" class="rf-note" style="margin-top:6px">${bits.join('<br>')}</div>`);
+};
+
+/* ---------- 4. Customer approvals tied to one priced revision ---------- */
+function quoteHash(d){
+  const ln = a => (a || []).filter(l => l && l.desc).map(l => [String(l.desc).trim(), N(l.qty) || 1, N(l.price)]);
+  const s = canon({p:ln(d.parts), l:ln(d.labour), disc:N(d.discountAmt), vat:N(d.vat), g:N(d.grand)});
+  let h = 2166136261; for(let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36);
+}
+const prevSnap51 = approvalSnapshot;
+approvalSnapshot = function(){ const s = prevSnap51.apply(this, arguments); try{ s.hash = quoteHash({parts:s.parts, labour:s.labour, discountAmt:s.discount, vat:s.vat, grand:s.grand}); const id = $('docNo').dataset.savedId; const d = id && Store.get('doc', id); if(d && d._rev) s.rev = d._rev; }catch(e){} return s; };
+const prevAfterSave51 = afterSave;
+afterSave = function(doc, prev){
+  prevAfterSave51(doc, prev);
+  try{
+    const root = jobRoot(doc.id), t = trackOf(root);
+    if(t && t.approval === 'Approved' && t.approvedDocId === doc.id && t.approvedHash && quoteHash(doc) !== t.approvedHash){
+      prevSaveTrack51(root, {approval:'Pending', stage:JOB_STAGES.indexOf(t.stage) <= JOB_STAGES.indexOf('Approved') ? 'Waiting approval' : t.stage, approvedHash:'', approvedDocId:''}, 'Prices or work changed after approval — new approval needed');
+      toast('⚠ ' + (doc.docNo || 'This document') + ' changed after the customer approved it. Send a new approval before going ahead.', true);
+    }
+    if(doc.partnerOrderId) linkPartnerInvoice(doc);
+  }catch(e){ console.error(e); }
+};
+if(typeof window.convertTo === 'function'){
+  const prevConvert51 = window.convertTo;
+  window.convertTo = async function(){ try{ const id = $('docNo').dataset.savedId, d = id && Store.get('doc', id), t = id && trackOf(jobRoot(id));
+      if(d && t && t.approvedDocId === d.id && t.approvedHash && quoteHash(d) !== t.approvedHash && !(await askConfirm('The customer approved a different price or scope. Convert anyway?'))) return; }catch(e){}
+    return prevConvert51.apply(this, arguments); };
+}
+
+/* ---------- 5. Partner orders: tracking number, pickup schedule, collection evidence, trade balance ---------- */
+async function linkPartnerInvoice(doc){
+  if(mode !== 'cloud' || !can('cashier')) return;
+  try{ await Cloud.rest('PATCH', 'rf_partner_orders?id=eq.' + encodeURIComponent(doc.partnerOrderId), {invoice_no:doc.docNo, invoice_total:N(doc.grand), invoice_paid:paidOf(doc), updated_at:nowIso()}, 'return=minimal'); }catch(e){}
+}
+if(typeof saveQuick === 'function'){
+  const prevSaveQuick51 = saveQuick;
+  saveQuick = async function(){ const d = await prevSaveQuick51.apply(this, arguments); if(d && d.partnerOrderId) linkPartnerInvoice(d); return d; };
+}
+// keep partner balances up to date when payments come in later
+listeners.push(kinds => { if(EDITION !== 'robotik' || mode !== 'cloud' || !can('cashier') || !(kinds || []).includes('doc')) return;
+  clearTimeout(window.__rfPoSync); window.__rfPoSync = setTimeout(() => { (pOrders || []).filter(o => o.invoice_no).forEach(o => { const d = Store.list('doc').find(x => x.partnerOrderId === o.id && x.docNo === o.invoice_no); if(d && (N(o.invoice_paid) !== paidOf(d) || N(o.invoice_total) !== N(d.grand))) linkPartnerInvoice(d); }); }, 2500); });
+function pickupModal(o){
+  const box = modal(`<h3>📅 Schedule pickup — ${esc(o.track_no || '')} ${esc(o.garage)}</h3>
+    <div class="grid2"><div class="field"><label>Date</label><input id="puD" type="date" value="${esc((o.pickup_at || '').slice(0, 10) || today())}"></div><div class="field"><label>Time</label><input id="puT" type="time" value="${esc(o.pickup_at ? new Date(o.pickup_at).toTimeString().slice(0, 5) : '10:00')}"></div></div>
+    <div class="field"><label>Note for the garage (driver, window)</label><input id="puN" value="${esc(o.pickup_note || '')}" placeholder="e.g. Driver Sunday, 10am–12pm"></div>
+    <div class="rf-tools"><button class="rf-btn green" id="puOk">Save & tell the garage</button><button class="rf-btn grey" id="puX">Cancel</button></div>`);
+  box.querySelector('#puX').onclick = closeModal;
+  box.querySelector('#puOk').onclick = async () => { const at = new Date(box.querySelector('#puD').value + 'T' + (box.querySelector('#puT').value || '10:00')); const note = box.querySelector('#puN').value.trim();
+    try{ await Cloud.rest('PATCH', 'rf_partner_orders?id=eq.' + encodeURIComponent(o.id), Object.assign({pickup_at:at.toISOString(), pickup_note:note, handled_by:myName(), updated_at:nowIso()}, o.status === 'new' ? {status:'accepted'} : {}), 'return=minimal'); closeModal(); toast('Pickup scheduled.');
+      const d = o.data || {}; openWhatsApp(d.contactPhone, `Hello ${d.contact || o.garage}, Robotik Fix will pick up order ${o.track_no || d.ref} on ${fmtDate(at.toISOString().slice(0, 10))} at ${at.toLocaleTimeString('en-NG', {hour:'2-digit', minute:'2-digit'})}.${note ? '\n' + note : ''}`); renderPartners(); }
+    catch(e){ toast(e.message, true); } };
+}
+function collectModal(o){
+  let photo = '';
+  const box = modal(`<h3>📸 Collection evidence — ${esc(o.track_no || '')} ${esc(o.garage)}</h3><p class="rf-note">Record what was handed over, by whom, with a photo of the items.</p>
+    <div class="grid2"><div class="field"><label>Handed over by (garage staff)</label><input id="ceBy"></div><div class="field"><label>Number of items</label><input id="ceN" type="number" min="1" value="${esc((o.data || {}).qty || 1)}"></div></div>
+    <div class="field"><label>Photo</label><input id="ceP" type="file" accept="image/*" capture="environment"></div><div id="ceImg"></div>
+    <div class="rf-tools"><button class="rf-btn green" id="ceOk">Save — picked up</button><button class="rf-btn grey" id="ceX">Cancel</button></div>`);
+  box.querySelector('#ceX').onclick = closeModal;
+  box.querySelector('#ceP').onchange = async e => { const f = e.target.files[0]; if(!f) return; try{ photo = await resizeImage(f, 900); box.querySelector('#ceImg').innerHTML = `<img src="${photo}" style="max-width:100%;max-height:180px;border-radius:6px">`; }catch(er){ toast('Could not read that photo.', true); } };
+  box.querySelector('#ceOk').onclick = async () => { const by = box.querySelector('#ceBy').value.trim(), n = N(box.querySelector('#ceN').value);
+    if(!by){ toast('Enter who handed the items over.', true); return; } if(!photo && !(await askConfirm('No photo — save without evidence photo?'))) return;
+    try{ await Cloud.rest('PATCH', 'rf_partner_orders?id=eq.' + encodeURIComponent(o.id), {status:'picked up', collected_at:nowIso(), collected_from:by, collected_items:n || null, collection_photo:photo || null, handled_by:myName(), updated_at:nowIso()}, 'return=minimal'); closeModal(); toast('Collection recorded.'); renderPartners(); }
+    catch(e){ toast(e.message, true); } };
+}
+if(EDITION === 'robotik'){
+  const prevRenderPartners51 = renderPartners;
+  renderPartners = async function(noFetch){
+    await prevRenderPartners51.apply(this, arguments);
+    const v = $('view-partners'); if(!v || mode !== 'cloud') return;
+    v.querySelectorAll('[data-pinv]').forEach(btn => { const o = pOrders.find(x => x.id === btn.dataset.pinv), row = btn.closest('.rf-row'); if(!o || !row || row.querySelector('.rf-po51')) return;
+      const info = [o.track_no ? '<b>' + esc(o.track_no) + '</b>' : '', o.pickup_at ? '📅 pickup ' + esc(fmtDate(o.pickup_at.slice(0, 10))) + ' ' + esc(new Date(o.pickup_at).toLocaleTimeString('en-NG', {hour:'2-digit', minute:'2-digit'})) : '', o.collected_at ? '📦 collected from ' + esc(o.collected_from || '?') + (o.collected_items ? ' (' + esc(o.collected_items) + ')' : '') + (o.collection_photo ? ' 📸' : '') : '', o.returned_at ? '↩ returned ' + esc(fmtDate(o.returned_at.slice(0, 10))) : '', o.invoice_no ? '🧾 ' + esc(o.invoice_no) + ' · ' + money(o.invoice_total) + (N(o.invoice_total) > N(o.invoice_paid) ? ' · owes ' + money(N(o.invoice_total) - N(o.invoice_paid)) : ' · paid') : ''].filter(Boolean).join(' · ');
+      row.insertAdjacentHTML('beforeend', `<div class="m rf-po51">${info}</div>`);
+      const acts = row.querySelector('.acts'); if(acts && !['done', 'cancelled'].includes(o.status)) acts.insertAdjacentHTML('afterbegin', `<button class="rf-btn grey" data-pup="${esc(o.id)}">📅 Pickup</button>${o.collected_at ? '' : `<button class="rf-btn grey" data-pce="${esc(o.id)}">📸 Collected</button>`}${o.collected_at && !o.returned_at ? `<button class="rf-btn grey" data-pret="${esc(o.id)}">↩ Returned</button>` : ''}`);
+      if(o.collection_photo && acts) acts.insertAdjacentHTML('beforeend', `<button class="rf-btn grey" data-pph="${esc(o.id)}">View photo</button>`); });
+    bind(v, '[data-pup]', 'click', el => pickupModal(pOrders.find(x => x.id === el.dataset.pup)));
+    bind(v, '[data-pce]', 'click', el => collectModal(pOrders.find(x => x.id === el.dataset.pce)));
+    bind(v, '[data-pph]', 'click', el => { const o = pOrders.find(x => x.id === el.dataset.pph); modal(`<h3>${esc(o.track_no || '')} — collected ${esc(fmtDate((o.collected_at || '').slice(0, 10)))}</h3><img src="${esc(o.collection_photo)}" style="max-width:100%"><div class="rf-tools"><button class="rf-btn grey" onclick="document.getElementById('rfModal').classList.remove('on')">Close</button></div>`); });
+    bind(v, '[data-pret]', 'click', async el => { const o = pOrders.find(x => x.id === el.dataset.pret); try{ await Cloud.rest('PATCH', 'rf_partner_orders?id=eq.' + encodeURIComponent(o.id), {returned_at:nowIso(), status:'done', handled_by:myName(), updated_at:nowIso()}, 'return=minimal'); toast('Marked returned to the garage.'); renderPartners(); }catch(e){ toast(e.message, true); } });
+  };
+}
+const PO_STAGE_TXT = {'new':'Received by Robotik Fix', 'accepted':'Accepted', 'picked up':'Picked up — in our workshop', 'done':'Done', 'cancelled':'Cancelled'};
+async function partnerTracking(){
+  const mine = Store.list('porder').filter(o => o.delivered), code = typeof partnerCode === 'function' ? partnerCode() : '';
+  if(!mine.length && !code) return null;
+  const phone = (mine[0] && mine[0].contactPhone) || '';
+  try{ const r = await hqFetch('rpc/rf_partner_track', {method:'POST', body:JSON.stringify(code ? {p_code:code} : {p_phone:phone, p_refs:mine.map(o => o.ref).slice(0, 50)})});
+    if(r && !r.error) localStorage.setItem('rf3_ptrack', JSON.stringify(Object.assign({at:nowIso()}, r))); return r; }
+  catch(e){ try{ return JSON.parse(localStorage.getItem('rf3_ptrack') || 'null'); }catch(e2){ return null; } }
+}
+if(EDITION === 'partner'){
+  const prevRenderSend51 = renderSend;
+  renderSend = async function(){
+    await prevRenderSend51.apply(this, arguments);
+    const v = $('view-send'); if(!v) return;
+    const tr = await partnerTracking(); if(!tr || !tr.orders || !$('view-send')) return;
+    const by = new Map(tr.orders.map(o => [o.ref, o]));
+    const card = [...v.querySelectorAll('.card')].find(c => /MY ORDERS/.test((c.querySelector('h2') || {}).textContent || '')); if(!card || card.querySelector('.rf-trk')) return;
+    const mine = Store.list('porder').sort((a, b) => String(b.sentAt).localeCompare(String(a.sentAt)));
+    let h = '';
+    if(tr.verified && tr.balance != null) h += `<div class="banner rf-trk" style="${N(tr.balance) > 0 ? '' : 'background:#e8f8f1;border-color:#a7dcc3'}">Trade account with Robotik Fix: <b>${money(tr.balance)}</b> owed${N(tr.unpaid) ? ' on ' + esc(tr.unpaid) + ' invoice(s)' : ''}.</div>`;
+    h += mine.map(o => { const t = by.get(o.ref) || {};
+      const steps = [t.pickup_at ? '📅 Pickup ' + esc(fmtDate(String(t.pickup_at).slice(0, 10))) + ' ' + esc(new Date(t.pickup_at).toLocaleTimeString('en-NG', {hour:'2-digit', minute:'2-digit'})) + (t.pickup_note ? ' — ' + esc(t.pickup_note) : '') : '', t.collected_at ? '📦 Collected ' + esc(fmtDate(String(t.collected_at).slice(0, 10))) + ' from ' + esc(t.collected_from || '') + (t.collected_items ? ' · ' + esc(t.collected_items) + ' item(s)' : '') + (t.evidence ? ' · photo on file' : '') : '', t.returned_at ? '↩ Returned ' + esc(fmtDate(String(t.returned_at).slice(0, 10))) : '', t.invoice_no ? '🧾 ' + esc(t.invoice_no) + ' ' + money(t.invoice_total) + (N(t.invoice_total) > N(t.invoice_paid) ? ' · balance ' + money(N(t.invoice_total) - N(t.invoice_paid)) : ' · paid') : ''].filter(Boolean);
+      return `<div class="rf-row rf-trk"><div class="t"><span>${esc((PARTNER_SERVICES.find(s => s[0] === o.service) || [])[1] || o.service)}${t.track_no ? ' · <b>' + esc(t.track_no) + '</b>' : ''}</span><span class="rf-badge ${!o.delivered ? 'amber' : t.status === 'done' ? 'green' : t.status === 'cancelled' ? 'red' : 'blue'}">${o.delivered ? esc(PO_STAGE_TXT[t.status] || 'sent') : 'not delivered'}</span></div><div class="m">${esc(fmtDate(o.sentAt))} · qty ${esc(o.qty)} · ${esc(o.vehicles || o.custName || '')} · ref ${esc(o.ref)}</div>${steps.length ? '<div class="m">' + steps.join('<br>') + '</div>' : ''}${o.delivered ? '' : `<div class="acts"><button class="rf-btn" data-resend51="${esc(o.id)}">Send again</button></div>`}</div>`; }).join('');
+    card.innerHTML = '<h2>MY ORDERS</h2>' + (h || '<div class="rf-empty">No orders yet.</div>') + `<p class="rf-note">Updated ${esc(fmtDate((tr.at || nowIso()).slice(0, 10)))}${tr.verified ? '' : ' · enter your partner code to see your account balance'}.</p>`;
+    bind(card, '[data-resend51]', 'click', async el => { const o = Store.get('porder', el.dataset.resend51); const ok = await sendOrder(o, false); toast(ok ? 'Delivered.' : 'Still no connection.', !ok); renderSend(); });
+  };
+}
+
+/* ---------- 6. Stock: reservations for open jobs, available quantity, reorder on available ---------- */
+function reservedMap(){
+  const m = new Map(), since = addDays(today(), -120), byRoot = new Map();
+  Store.list('doc').forEach(d => { const t = (d.type || '').toUpperCase(); if(!['JOB CARD', 'QUOTATION'].includes(t) || d.status === 'Cancelled' || String(d.date || '') < since || !(d.parts || []).length) return;
+    const fam = jobFamily(d.id); if(fam.some(x => { const o = Store.get('doc', x); return o && isInv(o); })) return;
+    const root = jobRoot(d.id), tr = trackOf(root);
+    if(tr && ['Delivered', 'Cancelled'].includes(tr.stage)) return;
+    if(t === 'QUOTATION' && !(tr && tr.approval === 'Approved')) return;
+    const cur = byRoot.get(root); if(!cur || String(d.date) >= String(cur.date)) byRoot.set(root, d); });
+  byRoot.forEach(d => (d.parts || []).forEach(p => { const it = findItemByName(p.desc); if(it) m.set(it.id, (m.get(it.id) || 0) + (N(p.qty) || 1)); }));
+  return m;
+}
+function availMap(){ const sm = stockMap(), rm = reservedMap(), a = new Map(); sm.forEach((q, id) => a.set(id, q - (rm.get(id) || 0))); return {sm, rm, a}; }
+const prevStockItemsHtml51 = stockItemsHtml;
+stockItemsHtml = function(){
+  let h = prevStockItemsHtml51.apply(this, arguments);
+  try{ const {rm, a} = availMap(); const items = Store.list('item'), lowAvail = items.filter(i => (a.get(i.id) || 0) <= N(i.reorderLevel)).length, res = items.filter(i => rm.get(i.id)).length;
+    h = h.replace('<div class="rf-tools">', `<p class="rf-note">${res ? '<b>' + res + '</b> item(s) reserved for open jobs. ' : ''}${lowAvail ? '<b>' + lowAvail + '</b> item(s) at or below reorder level after reservations.' : ''}</p><div class="rf-tools">`);
+    items.forEach(i => { const r = rm.get(i.id); if(!r) return; h = h.replace(new RegExp('(<span>' + esc(i.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '</span><span class="rf-badge [a-z]*">[-0-9.]+ in stock)'), `$1 · ${r} reserved · ${a.get(i.id)} free`); }); }catch(e){ console.error(e); }
+  return h;
+};
+function stockWarnForDoc(d){ if(!d || !(d.parts || []).length) return []; const {a} = availMap(); const out = [];
+  (d.parts || []).forEach(p => { const it = findItemByName(p.desc); if(it && (a.get(it.id) || 0) < 0) out.push(it.name + ' (short by ' + Math.abs(a.get(it.id)) + ')'); }); return out; }
+const prevAfterSave51b = afterSave;
+afterSave = function(doc, prev){ prevAfterSave51b(doc, prev); try{ if(['JOB CARD', 'QUOTATION'].includes((doc.type || '').toUpperCase())){ const w = stockWarnForDoc(doc); if(w.length) toast('📦 Not enough free stock: ' + w.join(', ') + '. Order more.', true); } }catch(e){} };
+
+/* ---------- 7. Financial summary: revenue, direct job costs, gross margin, cash collected, receivables ---------- */
+function finSummary(f, t){
+  const invs = Store.list('doc').filter(d => isInv(d) && d.date >= f && d.date <= t);
+  let rev = 0, vat = 0, parts = 0, jp = 0, pay = 0, tow = 0, come = 0, unknown = 0;
+  invs.forEach(d => { const c = jobCosts(d); rev += c.sales; vat += N(d.vat); parts += c.stockCost; jp += c.jp; pay += c.pay; tow += c.tow; come += c.come; unknown += c.unknown; });
+  const direct = parts + jp + pay + tow + come;
+  const pays = payments().filter(p => p.date >= f && p.date <= t), cash = sumBy(pays, p => p.amount), other = sumBy(Store.list('income').filter(x => x.date >= f && x.date <= t), x => x.amount);
+  const ages = [['0–30 days', 0], ['31–60 days', 0], ['61–90 days', 0], ['Over 90 days', 0]]; let owed = 0, owedN = 0;
+  Store.list('doc').filter(d => isInv(d) && d.date <= t).forEach(d => { const paid = sumBy((d.paymentEntries || []).filter(p => !p.date || p.date <= t), p => p.amount), bal = N(d.grand) - paid; if(bal <= 0.5) return;
+    owed += bal; owedN++; const days = Math.round((new Date(t + 'T12:00') - new Date((d.date || t) + 'T12:00')) / 864e5); ages[days <= 30 ? 0 : days <= 60 ? 1 : days <= 90 ? 2 : 3][1] += bal; });
+  return {invs, rev, vat, parts, jp, pay, tow, come, direct, gross:rev - direct, margin:rev ? (rev - direct) / rev * 100 : 0, unknown, cash, other, owed, owedN, ages};
+}
+function renderFin(){
+  const box = $('rfFin'); if(!box) return;
+  const [f, t] = periodRange(), s = finSummary(f, t);
+  const row = (l, v, cls) => `<tr><td>${l}</td><td class="n ${cls || ''}">${money(v)}</td></tr>`;
+  let h = periodPicker() + `<p class="rf-note">${esc(fmtDate(f))} – ${esc(fmtDate(t))} · ${s.invs.length} invoice(s)</p>`;
+  h += `<div class="rf-kpis"><div class="rf-kpi"><div class="l">Revenue (ex VAT)</div><div class="v">${money(s.rev)}</div></div><div class="rf-kpi"><div class="l">Direct job costs</div><div class="v neg">${money(s.direct)}</div></div><div class="rf-kpi"><div class="l">Gross margin</div><div class="v ${s.gross < 0 ? 'neg' : 'pos'}">${money(s.gross)} · ${Math.round(s.margin)}%</div></div><div class="rf-kpi"><div class="l">Cash collected</div><div class="v pos">${money(s.cash + s.other)}</div></div><div class="rf-kpi"><div class="l">Owed to us (at ${esc(fmtDate(t))})</div><div class="v ${s.owed ? 'neg' : ''}">${money(s.owed)}</div></div></div>`;
+  h += `<table class="rf-table"><tr><th>Revenue and direct costs</th><th class="n">₦</th></tr>${row('Revenue invoiced (excluding VAT)', s.rev)}${row('VAT charged (owed to FIRS, not revenue)', s.vat)}${row('Parts from stock (at cost)', -s.parts, 'neg')}${row('Parts bought for jobs', -s.jp, 'neg')}${row('Mechanic pay per job', -s.pay, 'neg')}${row('Towing', -s.tow, 'neg')}${row('Comebacks / warranty rework', -s.come, 'neg')}<tr><td><b>Gross margin</b></td><td class="n"><b>${money(s.gross)}</b> (${Math.round(s.margin)}%)</td></tr></table>`;
+  if(s.unknown) h += `<p class="rf-note">⚠ ${s.unknown} part line(s) have no cost price, so the margin is overstated. Add them to Stock or record job parts.</p>`;
+  h += `<table class="rf-table"><tr><th>Cash collected</th><th class="n">₦</th></tr>${row('Customer payments on invoices', s.cash)}${row('Other money in', s.other)}<tr><td><b>Total</b></td><td class="n"><b>${money(s.cash + s.other)}</b></td></tr></table>`;
+  h += `<table class="rf-table"><tr><th>Outstanding receivables (${s.owedN} invoices)</th><th class="n">₦</th></tr>${s.ages.map(([l, v]) => row(l, v, v && l.startsWith('Over') ? 'neg' : '')).join('')}<tr><td><b>Total owed</b></td><td class="n"><b>${money(s.owed)}</b></td></tr></table>`;
+  h += `<p class="rf-note">Operating expenses (rent, salaries, diesel…) are in Profit &amp; loss. This summary shows how much each job really earns before overheads.</p><div class="rf-tools"><button class="rf-btn grey" id="finCsv">⬇ CSV</button></div>`;
+  box.innerHTML = wrap('FINANCIAL SUMMARY', h, true);
+  const ps = $('rfPeriod'); if(ps) ps.onchange = e => { moneyPeriod = e.target.value; renderMoney(); };
+  if($('rfFrom')) $('rfFrom').onchange = e => { moneyFrom = e.target.value; renderMoney(); };
+  if($('rfTo')) $('rfTo').onchange = e => { moneyTo = e.target.value; renderMoney(); };
+  $('finCsv').onclick = () => downloadCsv('financial_summary_' + f + '_' + t + '.csv', [['Line', 'Amount (NGN)'], ['Revenue ex VAT', s.rev], ['VAT', s.vat], ['Parts from stock', -s.parts], ['Job parts', -s.jp], ['Mechanic pay', -s.pay], ['Towing', -s.tow], ['Comebacks', -s.come], ['Gross margin', s.gross], ['Gross margin %', Math.round(s.margin * 10) / 10], ['Cash collected (invoices)', s.cash], ['Other money in', s.other]].concat(s.ages.map(([l, v]) => ['Owed ' + l, v])).concat([['Owed total', s.owed]]));
+}
+
+/* ---------- 8. Technical support: safety warnings, engine identification, sources ---------- */
+const SAFETY_RULES = [
+  [/\b(airbag|srs|b00\d\d|b1\d{3}|clock ?spring|seat ?belt pretension)/i, 'Airbag/SRS: disconnect the battery and wait at least 3 minutes before unplugging any SRS connector. Never probe airbag circuits with a test lamp or ohmmeter.'],
+  [/\b(hybrid|prius|ev\b|electric vehicle|high.?voltage|inverter|hv battery|p0a\w\w|p3\w{3})/i, 'High voltage: hybrid/EV systems carry 200–650 V. Remove the service plug, wait 10 minutes, wear insulated gloves, and only trained staff may work on orange cables.'],
+  [/\b(fuel (pump|rail|pressure|injector|line|filter)|injector|p0087|p0190|p0191|p0192|p0193|p0230)/i, 'Fuel system: relieve fuel pressure before opening any line, keep a fire extinguisher close, no sparks or smoking.'],
+  [/\b(a\/?c|aircon|air con|refrigerant|r134a|r1234yf|compressor)/i, 'A/C: refrigerant must be recovered with a machine, never vented. Wear eye protection — liquid refrigerant causes frostbite.'],
+  [/\b(coolant|radiator|overheat|thermostat|p0217|p0128|p0117|p0118|head gasket)/i, 'Cooling system: never open the radiator cap on a hot engine. Let it cool first.'],
+  [/\b(brake|abs|c00\d\d|esp|bleed|caliper|master cylinder|disc|rotor|pad)/i, 'Brakes: use the fluid grade on the cap (do not mix DOT 5 with DOT 3/4), bleed with ABS-specific procedure if required, and road-test before handover.'],
+  [/\b(lift|jack|axle stand|ramp|under the (car|vehicle)|gearbox removal|transmission removal)/i, 'Lifting: use the manufacturer lift points and axle stands — never work under a vehicle held only by a jack.'],
+  [/\b(battery|alternator|starter|jump.?start)/i, 'Battery: remove the negative terminal first and refit it last; keep sparks away from the battery.']
+];
+function safetyFor(text){ const s = String(text || ''); return SAFETY_RULES.filter(([re]) => re.test(s)).map(([, w]) => w); }
+function safetyHtml(list){ return list.length ? `<div class="banner" style="background:#fff4e5;border-color:#f0c27a">⚠ <b>Safety</b><br>${list.map(esc).join('<br>')}</div>` : ''; }
+const prevAnswerFree51 = answerFree;
+answerFree = async function(text){ const r = await prevAnswerFree51.apply(this, arguments); try{ const codes = codesIn(text).map(c => c + ' ' + ((dtcInfo(c) || {}).desc || '')).join(' '); const w = safetyFor(text + ' ' + codes); if(w.length && r && r.html) r.html = safetyHtml(w) + r.html; }catch(e){} return r; };
+const prevAskAI51 = askAI;
+askAI = async function(){ const r = await prevAskAI51.apply(this, arguments); try{ const last = chat.slice().reverse().find(m => m.role === 'user'); const w = safetyFor(((last && last.text) || '') + ' ' + (r.text || ''));
+  if(w.length && !/⚠\s*Safety/i.test(r.text || '')) r.html = safetyHtml(w) + r.html; if(r.text && /\b\d+(\.\d+)?\s?(l|litres?|liters?|qt|nm|psi|bar|mm)\b/i.test(r.text) && !(r.sources || []).length && !/https?:\/\//.test(r.text)) r.html += '<div class="rf-note">⚠ No source given for these figures — confirm in the service manual before use.</div>'; }catch(e){} return r; };
+// VIN → make, model year and the engine character (on most makes VIN position 8 is the engine code)
+const VIN_YEAR = 'ABCDEFGHJKLMNPRSTVWXY123456789';
+const WMI = {JT:'Toyota', JTE:'Toyota', JTD:'Toyota', JTM:'Toyota', '4T':'Toyota', '5T':'Toyota', '2T':'Toyota', JTH:'Lexus', JTJ:'Lexus', '2HG':'Honda', '1HG':'Honda', '5FN':'Honda', JHM:'Honda', '5NP':'Hyundai', KMH:'Hyundai', KNA:'Kia', KND:'Kia', '5XY':'Kia', WDD:'Mercedes-Benz', WDB:'Mercedes-Benz', W1K:'Mercedes-Benz', '4JG':'Mercedes-Benz', SAL:'Land Rover', JA4:'Mitsubishi', JMB:'Mitsubishi', '1FT':'Ford', '1FM':'Ford', '1G1':'Chevrolet', '1GN':'Chevrolet', WBA:'BMW', WVW:'Volkswagen', '3VW':'Volkswagen', JN1:'Nissan', '1N4':'Nissan', '5N1':'Nissan', JF1:'Subaru', JS3:'Suzuki', VF1:'Renault', VF3:'Peugeot', SAJ:'Jaguar', YV1:'Volvo', JM1:'Mazda'};
+function decodeVin(vin){ vin = String(vin || '').toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g, ''); if(vin.length !== 17) return null;
+  const make = WMI[vin.slice(0, 3)] || WMI[vin.slice(0, 2)] || ''; const yi = VIN_YEAR.indexOf(vin[9]); let year = yi < 0 ? '' : 1980 + yi; if(year && year + 30 <= new Date().getFullYear() + 1) year += 30;
+  return {vin, make, year:String(year || ''), engineChar:vin[7], plant:vin[10], serial:vin.slice(11)}; }
+if(typeof fluidsHtml === 'function'){
+  const prevFluidsHtml51 = fluidsHtml;
+  fluidsHtml = function(){ let h = prevFluidsHtml51.apply(this, arguments); const v = fluidVeh, saved = specFor(v) || {};
+    const extra = `<div class="grid2"><div class="field"><label>VIN (optional — fills make &amp; year)</label><input id="flVin" value="${esc(v.vin || '')}" placeholder="17 characters" maxlength="17" style="text-transform:uppercase"></div><div class="field"><label>Engine code</label><input id="flEngine" value="${esc(v.engine || saved.engine || '')}" placeholder="e.g. 2AR-FE, 1GR-FE, G4KE"></div></div>
+      ${v.vinInfo ? `<p class="rf-note">VIN: ${esc(v.vinInfo.make || 'make not recognised')} · model year ${esc(v.vinInfo.year || '?')} · engine character (8th) <b>${esc(v.vinInfo.engineChar)}</b> — confirm the engine code on the engine plate or under-bonnet label.</p>` : ''}
+      ${!(v.engine || saved.engine) && (v.make || v.model) ? '<div class="banner">⚠ Capacities often differ by engine. Enter the engine code (from the VIN or the engine plate) before using these figures.</div>' : ''}
+      <div class="field"><label>Source of these figures (manual, page, link)</label><input id="flSource" value="${esc(saved.source || (saved.fluids && saved.fluids.url) || '')}" placeholder="e.g. Toyota repair manual RM1234 p.12, or the LEMON link"></div>`;
+    return h.replace('<div class="field"><label>Workshop notes', extra + '<div class="field"><label>Workshop notes'); };
+  const prevBindFluids51 = bindFluids;
+  bindFluids = function(v){ prevBindFluids51.apply(this, arguments);
+    if($('flVin')) $('flVin').onchange = e => { const d = decodeVin(e.target.value); fluidVeh.vin = e.target.value.trim().toUpperCase(); fluidVeh.vinInfo = d; if(d){ if(d.make && !fluidVeh.make) fluidVeh.make = d.make; if(d.year && !fluidVeh.year) fluidVeh.year = d.year; } else toast('A VIN has 17 characters (no I, O or Q).', true); renderTech(); };
+    if($('flEngine')) $('flEngine').onchange = e => { fluidVeh.engine = e.target.value.trim().toUpperCase(); };
+    const sv = $('flSave'); if(sv){ const old = sv.onclick; sv.onclick = () => { const eng = ($('flEngine') || {}).value || '', src = ($('flSource') || {}).value || ''; old(); try{ const s = specFor(fluidVeh); if(s) Store.put('vehspec', Object.assign({}, s, {engine:eng.trim().toUpperCase(), source:src.trim(), verifiedBy:src.trim() ? myName() : (s.verifiedBy || '')})); }catch(e){} }; } };
+}
+
+/* ---------- 9. Reminders: customer consent, no duplicates, delivery status ---------- */
+const consentKey = p => 'cons_' + (waPhone(p) || String(p || '').replace(/\D/g, ''));
+function consentOf(phone){ const c = Store.get('consent', consentKey(phone)); return c ? c.status : 'unknown'; }
+function setConsent(phone, status, how){ if(!phone) return; Store.put('consent', {id:consentKey(phone), phone:waPhone(phone) || phone, status, how:how || 'staff', at:nowIso(), by:myName()}); }
+const remKey = r => [waPhone(r.phone) || r.phone, lc(r.service), r.dueDate].join('|');
+function recentlySent(r){ const k = remKey(r), since = addDays(today(), -30);
+  return Store.list('reminder').some(x => x.id !== r.id && x.status === 'sent' && remKey(x) === k && String(x.sentAt || '') >= since) || Store.list('msglog').some(m => m.type === 'reminder' && m.ok && m.dedupe === k && String(m.at || '').slice(0, 10) >= since); }
+function remBlocked(r){ return consentOf(r.phone) === 'opted-out' || recentlySent(r); }
+function logManualReminder(r){ try{ Store.put('msglog', {id:'msg_man_' + r.id + '_' + Date.now().toString(36), at:nowIso(), type:'reminder', channel:'whatsapp (manual)', to:waPhone(r.phone), ok:true, status:'opened in WhatsApp', reminderId:r.id, custName:r.custName, vehReg:r.vehReg, service:r.service, dedupe:remKey(r)}); }catch(e){} }
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-rw]'); if(!b) return;
+  const r = Store.get('reminder', b.dataset.rw); if(!r) return;
+  if(consentOf(r.phone) === 'opted-out'){ e.stopImmediatePropagation(); e.preventDefault(); toast((r.custName || 'This customer') + ' asked not to receive reminders.', true); return; }
+  if(recentlySent(r) && b.dataset.rfForce !== '1'){ e.stopImmediatePropagation(); e.preventDefault(); askConfirm('A reminder for this service was already sent to ' + (r.custName || 'this customer') + ' in the last 30 days. Send again?').then(ok => { if(ok){ b.dataset.rfForce = '1'; b.click(); } }); return; }
+  delete b.dataset.rfForce; setTimeout(() => logManualReminder(r), 50);
+}, true);
+function remindersConsentCard(){
+  const list = Store.list('consent').sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  const logs = Store.list('msglog').filter(m => m.type === 'reminder').sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 30);
+  return wrap('REMINDER CONSENT & DELIVERY', `<p class="rf-note">Customers who reply STOP (or ask not to be contacted) are never sent reminders again. The same reminder is never sent twice within 30 days.</p>
+    <div class="rf-tools"><input id="csPh" placeholder="Phone number" type="tel"><select id="csSt"><option value="opted-out">Opted out (no reminders)</option><option value="opted-in">Agreed to reminders</option></select><button class="rf-btn" id="csSave">Save</button></div>
+    ${list.slice(0, 40).map(c => `<div class="rf-row"><div class="t"><span>${esc(c.phone)}</span><span class="rf-badge ${c.status === 'opted-out' ? 'red' : 'green'}">${esc(c.status)}</span></div><div class="m">${esc(fmtDate(String(c.at).slice(0, 10)))} · ${esc(c.by || '')} · ${esc(c.how || '')}</div></div>`).join('') || '<div class="rf-empty">No consent changes recorded.</div>'}
+    <h3 style="font-size:12.5px;color:#1F3864">Recent reminder messages</h3>
+    ${logs.map(m => `<div class="rf-row"><div class="t"><span>${esc(m.custName || m.to || '')} · ${esc(m.service || '')}</span><span class="rf-badge ${m.ok === false || m.deliveryStatus === 'failed' ? 'red' : m.deliveryStatus === 'read' || m.deliveryStatus === 'delivered' ? 'green' : 'blue'}">${esc(m.deliveryStatus || m.status || (m.ok ? 'sent' : 'failed'))}</span></div><div class="m">${esc(fmtDate(String(m.at).slice(0, 10)))} · ${esc(m.channel || '')}${m.error ? ' · ' + esc(m.error) : ''}</div></div>`).join('') || '<div class="rf-empty">No reminder messages yet.</div>'}`);
+}
+if(typeof renderPlugins === 'function'){
+  const prevRenderPlugins51 = renderPlugins;
+  renderPlugins = function(){ const r = prevRenderPlugins51.apply(this, arguments); try{ const v = $('view-plugins'); if(v && !$('csSave') && can('cashier')){ v.insertAdjacentHTML('beforeend', remindersConsentCard());
+      $('csSave').onclick = () => { const p = $('csPh').value.trim(); if(!waPhone(p)){ toast('Enter a valid phone number.', true); return; } setConsent(p, $('csSt').value, 'recorded by staff'); toast('Saved.'); renderPlugins(); }; } }catch(e){ console.error(e); } return r; };
+}
+
+/* ---------- test hooks ---------- */
+Object.assign(window.RF = window.RF || {}, {markReceived:by => { pendingReception = {by:by || 'Test', at:nowIso(), checks:RECEPTION_CHECKS.slice()}; }, discVerdict, tyreFlags, dotAge, quoteHash, reservedMap, availMap, finSummary, safetyFor, decodeVin, consentOf, setConsent, recentlySent, openConflictCount});
+
+/* ---------- sync recovery: download every record again (fixes a phone that missed changes) ---------- */
+const prevSysSync51 = sysSync;
+sysSync = async function(box){
+  await prevSysSync51.apply(this, arguments);
+  if(mode !== 'cloud' || !box || $('syRepair')) return;
+  box.insertAdjacentHTML('beforeend', wrap('REPAIR THIS DEVICE', '<p class="rf-note">If this phone is missing records that others can see, download everything again. Changes waiting to be sent are kept and sent first.</p><div class="rf-tools"><button class="rf-btn" id="syRepair">⟳ Re-download all records</button></div>'));
+  $('syRepair').onclick = async () => { try{ await Cloud.flush(); await idbSetMeta('since:' + Cloud.cfg.url, '1970-01-01T00:00:00Z'); const ch = await Cloud.pull(); toast('Done — ' + (ch && ch.size ? 'records updated.' : 'everything was already up to date.')); renderSystem(); }catch(e){ toast(e.message, true); } };
+};
 
 })();
 </script>

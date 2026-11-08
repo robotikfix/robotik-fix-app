@@ -1,4 +1,4 @@
-const CACHE_NAME = 'partner-garage-v5-0';
+const CACHE_NAME = 'partner-garage-v5-1';
 const urlsToCache = [
   './',
   './index.html',
