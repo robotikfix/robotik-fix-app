@@ -1,4 +1,4 @@
-const CACHE_NAME = 'partner-garage-v3-3';
+const CACHE_NAME = 'partner-garage-v5-0';
 const urlsToCache = [
   './',
   './index.html',
@@ -30,13 +30,18 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   // Never cache the team database (Supabase) or WhatsApp — always go to the network.
   if (url.origin !== self.location.origin) return;
+  // The version check must always ask the server, so the app can tell you a new version is ready.
+  if (url.pathname.endsWith('version.json')) return;
 
   // Network-first for the app page itself, so a new version shows as soon as
   // the phone/laptop is online, instead of being stuck on an old cached copy.
   // Falls back to the cached copy when offline.
+  // The page, manifest and icons are network-first: a new version or new icons show as soon as you're online.
   const isPage = event.request.mode === 'navigate' ||
     event.request.url.endsWith('/index.html') ||
-    event.request.url.endsWith('/');
+    event.request.url.endsWith('/') ||
+    event.request.url.endsWith('.webmanifest') ||
+    url.pathname.indexOf('/icons/') !== -1;
 
   if (isPage) {
     event.respondWith(
