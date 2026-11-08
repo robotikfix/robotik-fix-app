@@ -1,21 +1,31 @@
 {
-  "name": "ROBOTIK FIX",
+  "id": "./",
+  "name": "Robotik Fix Workshop Manager",
   "short_name": "ROBOTIK FIX",
+  "description": "Job cards, quotations, invoices, quick invoices, stock, bookings and fleet tyres for Robotik Fix.",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#d60000",
-  "orientation": "portrait",
+  "theme_color": "#1F3864",
   "icons": [
     {
       "src": "icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
