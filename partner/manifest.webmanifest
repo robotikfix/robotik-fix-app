@@ -1,0 +1,31 @@
+{
+  "id": "./",
+  "name": "Garage Manager \u2014 powered by Robotik Fix",
+  "short_name": "Garage Manager",
+  "description": "Job cards, quotations and invoices for your garage, plus one-tap orders to Robotik Fix.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1F3864",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
