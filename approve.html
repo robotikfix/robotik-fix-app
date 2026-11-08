@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co http://localhost:*; base-uri 'none'; form-action 'none'">
+<title>Quotation approval</title>
+<style>
+  :root{--navy:#1F3864;--red:#E30613;--green:#0f9d58;--bg:#eef1f5}
+  *{box-sizing:border-box}body{margin:0;font:15px/1.45 -apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:#1d1d1f}
+  .wrap{max-width:640px;margin:0 auto;padding:14px}
+  .card{background:#fff;border-radius:16px;padding:16px;margin:0 0 12px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+  .hd{display:flex;gap:12px;align-items:center}.hd img{height:54px;width:54px;object-fit:contain}
+  h1{font-size:17px;color:var(--navy);margin:0}h2{font-size:13px;letter-spacing:.5px;color:var(--red);margin:0 0 8px;text-transform:uppercase}
+  .muted{color:#666;font-size:13px}.big{font-size:26px;font-weight:800;color:var(--navy)}
+  table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:7px 4px;border-bottom:1px solid #eee;text-align:left;vertical-align:top}th{font-size:12px;color:#666;font-weight:600}.n{text-align:right;white-space:nowrap}
+  .tot td{font-weight:700;border-bottom:0}.sec td{background:#f6f8fb;font-weight:700;color:var(--navy);font-size:12px}
+  label{display:block;font-size:13px;font-weight:600;margin:10px 0 4px}input,textarea{width:100%;font:inherit;padding:11px;border:1px solid #c9ced6;border-radius:10px}
+  .btns{display:flex;gap:10px;margin-top:14px}.btn{flex:1;border:0;border-radius:12px;padding:15px;font:inherit;font-weight:800;font-size:16px;color:#fff;cursor:pointer}
+  .ok{background:var(--green)}.no{background:#fff;color:var(--red);border:2px solid var(--red)}.btn:disabled{opacity:.5}
+  canvas{width:100%;height:140px;border:1px dashed #aab;border-radius:10px;background:#fcfcfd;touch-action:none}
+  .banner{border-radius:12px;padding:14px;font-weight:600}.good{background:#e8f8f1;color:#0b6b3d}.bad{background:#fdecea;color:#a12622}.info{background:#eaf2fb;color:#1F3864}
+  .lnk{background:none;border:0;color:#1F3864;text-decoration:underline;font:inherit;font-size:13px;padding:0;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><div class="card"><p class="muted">Loading your quotation…</p></div></div>
+<script>
+(function(){
+  'use strict';
+  var HQ_URL = 'https://pispfmbqjxewonqswcmr.supabase.co', HQ_KEY = 'sb_publishable_20-hdWEag4Y2LjGDO7dwyw_UNXAoODo';
+  var $ = function(id){ return document.getElementById(id); };
+  var esc = function(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var N = function(v){ var n = parseFloat(String(v == null ? '' : v).replace(/[^\d.-]/g, '')); return isFinite(n) ? n : 0; };
+  var money = function(v){ return '₦' + N(v).toLocaleString('en-NG', {minimumFractionDigits:2, maximumFractionDigits:2}); };
+  var fmt = function(iso){ try{ return new Date(String(iso).length <= 10 ? iso + 'T12:00' : iso).toLocaleDateString('en-NG', {day:'numeric', month:'short', year:'numeric'}); }catch(e){ return iso; } };
+  var app = $('app'), qs = new URLSearchParams(location.search), token = qs.get('t'), hash = location.hash.slice(1), D = null, state = {};
+  function rpc(fn, body){
+    return fetch(HQ_URL + '/rest/v1/rpc/' + fn, {method:'POST', headers:{apikey:HQ_KEY, 'Content-Type':'application/json'}, body:JSON.stringify(body)})
+      .then(function(r){ return r.text().then(function(t){ var j = null; try{ j = t ? JSON.parse(t) : null; }catch(e){} if(!r.ok) throw new Error((j && (j.message || j.hint)) || 'Connection problem (' + r.status + ')'); return j; }); });
+  }
+  function fromHash(){ try{ var b = decodeURIComponent(hash.replace(/^d=/, '')).replace(/-/g, '+').replace(/_/g, '/'); var s = decodeURIComponent(escape(atob(b))); return JSON.parse(s); }catch(e){ return null; } }
+  function lines(arr, title){
+    var rows = (arr || []).filter(function(l){ return l && l.desc; });
+    if(!rows.length) return '';
+    return '<tr class="sec"><td colspan="3">' + esc(title) + '</td></tr>' + rows.map(function(l){ return '<tr><td>' + esc(l.desc) + '</td><td class="n">' + esc(l.qty || 1) + ' × ' + money(l.price) + '</td><td class="n">' + money(N(l.qty || 1) * N(l.price)) + '</td></tr>'; }).join('');
+  }
+  function render(){
+    var d = D, done = state.status && state.status !== 'pending';
+    var h = '<div class="card"><div class="hd">' + (d.logo ? '<img src="' + esc(d.logo) + '" alt="">' : '') + '<div><h1>' + esc(d.biz) + '</h1><div class="muted">' + esc([d.bizAddr, d.bizPhone].filter(Boolean).join(' · ')) + '</div></div></div></div>';
+    h += '<div class="card"><h2>' + esc(d.docType || 'Quotation') + ' ' + esc(d.docNo || '') + '</h2><div class="muted">' + esc(fmt(d.date)) + ' · for <b>' + esc(d.custName || '') + '</b></div>' +
+      (d.vehicle || d.reg ? '<div class="muted">Vehicle: <b>' + esc([d.vehicle, d.reg].filter(Boolean).join(' · ')) + '</b>' + (d.km ? ' · ' + esc(N(d.km).toLocaleString()) + ' km' : '') + '</div>' : '') +
+      (d.complaint ? '<p><b>Your concern:</b> ' + esc(d.complaint) + '</p>' : '') + (d.findings ? '<p><b>What we found:</b> ' + esc(d.findings) + '</p>' : '') +
+      '<table><tr><th>Item</th><th class="n">Qty × price</th><th class="n">Amount</th></tr>' + lines(d.labour, 'Labour / services') + lines(d.parts, 'Parts') +
+      (N(d.discount) ? '<tr><td colspan="2">Discount</td><td class="n">−' + money(d.discount) + '</td></tr>' : '') + (N(d.vat) ? '<tr><td colspan="2">VAT (7.5%)</td><td class="n">' + money(d.vat) + '</td></tr>' : '') +
+      '<tr class="tot"><td colspan="2">Total</td><td class="n">' + money(d.grand) + '</td></tr></table><div class="big" style="margin-top:6px">' + money(d.grand) + '</div>' +
+      (d.notes ? '<p class="muted">' + esc(d.notes) + '</p>' : '') + (d.terms ? '<p class="muted"><b>Payment terms:</b> ' + esc(d.terms) + '</p>' : '') + '</div>';
+    if(state.error) h += '<div class="card"><div class="banner bad">' + esc(state.error) + '</div></div>';
+    else if(done) h += '<div class="card"><div class="banner ' + (state.status === 'approved' ? 'good' : 'bad') + '">' + (state.status === 'approved' ? '✅ Approved' : '✖ Declined') + ' by ' + esc(state.decided_name || '') + ' on ' + esc(fmt(state.decided_at)) + '.' + (state.status === 'approved' ? ' Thank you — the workshop has been notified and will proceed.' : ' The workshop has been notified.') + '</div></div>';
+    else if(state.expired) h += '<div class="card"><div class="banner bad">This link has expired. Please ask ' + esc(d.biz) + ' for a new one.</div></div>';
+    else {
+      h += '<div class="card"><h2>Your decision</h2><label for="nm">Your full name</label><input id="nm" autocomplete="name" value="' + esc(d.custName || '') + '">' +
+        '<label>Signature <span class="muted">(optional — draw with your finger)</span> <button class="lnk" id="clr" type="button">clear</button></label><canvas id="sig"></canvas>' +
+        '<label for="nt">Note to the workshop <span class="muted">(optional)</span></label><textarea id="nt" rows="2" placeholder="e.g. Please call me before replacing the pads"></textarea>' +
+        '<div class="btns"><button class="btn no" id="dec" type="button">Decline</button><button class="btn ok" id="apr" type="button">Approve</button></div>' +
+        '<p class="muted" style="margin-top:10px">' + (token ? 'By tapping Approve you authorise ' + esc(d.biz) + ' to carry out the work above at the price shown. Your name, the time and your signature are recorded.' : 'Tapping a button opens WhatsApp with your answer ready to send to ' + esc(d.biz) + '.') + '</p></div>';
+    }
+    app.innerHTML = h;
+    if(!done && !state.error && !state.expired) wire();
+  }
+  function wire(){
+    var c = $('sig'), ctx = c.getContext('2d'), drawn = false, last = null;
+    var fit = function(){ var r = c.getBoundingClientRect(); c.width = r.width * 2; c.height = r.height * 2; ctx.scale(2, 2); ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.strokeStyle = '#111'; };
+    fit();
+    var pos = function(e){ var r = c.getBoundingClientRect(); return {x:e.clientX - r.left, y:e.clientY - r.top}; };
+    c.addEventListener('pointerdown', function(e){ last = pos(e); c.setPointerCapture(e.pointerId); });
+    c.addEventListener('pointermove', function(e){ if(!last) return; var p = pos(e); ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke(); last = p; drawn = true; });
+    c.addEventListener('pointerup', function(){ last = null; });
+    $('clr').onclick = function(){ ctx.clearRect(0, 0, c.width, c.height); drawn = false; };
+    var go = function(decision){
+      var name = $('nm').value.trim(), note = $('nt').value.trim();
+      if(name.length < 2){ alert('Please type your full name.'); $('nm').focus(); return; }
+      if(decision === 'declined' && !note && !confirm('Decline without a note? You can tell the workshop why in the note box.')) return;
+      if(!token){
+        var msg = (decision === 'approved' ? '✅ I APPROVE ' : '✖ I DECLINE ') + (D.docType || 'quotation').toLowerCase() + ' ' + (D.docNo || '') + ' (' + money(D.grand) + ')' + (D.reg ? ' for ' + D.reg : '') + '.\nName: ' + name + (note ? '\nNote: ' + note : '');
+        location.href = 'https://wa.me/' + String(D.wa || '').replace(/\D/g, '') + '?text=' + encodeURIComponent(msg); return;
+      }
+      $('apr').disabled = $('dec').disabled = true;
+      var sig = drawn ? c.toDataURL('image/png') : null;
+      rpc('rf_approval_decide', {p_token:token, p_decision:decision, p_name:name, p_note:note || null, p_sig:sig, p_agent:navigator.userAgent.slice(0, 250)})
+        .then(function(r){ state.status = r.status; state.decided_name = name; state.decided_at = r.decided_at; render(); window.scrollTo(0, 0); })
+        .catch(function(e){ alert(e.message); $('apr').disabled = $('dec').disabled = false; });
+    };
+    $('apr').onclick = function(){ go('approved'); };
+    $('dec').onclick = function(){ go('declined'); };
+  }
+  if(token){
+    if(!/^[A-Za-z0-9_-]{20,80}$/.test(token)){ app.innerHTML = '<div class="card"><div class="banner bad">This approval link is not complete. Please open the full link you received.</div></div>'; return; }
+    rpc('rf_approval_get', {p_token:token}).then(function(r){
+      if(!r || r.error){ app.innerHTML = '<div class="card"><div class="banner bad">' + esc((r && r.error) || 'Not found.') + '</div></div>'; return; }
+      D = r.data || {}; state = {status:r.status, expired:r.expired, decided_name:r.decided_name, decided_at:r.decided_at}; render();
+    }).catch(function(e){ app.innerHTML = '<div class="card"><div class="banner bad">Could not load the quotation: ' + esc(e.message) + '. Check your internet connection and open the link again.</div></div>'; });
+  } else if(hash){
+    D = fromHash(); if(!D){ app.innerHTML = '<div class="card"><div class="banner bad">This link is not complete. Please open the full link you received.</div></div>'; return; }
+    state = {status:'pending'}; render();
+  } else app.innerHTML = '<div class="card"><div class="banner info">Open the approval link you received on WhatsApp.</div></div>';
+})();
+</script>
+</body>
+</html>
