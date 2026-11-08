@@ -2550,6 +2550,21 @@ img.rf-sig{position:absolute;bottom:100%;left:0;right:0;margin:0 auto 2px;height
 .bot-in{display:flex;gap:6px;align-items:flex-end;}.bot-in textarea{flex:1;min-height:44px;}
 .bot-btns{display:flex;flex-direction:column;gap:4px;}.bot-btns .rf-btn{text-align:center;}
 body.role-technician .price-col,body.role-technician #totalsCard,body.role-technician #rfWsDoc{display:none !important;}
+/* v5.2 partner adverts */
+#rfAd{position:fixed;right:10px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:900;max-width:min(330px,calc(100vw - 20px))}
+.rf-ad-card{position:relative;display:flex;gap:10px;align-items:center;background:#fff;border:2px solid #E30613;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.18);padding:8px 30px 8px 8px;cursor:pointer;animation:rfAdIn .35s ease}
+.rf-ad-card img{width:62px;height:62px;object-fit:cover;border-radius:8px;flex:none}
+.rf-ad-ico{width:52px;height:52px;border-radius:10px;background:#fdecea;display:flex;align-items:center;justify-content:center;font-size:26px;flex:none}
+.rf-ad-txt{display:flex;flex-direction:column;gap:1px;min-width:0;font-size:12px;color:#374151}
+.rf-ad-txt small{color:#E30613;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.3px}
+.rf-ad-txt b{font-size:13.5px;color:#1F3864;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.rf-ad-price{display:inline-block;align-self:flex-start;background:#E30613;color:#fff;border-radius:6px;padding:1px 7px;font-weight:700;font-size:12px}
+.rf-ad-x,.rf-ad-nx{position:absolute;right:4px;border:0;background:#f3f4f6;color:#374151;border-radius:50%;width:22px;height:22px;font-size:12px;line-height:22px;padding:0;cursor:pointer}
+.rf-ad-x{top:4px}.rf-ad-nx{bottom:4px;font-size:15px}
+.rf-ad-bubble{position:relative;border:0;background:#E30613;color:#fff;width:50px;height:50px;border-radius:50%;font-size:22px;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer}
+.rf-ad-bubble span{position:absolute;top:-4px;right:-4px;background:#1F3864;color:#fff;font-size:11px;border-radius:10px;padding:1px 6px}
+@keyframes rfAdIn{from{transform:translateY(20px);opacity:0}to{transform:none;opacity:1}}
+@media print{#rfAd{display:none!important}}
 </style>
 <script>
 (function(){
@@ -2561,7 +2576,7 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
    database (Supabase) with staff logins and roles (admin / cashier / technician).
    Without the team database everything still works on this device alone, as before.
 =========================================================================================== */
-const RF_VERSION = '5.1';
+const RF_VERSION = '5.3';
 /* Multi-user team database: built, but switched OFF for now. Set to true to turn it back on. */
 const EDITION = 'partner';      // build script switches this to 'partner' for the partner-garage app
 const TEAM_ENABLED = EDITION === 'robotik' && true;
@@ -3166,7 +3181,9 @@ function postStockForDoc(doc){
   if(!doc || !can('cashier')) return;
   const active = (doc.type || '').toUpperCase() === 'INVOICE' && doc.status !== 'Cancelled' && !doc._deleted;
   const want = new Map();
-  if(active) (doc.parts || []).forEach(p => { const it = findItemByName(p.desc); if(it) want.set(it.id, (want.get(it.id) || 0) + N(p.qty)); });
+  // parts bought specially for this job (Workshop → part bought for this job) did not come out of stock
+  let special = new Set(); try{ if(typeof jobFamily === 'function'){ const fam = jobFamily(doc.id); special = new Set(Store.list('jobpart').filter(x => fam.includes(x.docId)).map(x => lc(String(x.desc || '').trim()))); } }catch(e){}
+  if(active) (doc.parts || []).forEach(p => { if(special.has(lc(String(p.desc || '').trim()))) return; const it = findItemByName(p.desc); if(it) want.set(it.id, (want.get(it.id) || 0) + N(p.qty)); });
   Store.list('stockmove').filter(m => m.docId === doc.id).forEach(m => { if(!want.has(m.itemId) && N(m.qty) !== 0) Store.put('stockmove', Object.assign({}, m, {qty:0, note:'Removed from ' + (doc.docNo || '')})); });
   want.forEach((q, itemId) => {
     const id = 'sm_' + doc.id + '_' + itemId, cur = bucket('stockmove').get(id);
@@ -3702,10 +3719,11 @@ function renderMoney(){
   const v = $('view-money');
   if(!can('cashier')){ v.innerHTML = wrap('MONEY', '<p>Only cashier or admin can see this screen.</p>'); return; }
   const s = segState.money, pend = payments().filter(p => isTransfer(p.method) && !bucket('payconfirm').has('pc_' + p.id)).length;
-  let h = seg('money', [['reports', 'Reports'], ['cashbook', 'Cash book'], ['summary', 'Profit & loss'], ['exp', 'Expenses'], ['confirm', 'Confirm transfers' + (pend ? ' (' + pend + ')' : '')], ['owed', 'Owed to us'], ['fin', 'Financial summary'], ['acct', 'Accounting export']], s);
+  let h = seg('money', [['reports', 'Reports'], ['cashbook', 'Cash book'], ['summary', 'Profit & loss'], ['exp', 'Expenses'], ['confirm', 'Confirm transfers' + (pend ? ' (' + pend + ')' : '')], ['owed', 'Owed to us'], ['pay', 'Online payments'], ['fin', 'Financial summary'], ['acct', 'Accounting export']], s);
   if(s === 'reports' || s === 'cashbook'){ v.innerHTML = h + '<div id="rfBooks"></div>'; renderBooks(s); return; }
   if(s === 'acct'){ v.innerHTML = h + '<div id="rfAcct"></div>'; renderAcct(); return; }
   if(s === 'fin'){ v.innerHTML = h + '<div id="rfFin"></div>'; renderFin(); return; }
+  if(s === 'pay'){ v.innerHTML = h + '<div id="rfPayRecon"></div>'; renderPayRecon(); return; }
   if(s === 'summary') h += summaryHtml(); else if(s === 'exp') h += expHtml(); else if(s === 'confirm') h += confirmHtml(); else h += owedHtml();
   v.innerHTML = h;
   const ps = $('rfPeriod'); if(ps) ps.onchange = e => { moneyPeriod = e.target.value; renderMoney(); };
@@ -4791,6 +4809,7 @@ function activity(p, co){
     const c = (d.custName || '(no name)').trim(); custs[c] = (custs[c] || 0) + N(d.grand);
     if(d.quick && QUICK[d.quick.tpl]){ const k = QUICK[d.quick.tpl].name; quickT[k] = quickT[k] || {n:0, amt:0}; quickT[k].n++; quickT[k].amt += N(d.grand); }
   });
+  if(typeof docPartsCost === 'function'){ partsCost = 0; unknownCost = 0; inv.forEach(d => { const c = docPartsCost(d); partsCost += c.stockCost + c.jp; unknownCost += c.unknown; }); }
   const L = ledger().filter(x => coMatch(x.company, co) && x.cat !== 'Transfer');
   const inP = L.filter(x => inR(x.date));
   const cashIn = inP.filter(x => x.dir === 'in').reduce((s, x) => s + x.amount, 0), cashOut = inP.filter(x => x.dir === 'out').reduce((s, x) => s + x.amount, 0);
@@ -5033,12 +5052,17 @@ const prevNewDoc2 = window.newDocument;
 window.newDocument = async function(){ convertFrom = ''; await prevNewDoc2.apply(this, arguments); renderWsDoc(); };
 
 /* ---------- profit per job ---------- */
-function jobCosts(d){
+// One cost rule used everywhere (job costs card, profit per job, Money summary, reports):
+// a part line bought specially for the job is costed from that purchase ONLY — never also from the stock price.
+function docPartsCost(d){
   const fam = jobFamily(d.id), jps = Store.list('jobpart').filter(x => fam.includes(x.docId));
-  const jpNames = new Set(jps.map(x => lc(x.desc)));
+  const jpNames = new Set(jps.map(x => lc(String(x.desc || '').trim())));
   let stockCost = 0, unknown = 0;
-  (d.parts || []).forEach(p => { if(!p.desc) return; const it = findItemByName(p.desc); if(it && N(it.costPrice)) stockCost += N(p.qty) * N(it.costPrice); else if(!jpNames.has(lc(p.desc))) unknown++; });
-  const jp = sumBy(jps, x => N(x.qty) * N(x.cost));
+  (d.parts || []).forEach(p => { if(!p.desc) return; if(jpNames.has(lc(String(p.desc).trim()))) return; const it = findItemByName(p.desc); if(it && N(it.costPrice)) stockCost += N(p.qty) * N(it.costPrice); else unknown++; });
+  return {fam, jps, stockCost, jp:sumBy(jps, x => N(x.qty) * N(x.cost)), unknown};
+}
+function jobCosts(d){
+  const {fam, jps, stockCost, jp, unknown} = docPartsCost(d);
   const pay = sumBy(Store.list('staffpay').filter(x => x.type === 'job' && fam.includes(x.docId)), x => x.amount);
   const tow = sumBy(Store.list('tow').filter(x => fam.includes(x.docId)), x => x.cost);
   const come = sumBy(Store.list('comeback').filter(x => x.origDocId && fam.includes(x.origDocId)), x => x.cost);
@@ -5048,9 +5072,10 @@ function jobCosts(d){
 const marginBadge = m => `<span class="rf-badge ${m < 15 ? 'red' : m < 30 ? 'amber' : 'green'}">${Math.round(m)}%</span>`;
 const prevPnl = pnl;
 pnl = function(from, to){
-  const p = prevPnl(from, to); let extra = 0, known = 0;
-  p.invs.forEach(d => { const c = jobCosts(d); extra += c.jp; const names = new Set(c.jps.map(x => lc(x.desc))); known += (d.parts || []).filter(x => x.desc && !findItemByName(x.desc) && names.has(lc(x.desc))).length; });
-  p.partsCost += extra; p.gross -= extra; p.net -= extra; p.unknownCost = Math.max(0, p.unknownCost - known); p.jobPartsCost = extra;
+  const p = prevPnl(from, to); let parts = 0, jp = 0, unknown = 0;
+  p.invs.forEach(d => { const c = docPartsCost(d); parts += c.stockCost; jp += c.jp; unknown += c.unknown; });
+  p.partsCost = parts + jp; p.jobPartsCost = jp; p.unknownCost = unknown;
+  p.gross = p.sales - p.partsCost; p.net = p.sales - p.partsCost - p.opex;
   return p;
 };
 
@@ -5107,7 +5132,7 @@ function renderWsDoc(){
 }
 function editJobPart(id){
   const docId = $('docNo').dataset.savedId; if(!docId && !id){ toast('Save the document first.', true); return; }
-  const jp = id ? Store.get('jobpart', id) : {date:today(), qty:1, markup:markupPct(), pay:'Transfer', addLine:true};
+  const jp = id ? Store.get('jobpart', id) : {date:today(), qty:1, markup:markupPct(), pay:'Transfer', addLine:localStorage.getItem('rf3_jp_addline') === '1'};
   const f = [
     {k:'desc', label:'Part (as it should appear on the invoice)', req:true, type:'list', list:'rfItemList', ph:'e.g. Front brake pads — Toyota Camry'},
     {k:'supplier', label:'Bought from (supplier)', type:'list', list:'rfSupplierList', half:true}, {k:'date', label:'Date bought', type:'date', half:true},
@@ -5115,14 +5140,17 @@ function editJobPart(id){
     {k:'markup', label:'Your markup %', type:'number', half:true, hint:'Default ' + markupPct() + '% (Workshop → Profit per job)'},
     {k:'pay', label:'Paid by', type:'select', opts:PAY_METHODS.concat(['Credit — owe the supplier']), half:true}
   ];
-  if(!id) f.push({k:'addLine', label:'Add it to this document\'s parts at the selling price', type:'check'});
+  if(!id) f.push({k:'addLine', label:'Also add it as a NEW line on this document at the selling price (leave unticked if the part is already on the invoice)', type:'check'});
   wsLists();
   formModal(id ? 'Part bought for ' + (jp.docNo || 'job') : 'Part bought for this job', f, jp, v => {
     const o = Object.assign({}, jp, v, {docId:jp.docId || docId, docNo:jp.docNo || $('docNo').value, vehReg:jp.vehReg || $('vehReg').value, custName:jp.custName || $('custName').value, company:jp.company != null ? jp.company : String(N($('companySelect').value)), by:jp.by || myName()}); delete o.addLine;
     const rec = Store.put('jobpart', o);
     syncJobPartExpense(rec);
-    if(!id && v.addLine){ const sp = sellFrom(v.cost, v.markup === '' ? markupPct() : v.markup); addLine('parts', v.desc, v.qty, sp); calcAll(); toast('Added to parts at ' + money(sp) + ' each — save the document to keep it.'); }
-    else toast('Saved.');
+    if(!id) localStorage.setItem('rf3_jp_addline', v.addLine ? '1' : '0');
+    const onDoc = [...document.querySelectorAll('#partsTable tbody tr .desc-input')].some(i => lc(i.value.trim()) === lc(String(v.desc).trim()));
+    if(!id && v.addLine && onDoc) toast('Cost saved. “' + v.desc + '” is already on this document, so no extra line was added.');
+    else if(!id && v.addLine){ const sp = sellFrom(v.cost, v.markup === '' ? markupPct() : v.markup); addLine('parts', v.desc, v.qty, sp); calcAll(); toast('Added to parts at ' + money(sp) + ' each — save the document to keep it.'); }
+    else toast(id ? 'Saved.' : 'Cost saved for profit only — the invoice was not changed.');
     setTimeout(renderWsDoc, 100);
   }, id ? {label:'Delete', fn:async () => { if(!(await askConfirm('Delete this part purchase?'))) return false; Store.remove('jobpart', id); Store.remove('expense', 'exp_' + id); setTimeout(renderWsDoc, 100); }} : null);
 }
@@ -6367,7 +6395,7 @@ function renderPlugins(){
   // paystack
   h += wrap('💳 PAYSTACK — AUTOMATIC PAYMENT RECORDING', `<p class="rf-note">On an invoice: <b>💳 Paystack link</b> sends the customer a secure checkout for the balance (card, transfer, USSD). When they pay, Paystack tells your database, the payment is added to the invoice, the invoice is marked Paid and the transfer is already confirmed — no screenshots, no typing.</p>
     <details><summary class="rf-note" style="cursor:pointer"><b>Setup (once)</b></summary><ol class="rf-note">
-      <li>Supabase → Edge Functions → deploy <b>paystack-link</b> and <b>paystack-webhook</b> (Via editor, paste each index.ts). Switch off “Enforce JWT verification” for both.</li>
+      <li>Supabase → Edge Functions → deploy <b>paystack-link</b>, <b>paystack-webhook</b> and <b>reconcile-payments</b> (Via editor, paste each index.ts). Switch off “Enforce JWT verification” for all three.</li><li>Run the v5.3 database update, then set up automatic checking under Money → Online payments → ⏱ Automatic checking.</li>
       <li>Supabase → Edge Functions → Secrets: add <b>PAYSTACK_SECRET_KEY</b> (Paystack → Settings → API Keys; use the test key first).</li>
       <li>Paystack → Settings → API Keys &amp; Webhooks → Webhook URL:<br><code style="word-break:break-all">https://${esc(ref)}.supabase.co/functions/v1/paystack-webhook</code></li>
       <li>Test with a ₦100 invoice using Paystack's test card, then switch both to your live key.</li></ol></details>`, true);
@@ -6379,12 +6407,15 @@ function renderPlugins(){
   if($('plRSave')) $('plRSave').onclick = () => { const rules = {}; v.querySelectorAll('[data-rr]').forEach(i => rules[i.dataset.rr] = N(i.value)); Store.saveSetting({autoRemMode:$('plRm').value, autoRemDaysBefore:N($('plRd').value), remRules:rules}); toast('Reminder settings saved.'); };
   $('plQueue').onclick = reminderQueue;
   if($('plSendNow')) $('plSendNow').onclick = async () => { toast('Sending…'); try{ const j = await callFn('send-reminders', {}); if(j.skipped) toast(j.skipped, true); else toast(`Sent ${j.sent}, failed ${j.failed}, checked ${j.checked}.`, !!j.failed); await Cloud.sync(); renderPlugins(); }catch(e){ toast(e.message, true); } };
-  $('plCron').onclick = () => { const sec = randToken(24); $('plCronOut').innerHTML = `<p class="rf-note">1. Supabase → Edge Functions → Secrets → add <b>CRON_SECRET</b> = <code style="word-break:break-all">${esc(sec)}</code></p><p class="rf-note">2. SQL Editor → paste and Run:</p><textarea rows="9" readonly onclick="this.select()" style="font-family:monospace;font-size:11px">select cron.schedule('rf-daily-reminders', '0 7 * * *', $cron$
-  select net.http_post(
-    url := 'https://${esc(ref)}.supabase.co/functions/v1/send-reminders',
-    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', '${esc(sec)}'),
-    body := '{"source":"cron"}'::jsonb);
-$cron$);</textarea><p class="rf-note">Runs every day at 08:00 Lagos time. To stop it later: <code>select cron.unschedule('rf-daily-reminders');</code></p>`; };
+  $('plCron').onclick = () => { const sec = randToken(24); $('plCronOut').innerHTML = `<p class="rf-note">1. Supabase → Edge Functions → Secrets → add <b>CRON_SECRET</b> = <code style="word-break:break-all">${esc(sec)}</code></p><p class="rf-note">2. SQL Editor → paste and Run:</p><textarea rows="12" readonly onclick="this.select()" style="font-family:monospace;font-size:11px">select cron.unschedule(jobid) from cron.job where jobname in ('rf-daily-reminders', 'rf-payment-check');
+select cron.schedule('rf-daily-reminders', '0 7 * * *', $cron$
+  select net.http_post(url := 'https://${esc(ref)}.supabase.co/functions/v1/send-reminders',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', '${esc(sec)}'), body := '{"source":"cron"}'::jsonb);
+$cron$);
+select cron.schedule('rf-payment-check', '*/15 * * * *', $cron$
+  select net.http_post(url := 'https://${esc(ref)}.supabase.co/functions/v1/reconcile-payments',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', '${esc(sec)}'), body := '{"source":"cron"}'::jsonb);
+$cron$);</textarea><p class="rf-note">Reminders run every day at 08:00 Lagos time; Paystack payments are checked every 15 minutes (if the reconcile-payments plug-in is installed). To stop: <code>select cron.unschedule('rf-daily-reminders');</code></p>`; };
   $('plAcct').onclick = () => { segState.money = 'acct'; showTab('money'); };
   $('plBk').onclick = () => { sysSeg = 'backup'; showTab('system'); };
 }
@@ -7597,7 +7628,7 @@ if(typeof renderPlugins === 'function'){
 }
 
 /* ---------- test hooks ---------- */
-Object.assign(window.RF = window.RF || {}, {markReceived:by => { pendingReception = {by:by || 'Test', at:nowIso(), checks:RECEPTION_CHECKS.slice()}; }, discVerdict, tyreFlags, dotAge, quoteHash, reservedMap, availMap, finSummary, safetyFor, decodeVin, consentOf, setConsent, recentlySent, openConflictCount});
+Object.assign(window.RF = window.RF || {}, {jobCosts:d => jobCosts(d), pnl:(a, b) => pnl(a, b), stockMap:() => stockMap(), markReceived:by => { pendingReception = {by:by || 'Test', at:nowIso(), checks:RECEPTION_CHECKS.slice()}; }, discVerdict, tyreFlags, dotAge, quoteHash, reservedMap, availMap, finSummary, safetyFor, decodeVin, consentOf, setConsent, recentlySent, openConflictCount});
 
 /* ---------- sync recovery: download every record again (fixes a phone that missed changes) ---------- */
 const prevSysSync51 = sysSync;
@@ -7607,6 +7638,188 @@ sysSync = async function(box){
   box.insertAdjacentHTML('beforeend', wrap('REPAIR THIS DEVICE', '<p class="rf-note">If this phone is missing records that others can see, download everything again. Changes waiting to be sent are kept and sent first.</p><div class="rf-tools"><button class="rf-btn" id="syRepair">⟳ Re-download all records</button></div>'));
   $('syRepair').onclick = async () => { try{ await Cloud.flush(); await idbSetMeta('since:' + Cloud.cfg.url, '1970-01-01T00:00:00Z'); const ch = await Cloud.pull(); toast('Done — ' + (ch && ch.size ? 'records updated.' : 'everything was already up to date.')); renderSystem(); }catch(e){ toast(e.message, true); } };
 };
+/* ===================== v5.2: adverts for partner garages =====================
+   HQ (admin/cashier) creates adverts in the Partners tile; partner apps show them in a floating box
+   on Home and "Send work", with a WhatsApp "I'm interested" button. Views and taps are counted. */
+const AD_STATUS = a => { const t = today(); return !a.active ? ['Paused', 'grey'] : a.starts > t ? ['Scheduled', 'blue'] : a.ends && a.ends < t ? ['Ended', 'grey'] : ['Running', 'green']; };
+
+/* ---------- HQ: manage adverts ---------- */
+async function adList(){ return await Cloud.rest('GET', 'rf_adverts?select=id,title,body,cta,link,price,starts,ends,priority,audience,active,views,clicks,updated_at&order=priority.desc,updated_at.desc') || []; }
+function adPreview(a){
+  return `<div class="rf-ad-card" style="position:static;max-width:320px;margin:6px 0">${a.image ? `<img src="${esc(a.image)}" alt="">` : '<div class="rf-ad-ico">📣</div>'}<div class="rf-ad-txt"><b>${esc(a.title || 'Advert title')}</b>${a.price ? `<span class="rf-ad-price">${esc(a.price)}</span>` : ''}<span>${esc((a.body || '').slice(0, 90))}</span></div></div>`;
+}
+function adEditor(a, done){
+  a = Object.assign({title:'', body:'', price:'', cta:'', link:'', starts:today(), ends:addDays(today(), 14), priority:0, audience:'all', active:true, image:''}, a || {});
+  const box = modal(`<h3>📣 ${a.id ? 'Edit advert' : 'New advert for partner garages'}</h3>
+    <div class="field"><label>Title * (shown in the box)</label><input id="adT" maxlength="80" value="${esc(a.title)}" placeholder="e.g. 20% off brake disc skimming this week"></div>
+    <div class="field"><label>Details</label><textarea id="adB" maxlength="600" rows="3" placeholder="What it is, who it is for, conditions">${esc(a.body || '')}</textarea></div>
+    <div class="grid2"><div class="field"><label>Price / offer tag</label><input id="adP" maxlength="40" value="${esc(a.price || '')}" placeholder="e.g. ₦6,500 per disc"></div><div class="field"><label>Button text</label><input id="adC" maxlength="30" value="${esc(a.cta || '')}" placeholder="I'm interested"></div></div>
+    <div class="field"><label>Web link (optional, must start with https://)</label><input id="adL" value="${esc(a.link || '')}" placeholder="https://…"></div>
+    <div class="grid2"><div class="field"><label>Starts</label><input id="adS" type="date" value="${esc(a.starts)}"></div><div class="field"><label>Ends (empty = no end)</label><input id="adE" type="date" value="${esc(a.ends || '')}"></div></div>
+    <div class="grid2"><div class="field"><label>Show to</label><select id="adA"><option value="all"${a.audience === 'all' ? ' selected' : ''}>All partner garages</option><option value="verified"${a.audience === 'verified' ? ' selected' : ''}>Only garages with a partner code</option></select></div><div class="field"><label>Priority (higher shows first)</label><input id="adR" type="number" value="${esc(a.priority)}"></div></div>
+    <div class="field"><label>Picture (product photo or flyer)</label><input id="adI" type="file" accept="image/*"></div>
+    <label class="chk" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="adOn" style="width:auto"${a.active ? ' checked' : ''}> Active</label>
+    <div class="rf-note">Preview:</div><div id="adPrev">${adPreview(a)}</div>
+    <div class="rf-tools"><button class="rf-btn green big" id="adSave">Save advert</button>${a.image ? '<button class="rf-btn grey" id="adNoImg">Remove picture</button>' : ''}<button class="rf-btn grey" id="adX">Cancel</button></div>`);
+  const read = () => Object.assign(a, {title:box.querySelector('#adT').value.trim(), body:box.querySelector('#adB').value.trim(), price:box.querySelector('#adP').value.trim(), cta:box.querySelector('#adC').value.trim(), link:box.querySelector('#adL').value.trim(), starts:box.querySelector('#adS').value || today(), ends:box.querySelector('#adE').value || null, audience:box.querySelector('#adA').value, priority:N(box.querySelector('#adR').value), active:box.querySelector('#adOn').checked});
+  box.addEventListener('input', () => { read(); box.querySelector('#adPrev').innerHTML = adPreview(a); });
+  box.querySelector('#adI').onchange = async e => { const f = e.target.files[0]; if(!f) return; try{ a.image = await resizeImage(f, 800); box.querySelector('#adPrev').innerHTML = adPreview(read()); }catch(er){ toast('Could not read that picture.', true); } };
+  if(box.querySelector('#adNoImg')) box.querySelector('#adNoImg').onclick = () => { a.image = ''; box.querySelector('#adPrev').innerHTML = adPreview(read()); };
+  box.querySelector('#adX').onclick = closeModal;
+  box.querySelector('#adSave').onclick = async () => { read();
+    if(a.title.length < 2){ toast('Give the advert a title.', true); return; }
+    if(a.link && !/^https:\/\//i.test(a.link)){ toast('The link must start with https://', true); return; }
+    if(a.ends && a.ends < a.starts){ toast('The end date is before the start date.', true); return; }
+    const row = {title:a.title, body:a.body || null, price:a.price || null, cta:a.cta || null, link:a.link || null, starts:a.starts, ends:a.ends, audience:a.audience, priority:a.priority, active:a.active, image:a.image || null, updated_at:nowIso()};
+    try{ if(a.id) await Cloud.rest('PATCH', 'rf_adverts?id=eq.' + encodeURIComponent(a.id), row, 'return=minimal');
+      else await Cloud.rest('POST', 'rf_adverts', Object.assign(row, {created_by:myName()}), 'return=minimal');
+      closeModal(); toast('Advert saved. Partner apps show it within 30 minutes (or when reopened).'); done && done(); }
+    catch(e){ toast(e.message, true); } };
+}
+async function renderAdvertsCard(v){
+  if(!v || mode !== 'cloud' || !can('cashier') || $('rfAdsCard')) return;
+  v.insertAdjacentHTML('beforeend', `<div id="rfAdsCard"></div>`);
+  const box = $('rfAdsCard');
+  let ads; try{ ads = await adList(); }
+  catch(e){ box.innerHTML = wrap('📣 ADVERTS FOR PARTNER GARAGES', '<p class="rf-note">' + esc(/rf_adverts|404|does not exist|schema cache/.test(e.message + e.status) ? 'Run the adverts database update (upgrade-5.2-adverts.sql) in Supabase to switch this on.' : e.message) + '</p>'); return; }
+  const h = '<p class="rf-note">Adverts appear in a floating box in every partner garage app (Home and Send work screens). Garages tap “I’m interested” to message you on WhatsApp.</p><div class="rf-tools"><button class="rf-btn green" id="adNew">＋ New advert</button></div>' +
+    (ads.map(a => { const [st, c] = AD_STATUS(a), rate = a.views ? Math.round(a.clicks / a.views * 100) : 0;
+      return `<div class="rf-row"><div class="t"><span>${esc(a.title)}${a.price ? ' · ' + esc(a.price) : ''}</span><span class="rf-badge ${c}">${st}</span></div>
+        <div class="m">${esc(fmtDate(a.starts))} – ${a.ends ? esc(fmtDate(a.ends)) : 'no end'} · ${a.audience === 'verified' ? 'partners with a code' : 'all garages'} · 👁 ${esc(a.views)} views · 👆 ${esc(a.clicks)} taps${a.views ? ' (' + rate + '%)' : ''}</div>
+        <div class="acts"><button class="rf-btn grey" data-ade="${esc(a.id)}">Edit</button><button class="rf-btn grey" data-adp="${esc(a.id)}">${a.active ? 'Pause' : 'Resume'}</button>${can('admin') ? `<button class="rf-btn red" data-add="${esc(a.id)}">Delete</button>` : ''}</div></div>`; }).join('') || '<div class="rf-empty">No adverts yet.</div>');
+  box.innerHTML = wrap('📣 ADVERTS FOR PARTNER GARAGES', h);
+  const again = () => { const c = $('rfAdsCard'); if(c) c.remove(); renderAdvertsCard($('view-partners')); };
+  $('adNew').onclick = () => adEditor(null, again);
+  bind(box, '[data-ade]', 'click', async el => { try{ const r = await Cloud.rest('GET', 'rf_adverts?select=*&id=eq.' + encodeURIComponent(el.dataset.ade)); adEditor(r[0], again); }catch(e){ toast(e.message, true); } });
+  bind(box, '[data-adp]', 'click', async el => { const a = ads.find(x => x.id === el.dataset.adp); try{ await Cloud.rest('PATCH', 'rf_adverts?id=eq.' + encodeURIComponent(a.id), {active:!a.active, updated_at:nowIso()}, 'return=minimal'); again(); }catch(e){ toast(e.message, true); } });
+  bind(box, '[data-add]', 'click', async el => { if(!(await askConfirm('Delete this advert? Partner apps stop showing it.'))) return; try{ await Cloud.rest('DELETE', 'rf_adverts?id=eq.' + encodeURIComponent(el.dataset.add), null, 'return=minimal'); again(); }catch(e){ toast(e.message, true); } });
+}
+if(EDITION === 'robotik'){
+  const prevRenderPartners52 = renderPartners;
+  renderPartners = async function(){ await prevRenderPartners52.apply(this, arguments); try{ await renderAdvertsCard($('view-partners')); }catch(e){ console.error(e); } };
+}
+
+/* ---------- Partner app: floating advert box ---------- */
+const AD_KEY = 'rf3_ads', AD_HIDE = 'rf3_ads_hidden', AD_SEEN = 'rf3_ads_seen';
+const adJ = (k, d) => { try{ return JSON.parse(localStorage.getItem(k) || '') || d; }catch(e){ return d; } };
+let adIdx = 0, adTimer = null, adMin = sessionStorage.getItem('rf_ad_min') === '1';
+function liveAds(){ const hid = adJ(AD_HIDE, {}), t = today(); return ((adJ(AD_KEY, {}).list) || []).filter(a => hid[a.id] !== a.updated_at && (!a.ends || a.ends >= t)); }
+async function fetchAds(){
+  try{ const code = typeof partnerCode === 'function' ? partnerCode() : ''; const list = await hqFetch('rpc/rf_adverts_live', {method:'POST', body:JSON.stringify({p_code:code || null})});
+    localStorage.setItem(AD_KEY, JSON.stringify({at:nowIso(), list:Array.isArray(list) ? list : []})); }
+  catch(e){ /* offline or not set up yet: keep the last adverts */ }
+  showAdBox();
+}
+function adHit(id, kind){
+  if(kind === 'view'){ const seen = adJ(AD_SEEN, {}), k = id + '|' + today(); if(seen[k]) return; seen[k] = 1; Object.keys(seen).forEach(x => { if(!x.endsWith(today())) delete seen[x]; }); localStorage.setItem(AD_SEEN, JSON.stringify(seen)); }
+  hqFetch('rpc/rf_advert_hit', {method:'POST', body:JSON.stringify({p_id:id, p_kind:kind})}).catch(() => {});
+}
+function adShowHere(){ return EDITION === 'partner' && ['home', 'send'].includes(curTab) && !document.querySelector('#rfModal.on'); }
+function showAdBox(){
+  if(EDITION !== 'partner') return;
+  let el = $('rfAd'); const ads = liveAds();
+  if(!ads.length || !adShowHere()){ if(el) el.style.display = 'none'; clearInterval(adTimer); adTimer = null; return; }
+  if(!el){ el = document.createElement('div'); el.id = 'rfAd'; el.className = 'rf-noprint'; document.body.appendChild(el);
+    el.addEventListener('click', e => { const t = e.target.closest('[data-adk]'); if(!t) return; e.stopPropagation(); const k = t.dataset.adk, ads2 = liveAds(), a = ads2[adIdx % ads2.length];
+      if(k === 'min'){ adMin = true; sessionStorage.setItem('rf_ad_min', '1'); showAdBox(); }
+      else if(k === 'max'){ adMin = false; sessionStorage.removeItem('rf_ad_min'); showAdBox(); }
+      else if(k === 'next'){ adIdx++; showAdBox(); }
+      else if(k === 'open' && a) openAd(a); }); }
+  el.style.display = '';
+  if(adMin){ el.innerHTML = `<button class="rf-ad-bubble" data-adk="max" aria-label="Show offers">📣<span>${ads.length}</span></button>`; clearInterval(adTimer); adTimer = null; return; }
+  const a = ads[adIdx % ads.length];
+  el.innerHTML = `<div class="rf-ad-card" data-adk="open" role="button" aria-label="Offer: ${esc(a.title)}">${a.image ? `<img src="${esc(a.image)}" alt="">` : '<div class="rf-ad-ico">📣</div>'}<div class="rf-ad-txt"><small>Robotik Fix offer${ads.length > 1 ? ` ${adIdx % ads.length + 1}/${ads.length}` : ''}</small><b>${esc(a.title)}</b>${a.price ? `<span class="rf-ad-price">${esc(a.price)}</span>` : ''}${a.ends ? `<span>Ends ${esc(fmtDate(a.ends))}</span>` : ''}</div>
+    <button class="rf-ad-x" data-adk="min" aria-label="Minimise">✕</button>${ads.length > 1 ? '<button class="rf-ad-nx" data-adk="next" aria-label="Next offer">›</button>' : ''}</div>`;
+  adHit(a.id, 'view');
+  if(ads.length > 1 && !adTimer) adTimer = setInterval(() => { if(!adShowHere() || adMin){ return; } adIdx++; showAdBox(); }, 8000);
+}
+function openAd(a){
+  adHit(a.id, 'click');
+  const garage = (typeof brandVals === 'function' && brandVals().biz) || 'a partner garage';
+  const box = modal(`${a.image ? `<img src="${esc(a.image)}" alt="" style="width:100%;max-height:260px;object-fit:contain;border-radius:8px;background:#f3f4f6">` : ''}
+    <h3 style="margin-top:8px">${esc(a.title)}</h3>${a.price ? `<div class="rf-ad-price" style="font-size:15px">${esc(a.price)}</div>` : ''}
+    ${a.body ? `<p style="white-space:pre-wrap">${esc(a.body)}</p>` : ''}${a.ends ? `<p class="rf-note">Offer ends ${esc(fmtDate(a.ends))}.</p>` : ''}
+    <div class="rf-tools"><button class="rf-btn green big" id="adWa">💬 ${esc(a.cta || 'I’m interested')}</button>${a.link ? '<button class="rf-btn" id="adLink">Open link</button>' : ''}</div>
+    <div class="rf-tools"><button class="rf-btn grey" id="adHide">Don’t show this offer again</button><button class="rf-btn grey" id="adClose">Close</button></div>`);
+  box.querySelector('#adWa').onclick = () => { closeModal(); openWhatsApp(HQ.wa, `Hello Robotik Fix, I'm interested in your offer: ${a.title}${a.price ? ' (' + a.price + ')' : ''}.\n— ${garage}`); };
+  if(box.querySelector('#adLink')) box.querySelector('#adLink').onclick = () => { if(/^https:\/\//i.test(a.link)) window.open(a.link, '_blank', 'noopener'); };
+  box.querySelector('#adHide').onclick = () => { const h = adJ(AD_HIDE, {}); h[a.id] = a.updated_at; localStorage.setItem(AD_HIDE, JSON.stringify(h)); closeModal(); adIdx = 0; showAdBox(); };
+  box.querySelector('#adClose').onclick = () => { closeModal(); showAdBox(); };
+}
+if(EDITION === 'partner'){
+  const prevShowTab52 = window.showTab;
+  window.showTab = function(){ const r = prevShowTab52.apply(this, arguments); setTimeout(showAdBox, 50); return r; };
+  setTimeout(fetchAds, 2500); setInterval(fetchAds, 30 * 60 * 1000);
+  window.addEventListener('online', fetchAds);
+  let adMo = null; new MutationObserver(m => { if(!m.some(x => x.target.id === 'rfModal')) return; clearTimeout(adMo); adMo = setTimeout(showAdBox, 60); }).observe(document.body, {attributes:true, subtree:true, attributeFilter:['class']});
+}
+Object.assign(window.RF = window.RF || {}, {fetchAds, showAdBox, liveAds});
+/* ===================== v5.3: online payments (Paystack) reconciliation =====================
+   Money → Online payments: every checkout link, whether Paystack paid it, whether it was posted to the invoice,
+   and anything that needs a person to check. Closing a review never adds money to an invoice. */
+let payFilter = 'all', payQ = '';
+const kobo = k => money(N(k) / 100);
+function payRows(intents, ledger, reviews){
+  const L = new Map(ledger.map(x => [x.reference, x])), R = new Map(reviews.map(x => [x.reference, x])), seen = new Set();
+  const rows = intents.map(i => { seen.add(i.reference); const l = L.get(i.reference), r = R.get(i.reference);
+    const status = l ? 'Posted' : r && !r.resolved_at ? 'Needs review' : r ? 'Closed' : i.status === 'abandoned' ? 'Not paid' : 'Waiting for payment';
+    return {reference:i.reference, doc_id:i.doc_id, doc_no:i.doc_no || (l && l.doc_no) || '', amount:i.amount_kobo, created_at:i.created_at, created_by:i.created_by || '', source:i.source, status, posted_at:l && l.posted_at, via:l && l.posted_via, channel:l && l.channel, reason:r && r.reason, resolution:r && r.resolution, resolved_by:r && r.resolved_by}; });
+  reviews.filter(r => !seen.has(r.reference)).forEach(r => rows.push({reference:r.reference, doc_no:'', amount:(r.details || {}).amount_kobo || 0, created_at:r.created_at, status:r.resolved_at ? 'Closed' : 'Needs review', reason:r.reason, resolution:r.resolution, resolved_by:r.resolved_by, created_by:'Paystack'}));
+  return rows.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+}
+const PAY_TONE = {'Posted':'green', 'Needs review':'red', 'Closed':'grey', 'Not paid':'grey', 'Waiting for payment':'amber'};
+async function renderPayRecon(){
+  const box = $('rfPayRecon'); if(!box) return;
+  if(mode !== 'cloud'){ box.innerHTML = wrap('ONLINE PAYMENTS', '<p class="rf-note">Online payments need the team database and the Paystack plug-ins.</p>', true); return; }
+  box.innerHTML = wrap('ONLINE PAYMENTS', '<div class="rf-empty">Loading…</div>', true);
+  let intents, ledger, reviews;
+  try{ [intents, ledger, reviews] = await Promise.all([
+      Cloud.rest('GET', 'rf_payment_intents?select=*&order=created_at.desc&limit=500'),
+      Cloud.rest('GET', 'rf_payment_ledger?select=*&order=posted_at.desc&limit=500'),
+      Cloud.rest('GET', 'rf_payment_review?select=*&order=created_at.desc&limit=300')]); }
+  catch(e){ box.innerHTML = wrap('ONLINE PAYMENTS', '<p class="rf-note">' + esc(/rf_payment|404|does not exist|schema cache/.test(e.message + e.status) ? 'Run the v5.3 database update (upgrade-5.3-part1 to part3) in Supabase first.' : e.message) + '</p>', true); return; }
+  const all = payRows(intents || [], ledger || [], reviews || []);
+  const [f, t] = periodRange();
+  const inP = r => String(r.created_at || '').slice(0, 10) >= f && String(r.created_at || '').slice(0, 10) <= t;
+  const postedP = (ledger || []).filter(l => String(l.posted_at || '').slice(0, 10) >= f && String(l.posted_at || '').slice(0, 10) <= t);
+  const waiting = all.filter(r => r.status === 'Waiting for payment'), review = all.filter(r => r.status === 'Needs review');
+  let rows = all.filter(r => r.status === 'Needs review' || r.status === 'Waiting for payment' || inP(r));
+  if(payFilter !== 'all') rows = rows.filter(r => r.status === payFilter);
+  if(payQ) rows = rows.filter(r => lc([r.reference, r.doc_no, r.created_by, r.reason, r.resolution].join(' ')).includes(lc(payQ)));
+  let h = periodPicker();
+  h += `<div class="rf-kpis"><div class="rf-kpi"><div class="l">Received online (${esc(fmtDate(f))} – ${esc(fmtDate(t))})</div><div class="v pos">${kobo(sumBy(postedP, l => l.amount_kobo))}</div></div><div class="rf-kpi"><div class="l">Payments posted</div><div class="v">${postedP.length}</div></div><div class="rf-kpi"><div class="l">Links waiting for payment</div><div class="v">${waiting.length} · ${kobo(sumBy(waiting, r => r.amount))}</div></div><div class="rf-kpi"><div class="l">Needs review</div><div class="v ${review.length ? 'neg' : ''}">${review.length}</div></div></div>`;
+  h += `<p class="rf-note">A payment is added to an invoice <b>only</b> after Paystack confirms it, and only once. A link that is “Waiting for payment” is not money received. Payments the system could not match (wrong amount, cancelled invoice, already paid by hand) are listed under <b>Needs review</b> — check them in the Paystack dashboard and close each one with a note.</p>`;
+  h += `<div class="rf-tools"><select id="payF">${['all', 'Needs review', 'Waiting for payment', 'Posted', 'Closed', 'Not paid'].map(s => `<option value="${s}"${payFilter === s ? ' selected' : ''}>${s === 'all' ? 'All' : s}</option>`).join('')}</select><input id="payQ" placeholder="Search reference, invoice no., staff" value="${esc(payQ)}"><button class="rf-btn" id="payNow">⟳ Check with Paystack now</button><button class="rf-btn grey" id="payCsv">⬇ CSV</button>${can('admin') ? '<button class="rf-btn grey" id="paySched">⏱ Automatic checking</button>' : ''}</div><div id="paySchedOut"></div>`;
+  h += rows.map(r => `<div class="rf-row"${r.status === 'Needs review' ? ' style="border-left:3px solid #E30613"' : ''}><div class="t"><span>${esc(r.doc_no || 'No invoice')} · ${kobo(r.amount)}</span><span class="rf-badge ${PAY_TONE[r.status] || 'grey'}">${esc(r.status)}</span></div>
+      <div class="m">Ref ${esc(r.reference)} · link by ${esc(r.created_by || '?')}${r.source === 'legacy' ? ' (link made before v5.3)' : ''} · ${esc(fmtDate(String(r.created_at).slice(0, 10)))}${r.posted_at ? ' · posted ' + esc(fmtDate(String(r.posted_at).slice(0, 10))) + (r.channel ? ' · ' + esc(r.channel) : '') + (r.via ? ' · by ' + esc(r.via) : '') : ''}</div>
+      ${r.reason ? `<div class="m">⚠ ${esc(r.reason)}</div>` : ''}${r.resolution ? `<div class="m">✓ Closed by ${esc(r.resolved_by || '')}: ${esc(r.resolution)}</div>` : ''}
+      <div class="acts">${r.doc_id ? `<button class="rf-btn grey" data-payopen="${esc(r.doc_id)}">Open invoice</button>` : ''}${r.status === 'Needs review' ? `<button class="rf-btn red" data-payclose="${esc(r.reference)}">Close with note</button>` : ''}</div></div>`).join('') || '<div class="rf-empty">Nothing to show for this filter.</div>';
+  box.innerHTML = wrap('ONLINE PAYMENTS', h, true);
+  const ps = $('rfPeriod'); if(ps) ps.onchange = e => { moneyPeriod = e.target.value; renderMoney(); };
+  if($('rfFrom')) $('rfFrom').onchange = e => { moneyFrom = e.target.value; renderMoney(); };
+  if($('rfTo')) $('rfTo').onchange = e => { moneyTo = e.target.value; renderMoney(); };
+  $('payF').onchange = e => { payFilter = e.target.value; setTimeout(renderPayRecon, 0); };
+  $('payQ').onchange = e => { payQ = e.target.value; setTimeout(renderPayRecon, 0); };
+  $('payNow').onclick = async () => { toast('Checking with Paystack…'); try{ const j = await callFn('reconcile-payments', {}); toast(`Checked ${j.checked}: ${j.posted} posted, ${j.waiting} still waiting, ${j.review} need review${j.abandoned ? ', ' + j.abandoned + ' not paid after 7 days' : ''}.`, !!j.review || !!j.failed); await Cloud.sync(); renderPayRecon(); }catch(e){ toast(e.message, true); } };
+  $('payCsv').onclick = () => downloadCsv('online_payments_' + f + '_' + t + '.csv', [['Created', 'Reference', 'Invoice', 'Amount (NGN)', 'Status', 'Link by', 'Posted', 'Channel', 'Review reason', 'Closed note', 'Closed by']].concat(rows.map(r => [r.created_at, r.reference, r.doc_no, N(r.amount) / 100, r.status, r.created_by, r.posted_at || '', r.channel || '', r.reason || '', r.resolution || '', r.resolved_by || ''])));
+  bind(box, '[data-payopen]', 'click', async el => { await loadDoc(el.dataset.payopen); showTab('doc'); });
+  bind(box, '[data-payclose]', 'click', el => { const ref = el.dataset.payclose;
+    const m = modal(`<h3>Close payment review</h3><p class="rf-note">Ref <b>${esc(ref)}</b>. Write what you did, for example “Refunded on Paystack 9 Nov” or “Recorded by hand on INV-2026-120”. Closing does <b>not</b> add money to any invoice.</p><div class="field"><label>Note (at least 10 characters)</label><textarea id="payNote" rows="3"></textarea></div><div class="rf-tools"><button class="rf-btn green" id="payNoteOk">Close review</button><button class="rf-btn grey" id="payNoteX">Cancel</button></div>`);
+    m.querySelector('#payNoteX').onclick = closeModal;
+    m.querySelector('#payNoteOk').onclick = async () => { const note = m.querySelector('#payNote').value.trim(); if(note.length < 10){ toast('Write at least 10 characters.', true); return; }
+      try{ await Cloud.rest('POST', 'rpc/rf_resolve_payment_review', {p_reference:ref, p_note:note}); closeModal(); toast('Review closed.'); renderPayRecon(); }catch(e){ toast(e.message, true); } }; });
+  if($('paySched')) $('paySched').onclick = () => { const sec = randToken(24), ref = (Cloud.cfg.url.match(/https:\/\/([^.]+)\./) || [])[1] || 'YOUR-PROJECT-REF';
+    $('paySchedOut').innerHTML = `<p class="rf-note">This sets up <b>both</b> automatic jobs with one new secret: payment checking every 15 minutes, and service reminders daily at 08:00.</p><p class="rf-note">1. Supabase → Edge Functions → Secrets → set <b>CRON_SECRET</b> = <code style="word-break:break-all">${esc(sec)}</code> (replace the old value if there is one).</p><p class="rf-note">2. Database → Extensions: switch on <b>pg_cron</b> and <b>pg_net</b>.</p><p class="rf-note">3. SQL Editor → paste and Run:</p><textarea rows="12" readonly onclick="this.select()" style="font-family:monospace;font-size:11px">select cron.unschedule(jobid) from cron.job where jobname in ('rf-daily-reminders', 'rf-payment-check');
+select cron.schedule('rf-payment-check', '*/15 * * * *', $cron$
+  select net.http_post(url := 'https://${esc(ref)}.supabase.co/functions/v1/reconcile-payments',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', '${esc(sec)}'), body := '{"source":"cron"}'::jsonb);
+$cron$);
+select cron.schedule('rf-daily-reminders', '0 7 * * *', $cron$
+  select net.http_post(url := 'https://${esc(ref)}.supabase.co/functions/v1/send-reminders',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', '${esc(sec)}'), body := '{"source":"cron"}'::jsonb);
+$cron$);</textarea>`; };
+}
+Object.assign(window.RF = window.RF || {}, {payRows});
 
 })();
 </script>
