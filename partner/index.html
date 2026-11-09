@@ -2576,7 +2576,7 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
    database (Supabase) with staff logins and roles (admin / cashier / technician).
    Without the team database everything still works on this device alone, as before.
 =========================================================================================== */
-const RF_VERSION = '5.3';
+const RF_VERSION = '5.4';
 /* Multi-user team database: built, but switched OFF for now. Set to true to turn it back on. */
 const EDITION = 'partner';      // build script switches this to 'partner' for the partner-garage app
 const TEAM_ENABLED = EDITION === 'robotik' && true;
@@ -3314,10 +3314,10 @@ function decorateDocScreen(){
 
 /* ===================== Navigation ===================== */
 const TABS = EDITION === 'partner'
-  ? [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['send', '📦 Send to Robotik Fix'], ['sync', 'Setup']]
+  ? [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['stock', 'Stock'], ['workshop', 'Workshop'], ['money', 'Money'], ['send', '📦 Send to Robotik Fix'], ['sync', 'Setup']]
   : [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['stock', 'Stock'], ['book', 'Bookings'], ['workshop', 'Workshop'],
      ['money', 'Money', 'need-cashier'], ['partners', 'Partners', 'need-cashier'], ['fleet', 'Fleet'], ['team', 'Team'], ['sync', 'Setup']];
-const NEW_VIEWS = EDITION === 'partner' ? ['home', 'quick', 'send', 'system', 'assets', 'tech'] : ['home', 'system', 'plugins', 'assets', 'tech', 'quick', 'stock', 'book', 'workshop', 'money', 'partners', 'fleet', 'team'];
+const NEW_VIEWS = EDITION === 'partner' ? ['home', 'quick', 'send', 'system', 'assets', 'tech', 'stock', 'workshop', 'money'] : ['home', 'system', 'plugins', 'assets', 'tech', 'quick', 'stock', 'book', 'workshop', 'money', 'partners', 'fleet', 'team'];
 let curTab = 'doc';
 const segState = {partners:'orders', stock:'items', book:'day', money:'reports', fleet:'trucks', team:'clock', workshop:'jobs'};
 function buildNav(){
@@ -3468,7 +3468,7 @@ function editLabour(id){
 function labourHtml(){
   const list = Store.list('labour').sort((a, b) => (a.cat || '').localeCompare(b.cat || '') || a.name.localeCompare(b.name));
   let h = '<p class="rf-note">Your own standard prices. Typing a job on a quotation fills in the price; jobs with a reminder period create a WhatsApp service reminder when invoiced.</p>';
-  if(can('admin')) h += `<div class="rf-tools"><button class="rf-btn big" id="rfAddLab">＋ Add job</button>${list.length ? '' : '<button class="rf-btn grey" id="rfSeedLab">Load suggested Robotik Fix jobs</button>'}</div>`;
+  if(can('admin')) h += `<div class="rf-tools"><button class="rf-btn big" id="rfAddLab">＋ Add job</button>${list.length ? '' : '<button class="rf-btn grey" id="rfSeedLab">Load suggested ' + (EDITION === 'partner' ? '' : 'Robotik Fix ') + 'jobs</button>'}</div>`;
   let cat = '';
   list.forEach(l => { if(l.cat !== cat){ cat = l.cat; h += `<div class="rf-note" style="font-weight:bold;color:#1F3864;margin-top:10px">${esc(cat || 'Other')}</div>`; }
     h += `<div class="rf-row"><div class="t"><span>${esc(l.name)}</span><span>${N(l.price) ? money(l.price) : '<span class="rf-badge amber">set price</span>'}</span></div><div class="m">${N(l.hours) ? N(l.hours) + ' h std · ' : ''}${N(l.remindDays) || N(l.remindKm) ? '🔔 remind ' + [N(l.remindDays) ? N(l.remindDays) + ' days' : '', N(l.remindKm) ? N(l.remindKm).toLocaleString() + ' km' : ''].filter(Boolean).join(' / ') : 'no reminder'}</div>${can('admin') ? `<div class="acts"><button class="rf-btn grey" data-lab="${esc(l.id)}">Edit</button></div>` : ''}</div>`; });
@@ -3719,7 +3719,7 @@ function renderMoney(){
   const v = $('view-money');
   if(!can('cashier')){ v.innerHTML = wrap('MONEY', '<p>Only cashier or admin can see this screen.</p>'); return; }
   const s = segState.money, pend = payments().filter(p => isTransfer(p.method) && !bucket('payconfirm').has('pc_' + p.id)).length;
-  let h = seg('money', [['reports', 'Reports'], ['cashbook', 'Cash book'], ['summary', 'Profit & loss'], ['exp', 'Expenses'], ['confirm', 'Confirm transfers' + (pend ? ' (' + pend + ')' : '')], ['owed', 'Owed to us'], ['pay', 'Online payments'], ['fin', 'Financial summary'], ['acct', 'Accounting export']], s);
+  let h = seg('money', [['reports', 'Reports'], ['cashbook', 'Cash book'], ['summary', 'Profit & loss'], ['exp', 'Expenses'], ['confirm', 'Confirm transfers' + (pend ? ' (' + pend + ')' : '')], ['owed', 'Owed to us']].concat(EDITION === 'robotik' ? [['pay', 'Online payments']] : []).concat([['fin', 'Financial summary'], ['acct', 'Accounting export']]), s);
   if(s === 'reports' || s === 'cashbook'){ v.innerHTML = h + '<div id="rfBooks"></div>'; renderBooks(s); return; }
   if(s === 'acct'){ v.innerHTML = h + '<div id="rfAcct"></div>'; renderAcct(); return; }
   if(s === 'fin'){ v.innerHTML = h + '<div id="rfFin"></div>'; renderFin(); return; }
@@ -5084,7 +5084,6 @@ function curDoc(){ try{ return collectDoc($('docNo').dataset.savedId || '__unsav
 function labourTotal(d){ return sumBy(d.labour || [], l => N(l.qty) * N(l.price)); }
 function renderWsDoc(){
   const box = $('rfWsDoc'), info = $('rfWsInfo'); if(!box || !info) return;
-  if(EDITION !== 'robotik'){ box.style.display = info.style.display = 'none'; return; }
   const id = $('docNo').dataset.savedId, d = curDoc(); if(!d) return;
   d.id = id || '__unsaved';
   /* info banners (everyone) */
@@ -5176,7 +5175,7 @@ listeners.push(() => { if(curTab === 'doc' && !($('rfModal') && $('rfModal').cla
 function warrantyNote(){
   let el = $('rfWarrantyNote'); const bank = $('bankCard'); if(!bank) return;
   if(!el){ el = document.createElement('div'); el.id = 'rfWarrantyNote'; el.className = 'hide-in-report'; el.style.cssText = 'font-size:11px;color:#333;margin:6px 0;padding:6px 8px;border-left:3px solid #1F3864;background:#f6f8fb'; bank.before(el); }
-  const show = EDITION === 'robotik' && ($('docType') || {}).value === 'INVOICE' && warrantyDays() > 0 && wsSet('warrantyPrint', true) !== false;
+  const show = ($('docType') || {}).value === 'INVOICE' && warrantyDays() > 0 && wsSet('warrantyPrint', true) !== false;
   el.style.display = show ? 'block' : 'none';
   el.textContent = show ? 'Warranty: workmanship on this invoice is covered for ' + warrantyDays() + ' days' + (warrantyKm() ? ' or ' + warrantyKm().toLocaleString() + ' km, whichever comes first' : '') + '. Parts carry the supplier\'s warranty. Bring the vehicle back to us with this invoice; work done elsewhere in between is not covered.' : '';
 }
@@ -6488,7 +6487,7 @@ function disposeAsset(id){
   formModal('Dispose / sell — ' + a.name, [{k:'disposedOn', label:'Date', type:'date', half:true}, {k:'disposedFor', label:'Sold for (₦, 0 if scrapped)', type:'number', half:true}, {k:'disposedNote', label:'To whom / reason'}],
     {disposedOn:today(), disposedFor:0}, v => {
       Store.put('tool', Object.assign({}, a, v, {status:'Disposed'}));
-      if(EDITION === 'robotik' && N(v.disposedFor) > 0 && can('cashier')) Store.put('income', {id:'inc_disp_' + id, date:v.disposedOn, cat:'Sale of assets', desc:'Sold ' + a.name, amount:N(v.disposedFor), method:'Cash', company:'0', by:myName()});
+      if(N(v.disposedFor) > 0 && can('cashier')) Store.put('income', {id:'inc_disp_' + id, date:v.disposedOn, cat:'Sale of assets', desc:'Sold ' + a.name, amount:N(v.disposedFor), method:'Cash', company:'0', by:myName()});
       toast('Disposed. Book value was ' + money(bv.nbv) + ' — ' + (N(v.disposedFor) >= bv.nbv ? 'gain ' : 'loss ') + money(Math.abs(N(v.disposedFor) - bv.nbv)) + '.');
     });
 }
