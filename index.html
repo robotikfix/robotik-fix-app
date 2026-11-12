@@ -2574,7 +2574,7 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
    database (Supabase) with staff logins and roles (admin / cashier / technician).
    Without the team database everything still works on this device alone, as before.
 =========================================================================================== */
-const RF_VERSION = '5.4.3';
+const RF_VERSION = '5.5';
 /* Multi-user team database: built, but switched OFF for now. Set to true to turn it back on. */
 const EDITION = 'robotik';      // build script switches this to 'partner' for the partner-garage app
 const TEAM_ENABLED = EDITION === 'robotik' && true;
@@ -2637,7 +2637,7 @@ const bucket = k => mem[k] || (mem[k] = new Map());
 const listeners = [];
 let emitTimer = null;
 function emit(kinds){ clearTimeout(emitTimer); emitTimer = setTimeout(() => listeners.forEach(fn => { try{ fn(kinds); }catch(e){ console.error(e); } }), 60); }
-const LOCAL_KINDS = ['consent', 'porder', 'income', 'transfer', 'item','stockmove','labour','bundle','po','expense','appt','reminder','truck','tyreevent','timelog','payconfirm','setting','counter','joblink','jobpart','comeback','tow','supplier','supbill','suppay','worker','staffpay','tool','toolmove','corp','jobtrack','assetlog','msglog','diag','vehspec'];
+const LOCAL_KINDS = ['letter', 'receipt', 'consent', 'porder', 'income', 'transfer', 'item','stockmove','labour','bundle','po','expense','appt','reminder','truck','tyreevent','timelog','payconfirm','setting','counter','joblink','jobpart','comeback','tow','supplier','supbill','suppay','worker','staffpay','tool','toolmove','corp','jobtrack','assetlog','msglog','diag','vehspec'];
 function loadLocal(){
   LOCAL_KINDS.forEach(k => {
     const b = bucket(k); b.clear();
@@ -3315,7 +3315,7 @@ const TABS = EDITION === 'partner'
   ? [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['stock', 'Stock'], ['workshop', 'Workshop'], ['money', 'Money'], ['send', '📦 Send to Robotik Fix'], ['sync', 'Setup']]
   : [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['stock', 'Stock'], ['book', 'Bookings'], ['workshop', 'Workshop'],
      ['money', 'Money', 'need-cashier'], ['partners', 'Partners', 'need-cashier'], ['fleet', 'Fleet'], ['team', 'Team'], ['sync', 'Setup']];
-const NEW_VIEWS = EDITION === 'partner' ? ['home', 'quick', 'send', 'system', 'assets', 'tech', 'stock', 'workshop', 'money'] : ['home', 'system', 'plugins', 'assets', 'tech', 'quick', 'stock', 'book', 'workshop', 'money', 'partners', 'fleet', 'team'];
+const NEW_VIEWS = EDITION === 'partner' ? ['home', 'letters', 'quick', 'send', 'system', 'assets', 'tech', 'stock', 'workshop', 'money'] : ['home', 'letters', 'system', 'plugins', 'assets', 'tech', 'quick', 'stock', 'book', 'workshop', 'money', 'partners', 'fleet', 'team'];
 let curTab = 'doc';
 const segState = {partners:'orders', stock:'items', book:'day', money:'reports', fleet:'trucks', team:'clock', workshop:'jobs'};
 function buildNav(){
@@ -3348,7 +3348,7 @@ window.showTab = function(tab){
 function renderView(v){
   ensureLists();
   try{
-    if(v === 'home') renderHome(); else if(v === 'system') renderSystem(); else if(v === 'plugins') renderPlugins(); else if(v === 'assets') renderAssetsView(); else if(v === 'tech') renderTech(); else if(v === 'quick') renderQuick(); else if(v === 'send') renderSend(); else if(v === 'partners') renderPartners(); else if(v === 'stock') renderStock(); else if(v === 'book') renderBook(); else if(v === 'money') renderMoney();
+    if(v === 'home') renderHome(); else if(v === 'letters') renderLetters(); else if(v === 'system') renderSystem(); else if(v === 'plugins') renderPlugins(); else if(v === 'assets') renderAssetsView(); else if(v === 'tech') renderTech(); else if(v === 'quick') renderQuick(); else if(v === 'send') renderSend(); else if(v === 'partners') renderPartners(); else if(v === 'stock') renderStock(); else if(v === 'book') renderBook(); else if(v === 'money') renderMoney();
     else if(v === 'fleet') renderFleet(); else if(v === 'workshop') renderWorkshop(); else if(v === 'team') renderTeam();
   }catch(e){ console.error(e); const el = $('view-' + v); if(el) el.innerHTML = '<div class="card"><p>Something went wrong showing this screen: ' + esc(e.message) + '</p></div>'; }
 }
@@ -4154,8 +4154,8 @@ function renderQuick(){
   // totals & payment
   h += `<div class="card"><h2>TOTALS & PAYMENT</h2>
     <div class="grid2"><div class="field"><label>Discount %</label><input id="qDisc" type="number" min="0" max="100" value="${esc(d.discountPct || 0)}"></div><div class="field"><label>VAT 7.5%</label><select id="qVat"><option value="NO"${d.vatApplied !== 'YES' ? ' selected' : ''}>No VAT</option><option value="YES"${d.vatApplied === 'YES' ? ' selected' : ''}>Add VAT</option></select></div></div>
-    ${(d.paymentEntries || []).length ? '<table class="rf-table"><tr><th>Payment</th><th>Method</th><th class="n">₦</th></tr>' + d.paymentEntries.map(p => `<tr><td>${esc(fmtDate(p.date))}</td><td>${esc(p.method || '')} ${esc(p.reference || '')}</td><td class="n">${money(p.amount)}</td></tr>`).join('') + '</table>' : ''}
-    <div class="grid2"><div class="field"><label>${paidBefore ? 'Add another payment (₦)' : 'Amount paid now (₦)'}</label><input id="qPayAmt" type="number" min="0" inputmode="decimal" placeholder="0"></div><div class="field"><label>Method</label><select id="qPayMethod">${qOpts(['Cash', 'Bank transfer', 'POS', 'Paystack / online', 'Credit (pay later)'], 'Bank transfer')}</select></div></div>
+    ${(d.paymentEntries || []).length ? '<table class="rf-table"><tr><th>Payment</th><th>Method</th><th class="n">₦</th></tr>' + d.paymentEntries.map(p => `<tr><td>${esc(fmtDate(p.date))}</td><td>${esc(p.method || '')} ${esc(p.reference || '')}</td><td class="n">${money(p.amount)}</td></tr>`).join('') + '</table>' + (d.id && Store.get('doc', d.id) ? `<div class="rf-tools rf-noprint"><button class="rf-btn" type="button" data-qrct="${esc(d.id)}">🧾 Payment receipt</button></div>` : '') : ''}
+    <div class="grid2"><div class="field"><label>${paidBefore ? 'Add another payment (₦)' : 'Amount paid now (₦)'}</label><input id="qPayAmt" type="number" min="0" inputmode="decimal" placeholder="0"></div><div class="field"><label>Method</label><select id="qPayMethod">${qOpts(['Cash', 'Bank transfer', 'Card payment (POS)', 'Paystack / online', 'Credit (pay later)'], 'Bank transfer')}</select></div></div>
     <div class="field"><label>Transfer / receipt reference</label><input id="qPayRef"></div>
     <div class="totals" id="qTotals"></div>
     <div class="field" style="margin-top:10px"><label>Notes / terms (printed)</label><textarea id="qNotes" rows="3">${esc(d.notes || '')}</textarea></div></div>
@@ -5589,6 +5589,7 @@ const IC = {
   tyre:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M12 3v5.5M12 15.5V21M3 12h5.5M15.5 12H21"/>',
   brake:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/><path d="M12 5.5a6.5 6.5 0 0 1 6.5 6.5"/><path d="M7.5 9h.01M7.5 15h.01M16.5 15h.01"/>',
   wheel:'<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>',
+  letter:'<path d="M6 2h9l5 5v15H6z"/><path d="M15 2v5h5M9 12h8M9 16h8M9 8h3"/>',
   edit:'<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/>',
   records:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
   stock:'<path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M3 7l9 5 9-5M12 12v10"/>',
@@ -5690,6 +5691,7 @@ function homeTiles(){
     t('work', 'Inspection Report', 'inspect', 'cyan', 'doc', () => newDocType('INSPECTION REPORT')),
     t('work', 'Diagnostic Report', 'diag', 'pink', 'doc', () => newDocType('DIAGNOSTIC REPORT')),
     t('work', 'Technical Support', 'support', 'red', 'tech', () => { showTab('tech'); window.scrollTo({top:0}); }, '', Store.list('diag').filter(d => d.status !== 'Resolved').length),
+    t('work', 'Letters & Letterhead', 'letter', 'navy', 'letters', () => { segState.letters = 'list'; showTab('letters'); window.scrollTo({top:0}); }, 'need-cashier'),
     t('work', 'Current Document', 'edit', 'slate', 'doc', () => showTab('doc')),
     t('work', 'Lube Service', 'lube', 'yellow', 'quick', () => newQuick('lube')),
     t('work', 'Tyre & Wheel', 'tyre', 'slate', 'quick', () => newQuick('tyre')),
@@ -7817,6 +7819,370 @@ select cron.schedule('rf-daily-reminders', '0 7 * * *', $cron$
 $cron$);</textarea>`; };
 }
 Object.assign(window.RF = window.RF || {}, {payRows});
+/* ===================== v5.5 LETTERS ON COMPANY LETTERHEAD ===================== */
+/* Write, save, copy, print and share letters on either company's letterhead. Saved as kind 'letter'. */
+let letSeg = 'list', letDoc = null, letQ = '';
+const LET_CLOSINGS = ['Yours faithfully,', 'Yours sincerely,', 'Best regards,', 'Thank you,'];
+const LET_STATUS = ['Draft', 'Sent', 'Filed'];
+function letTemplates(){
+  const b = brandVals(), co = COMPANIES[letCoIdx()] || COMPANIES[0] || {};
+  return {
+    blank:{name:'Blank letter', subject:'', salutation:'Dear Sir/Madam,', body:''},
+    intro:{name:'Introduce our services', subject:'Introduction of ' + b.biz + ' services', salutation:'Dear Sir/Madam,',
+      body:'We write to introduce ' + b.biz + ', an automobile service workshop located at ' + (b.addr || '[ADDRESS]') + '.\n\nWe offer [LIST THE SERVICES RELEVANT TO THIS CLIENT], carried out by trained technicians with modern equipment. Every job is documented with a job card, a written quotation for approval and an itemised invoice.\n\nWe would welcome the opportunity to serve your vehicles. Our team is available to visit your premises for an inspection and to present a service proposal at your convenience.\n\nPlease contact us on ' + (b.tel || '[PHONE]') + ' or ' + (b.email || '[EMAIL]') + '.'},
+    quote:{name:'Quotation cover letter', subject:'Quotation for [VEHICLE / REG. NO.]', salutation:'Dear Sir/Madam,',
+      body:'Following the inspection of the above vehicle, please find attached our quotation no. [QUOTATION NO.] dated [DATE] for the sum of ₦[AMOUNT].\n\nThe quotation covers [SHORT DESCRIPTION OF WORK]. Work will begin as soon as we receive your written approval, and the vehicle will be ready within [NUMBER] working days.\n\nPlease do not hesitate to contact us if you need any clarification.'},
+    remind:{name:'Payment reminder', subject:'Outstanding payment on invoice no. [INVOICE NO.]', salutation:'Dear Sir/Madam,',
+      body:'This is a reminder that invoice no. [INVOICE NO.] dated [DATE] for work carried out on [VEHICLE / REG. NO.] has an outstanding balance of ₦[AMOUNT].\n\nKindly arrange payment to the account below at your earliest convenience, quoting the invoice number as the reference:\n- Bank: ' + (co.bankName || '[BANK]') + '\n- Account name: ' + (co.bankAcctName || '[ACCOUNT NAME]') + '\n- Account number: ' + (co.bankAcctNo || '[ACCOUNT NUMBER]') + '\n\nIf payment has already been made, please send us the transfer details so we can update our records. Thank you for your continued patronage.'},
+    ready:{name:'Vehicle ready / job completion', subject:'Completion of repairs on [VEHICLE / REG. NO.]', salutation:'Dear Sir/Madam,',
+      body:'We are pleased to inform you that the work on the above vehicle has been completed and has passed our quality check.\n\nThe work carried out includes [SUMMARY OF WORK]. The invoice no. [INVOICE NO.] is attached for your attention.\n\nThe vehicle is ready for collection from our workshop. Thank you for choosing ' + b.biz + '.'}
+  };
+}
+var letCoIdx = () => { const s = $('companySelect'); return s ? (parseInt(s.value, 10) || 0) : 0; };
+function newLetter(tpl){
+  const T = letTemplates()[tpl || 'blank'] || letTemplates().blank;
+  letDoc = {isNew:true, companyIdx:letCoIdx(), date:today(), status:'Draft', toName:'', toTitle:'', toOrg:'', toAddr:'', subject:T.subject, salutation:T.salutation, body:T.body,
+    closing:'Yours faithfully,', signName:myName() || '', signTitle:'', useSig:true, cc:'', encl:''};
+  letSeg = 'edit'; renderLetters(); window.scrollTo({top:0});
+}
+function openLetter(id){ const L = Store.get('letter', id); if(!L) return; letDoc = JSON.parse(JSON.stringify(L)); letSeg = 'edit'; renderLetters(); window.scrollTo({top:0}); }
+function copyLetter(src){
+  const L = JSON.parse(JSON.stringify(src)); delete L.id; delete L.ref; delete L._rev; delete L._at; delete L.createdAt; delete L.createdBy; delete L.history;
+  L.isNew = true; L.date = today(); L.status = 'Draft'; letDoc = L; letSeg = 'edit'; renderLetters(); window.scrollTo({top:0});
+  toast('Copy made — change what you need, then Save. It gets its own reference number.');
+}
+function readLetterForm(){
+  const g = id => ($(id) || {}).value || '';
+  Object.assign(letDoc, {companyIdx:parseInt(g('ltCo'), 10) || 0, date:g('ltDate') || today(), status:g('ltStatus') || 'Draft', toName:g('ltToName').trim(), toTitle:g('ltToTitle').trim(),
+    toOrg:g('ltToOrg').trim(), toAddr:g('ltToAddr').trim(), subject:g('ltSubject').trim(), salutation:g('ltSal').trim(), body:g('ltBody').replace(/\s+$/, ''), closing:g('ltClose').trim(),
+    signName:g('ltSignName').trim(), signTitle:g('ltSignTitle').trim(), useSig:!!($('ltUseSig') || {}).checked, cc:g('ltCc').trim(), encl:g('ltEncl').trim()});
+  return letDoc;
+}
+async function saveLetter(quiet){
+  readLetterForm();
+  if(!letDoc.subject && !letDoc.body){ toast('Write a subject or the letter body first.', true); return null; }
+  const L = Object.assign({}, letDoc); delete L.isNew;
+  const at = nowIso(), who = myName() || 'Staff';
+  if(!L.ref){ try{ L.ref = await nextNumber('letter', 'LTR', Store.list('letter').map(x => x.ref)); }catch(e){ toast('Could not get a reference number: ' + (e.message || e), true); return null; } }
+  if(!L.id) L.id = 'ltr_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  if(!L.createdAt){ L.createdAt = at; L.createdBy = who; }
+  L.updatedAt = at; L.updatedBy = who;
+  const h = (L.history || []).slice(-30); h.push({at, by:who, what:letDoc.isNew ? 'Created' : 'Edited (' + L.status + ')'}); L.history = h;
+  const saved = Store.put('letter', L); letDoc = JSON.parse(JSON.stringify(saved || L));
+  if(!quiet) toast('Letter ' + L.ref + ' saved.');
+  return letDoc;
+}
+/* ---------- text helpers ---------- */
+function letFmtDate(iso){ const d = new Date(String(iso || today()) + 'T12:00:00'); return isNaN(d) ? String(iso || '') : d.toLocaleDateString('en-GB', {day:'numeric', month:'long', year:'numeric'}); }
+function letBodyHtml(t){
+  const inl = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  const bullet = l => /^\s*[-•]\s+/.test(l);
+  return String(t || '').split(/\n\s*\n/).map(p => {
+    let out = '', txt = [], ul = [];
+    const flushT = () => { if(txt.length) out += '<p>' + txt.map(inl).join('<br>') + '</p>'; txt = []; };
+    const flushU = () => { if(ul.length) out += '<ul>' + ul.map(l => '<li>' + inl(l.replace(/^\s*[-•]\s+/, '')) + '</li>').join('') + '</ul>'; ul = []; };
+    p.split('\n').forEach(l => { if(bullet(l)){ flushT(); ul.push(l); } else { flushU(); txt.push(l); } });
+    flushT(); flushU(); return out;
+  }).join('');
+}
+function letterText(L){
+  const co = COMPANIES[N(L.companyIdx)] || COMPANIES[0];
+  return [co.name, co.address, 'Tel: ' + co.tel + (co.email ? ' · ' + co.email : ''), '', 'Our Ref: ' + (L.ref || '(not saved yet)'), letFmtDate(L.date), '',
+    L.toName, L.toTitle, L.toOrg, L.toAddr, '', L.salutation, '', L.subject ? 'RE: ' + L.subject.toUpperCase() : '', '', String(L.body || '').replace(/\*\*/g, ''), '',
+    L.closing, '', '', L.signName, L.signTitle, 'For: ' + co.name, L.cc ? '\ncc: ' + L.cc : '', L.encl ? 'Encl: ' + L.encl : ''].filter((x, i, a) => !(x === '' && a[i - 1] === '')).join('\n').trim();
+}
+function letterheadTop(co){
+  const logo = ($('logoImg') || {}).src || '';
+  return `<div class="lh-hd">${logo ? `<img src="${esc(logo)}" alt="">` : ''}<div class="lh-co"><b>${esc(co.name)}</b><div>${esc(co.address || '')}</div><div>Tel: ${esc(co.tel || '')}${co.email ? ' · ' + esc(co.email) : ''}</div>${co.tin ? `<div>TIN: ${esc(co.tin)}</div>` : ''}</div></div><div class="lh-rule"></div>`;
+}
+const LH_CSS = `.lh{font-family:Georgia,'Times New Roman',serif;color:#111;font-size:12.5px;line-height:1.55;width:100%;box-sizing:border-box;background:#fff;display:flex;flex-direction:column;min-height:10.2in}
+  .lh *{box-sizing:border-box}.lh-hd{display:flex;gap:14px;align-items:center;font-family:Arial,Helvetica,sans-serif}.lh-hd img{height:70px}
+  .lh-co{flex:1}.lh-co b{display:block;font-size:19px;color:#1F3864;letter-spacing:.4px}.lh-co div{font-size:10.5px;color:#333;line-height:1.4}
+  .lh-rule{height:4px;background:#E30613;margin-top:8px;border-bottom:2px solid #1F3864}
+  .lh-meta{display:flex;justify-content:space-between;margin-top:18px;font-size:12px}.lh-to{margin-top:14px;white-space:pre-line}
+  .lh-sal{margin-top:16px}.lh-sub{margin-top:10px;font-weight:bold;text-decoration:underline;text-transform:uppercase}
+  .lh-body{margin-top:10px;text-align:justify}.lh-body p{margin:0 0 10px}.lh-body ul{margin:0 0 10px 18px;padding:0}
+  .lh-close{margin-top:14px}.lh-sig{height:120px;position:relative}.lh-sig img{position:absolute;left:0;bottom:4px;height:116px;max-width:300px;object-fit:contain}
+  .lh-name{font-weight:bold}.lh-small{font-size:11px;margin-top:12px;white-space:pre-line}
+  .lh-grow{flex:1}.lt-prev .lh{min-height:0}.lh-foot{margin-top:24px;border-top:1px solid #1F3864;padding-top:6px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:9.5px;color:#555}`;
+function letterHtml(L, blank){
+  const co = COMPANIES[N(L.companyIdx)] || COMPANIES[0];
+  let h = `<div class="lh"><style>${LH_CSS}</style>${letterheadTop(co)}`;
+  if(!blank){
+    h += `<div class="lh-meta"><div>Our Ref: <b>${esc(L.ref || '')}</b></div><div>${esc(letFmtDate(L.date))}</div></div>`;
+    const to = [L.toName, L.toTitle, L.toOrg, L.toAddr].filter(Boolean).join('\n');
+    if(to) h += `<div class="lh-to">${esc(to)}</div>`;
+    if(L.salutation) h += `<div class="lh-sal">${esc(L.salutation)}</div>`;
+    if(L.subject) h += `<div class="lh-sub">RE: ${esc(L.subject)}</div>`;
+    h += `<div class="lh-body">${letBodyHtml(L.body)}</div><div class="lh-close">${esc(L.closing || '')}</div>`;
+    h += `<div class="lh-sig">${L.useSig && co.signature ? `<img src="${esc(co.signature)}" alt="">` : ''}</div>`;
+    h += `<div class="lh-name">${esc(L.signName || '')}</div>${L.signTitle ? `<div>${esc(L.signTitle)}</div>` : ''}<div>For: ${esc(co.name)}</div>`;
+    if(L.cc || L.encl) h += `<div class="lh-small">${L.encl ? 'Encl: ' + esc(L.encl) : ''}${L.cc && L.encl ? '\n' : ''}${L.cc ? 'cc: ' + esc(L.cc) : ''}</div>`;
+  }
+  h += `<div class="lh-grow"></div><div class="lh-foot">${esc(co.name)} · ${esc(co.address || '')}${co.bankName && co.bankAcctNo ? '<br>Bankers: ' + esc(co.bankName) + ' · ' + esc(co.bankAcctNo) : ''}${EDITION === 'partner' ? '<br><span style="color:#999">Powered by Robotik Fix</span>' : ''}</div></div>`;
+  return h;
+}
+function printHtmlDoc(inner, title, a5){
+  const w = window.open('', '_blank'); if(!w){ toast('Allow pop-ups to print.', true); return; }
+  w.document.write(`<!doctype html><html><head><title>${esc(title)}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>@page{size:A4;margin:14mm}body{margin:0;padding:16px}@media print{body{padding:0}.np{display:none}.lh{min-height:268mm}}</style></head><body>${inner}<p class="np" style="text-align:center"><button onclick="print()" style="padding:10px 20px;font-size:15px">Print / Save as PDF</button></p><script>setTimeout(function(){print()},400)<\/script></body></html>`);
+  w.document.close();
+}
+async function shareHtmlPdf(inner, filename, text, onNoTool){
+  if(typeof html2pdf === 'undefined'){ toast('PDF tool did not load (no internet?) — opening the print view instead; choose "Save as PDF".', true); onNoTool(); return; }
+  toast('Preparing PDF…');
+  const holder = document.createElement('div');
+  holder.style.cssText = 'position:fixed;left:0;top:0;width:7.27in;background:#fff;z-index:-1;';
+  holder.innerHTML = inner;
+  document.body.appendChild(holder);
+  try{
+    await Promise.all([...holder.querySelectorAll('img')].map(i => i.decode ? i.decode().catch(() => {}) : null));
+    const y = window.scrollY; window.scrollTo(0, 0);
+    let blob;
+    try{ blob = await html2pdf().set({margin:0.5, filename, image:{type:'jpeg', quality:0.95}, html2canvas:{scale:2, useCORS:true, scrollX:0, scrollY:0}, jsPDF:{unit:'in', format:'a4', orientation:'portrait'}, pagebreak:{mode:['css', 'legacy']}}).from(holder.firstElementChild).outputPdf('blob'); }
+    finally{ window.scrollTo(0, y); }
+    const file = new File([blob], filename, {type:'application/pdf'});
+    if(navigator.canShare && navigator.canShare({files:[file]})) await navigator.share({files:[file], title:filename, text});
+    else { const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = u; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 1500); toast('PDF downloaded.'); }
+  }catch(e){ if(!(e && e.name === 'AbortError')) toast('Could not make the PDF: ' + (e.message || e), true); }
+  finally{ holder.remove(); }
+}
+function printLetter(L, blank){ printHtmlDoc(letterHtml(L, blank), blank ? 'Letterhead' : (L.ref || 'Letter')); }
+function shareLetter(L, blank){
+  const filename = (blank ? 'Letterhead' : String(L.ref || 'Letter').replace(/[^A-Za-z0-9_-]/g, '_')) + '.pdf';
+  return shareHtmlPdf(letterHtml(L, blank), filename, blank ? 'Letterhead' : (L.subject || 'Letter') + ' — ' + (L.ref || ''), () => printLetter(L, blank));
+}
+function copyLetterText(L){
+  const t = letterText(L);
+  const ok = () => toast('Letter text copied — paste it into WhatsApp, email or Word.');
+  const fallback = () => { const ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0'; document.body.appendChild(ta); ta.select(); let done = false; try{ done = document.execCommand('copy'); }catch(e){} ta.remove(); done ? ok() : toast('Copy was blocked — select the text in the preview and copy it by hand.', true); };
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok, fallback); else fallback();
+}
+/* ---------- screens ---------- */
+function renderLetters(){
+  const v = $('view-letters'); if(!v) return;
+  if(segState.letters){ letSeg = segState.letters; delete segState.letters; }
+  if(mode === 'cloud' && myRole() === 'technician'){ v.innerHTML = wrap('LETTERS', '<p class="rf-note">Letters are kept for the owner, manager and cashier.</p>', true); return; }
+  let h = seg('letters', [['list', 'Saved letters'], ['edit', letDoc ? (letDoc.ref ? 'Editing ' + esc(letDoc.ref) : 'New letter') : 'Write a letter'], ['head', 'Blank letterhead']], letSeg);
+  if(letSeg === 'edit' && !letDoc){ letDoc = null; h += letStartHtml(); }
+  else if(letSeg === 'edit') h += letEditorHtml();
+  else if(letSeg === 'head') h += letHeadHtml();
+  else h += letListHtml();
+  v.innerHTML = h;
+  bindLetters(v);
+}
+function letStartHtml(){
+  const T = letTemplates();
+  return wrap('WRITE A LETTER', `<p class="rf-note">Pick a starting point. Text in [SQUARE BRACKETS] is for you to fill in.</p><div class="rf-tools" style="flex-wrap:wrap">${Object.entries(T).map(([k, t]) => `<button class="rf-btn ${k === 'blank' ? 'green' : 'grey'} big" data-ltnew="${k}">${esc(t.name)}</button>`).join('')}</div>`, true);
+}
+function letEditorHtml(){
+  const L = letDoc, cos = landingCompanies();
+  const inp = (id, label, val, ph, type) => `<div class="field"><label for="${id}">${label}</label><input id="${id}" type="${type || 'text'}" value="${esc(val || '')}" placeholder="${esc(ph || '')}"></div>`;
+  let h = `<div class="card"><h2 class="red">LETTER ${L.ref ? '— ' + esc(L.ref) : '<span class="rf-note" style="font-weight:normal">(reference number is given on save)</span>'}</h2>
+    <div class="grid2"><div class="field"><label for="ltCo">Letterhead (company)</label><select id="ltCo">${(cos.length ? cos : COMPANIES.map((c, i) => ({c, i}))).map(x => `<option value="${x.i}"${N(L.companyIdx) === x.i ? ' selected' : ''}>${esc(x.c.name)}</option>`).join('')}</select></div>
+    ${inp('ltDate', 'Date', L.date, '', 'date')}</div>
+    <div class="grid2"><div class="field"><label for="ltStatus">Status</label><select id="ltStatus">${LET_STATUS.map(s => `<option${L.status === s ? ' selected' : ''}>${s}</option>`).join('')}</select></div><div></div></div></div>`;
+  h += `<div class="card"><h2>TO</h2><div class="grid2">${inp('ltToName', 'Name', L.toName, 'e.g. Mr. Tunde Bakare')}${inp('ltToTitle', 'Position', L.toTitle, 'e.g. Fleet Manager')}</div>
+    ${inp('ltToOrg', 'Organisation', L.toOrg, 'e.g. Maersk Nigeria Limited')}<div class="field"><label for="ltToAddr">Address</label><textarea id="ltToAddr" rows="3" placeholder="Street, area, city">${esc(L.toAddr || '')}</textarea></div></div>`;
+  h += `<div class="card"><h2>LETTER</h2>${inp('ltSal', 'Salutation', L.salutation, 'Dear Sir/Madam,')}${inp('ltSubject', 'Subject (printed as RE:)', L.subject, 'e.g. Service proposal for your fleet')}
+    <div class="field"><label for="ltBody">Body</label><textarea id="ltBody" rows="14" style="font-family:Georgia,serif;font-size:15px;line-height:1.5" placeholder="Leave an empty line between paragraphs.">${esc(L.body || '')}</textarea></div>
+    <p class="rf-note" style="margin-top:-4px">Leave an empty line between paragraphs. Start lines with “- ” for a bullet list. Put **two stars** around words to make them bold.</p>
+    <div class="grid2"><div class="field"><label for="ltClose">Closing</label><input id="ltClose" list="ltCloseList" value="${esc(L.closing || '')}"><datalist id="ltCloseList">${LET_CLOSINGS.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div><div></div></div>
+    <div class="grid2">${inp('ltSignName', 'Signed by (name)', L.signName, 'e.g. Abiodun Osokoya')}${inp('ltSignTitle', 'Position', L.signTitle, 'e.g. Managing Director')}</div>
+    <label style="display:flex;gap:8px;align-items:center;margin:4px 0 10px"><input type="checkbox" id="ltUseSig"${L.useSig ? ' checked' : ''}> Print the saved signature for this company</label>
+    <div class="grid2">${inp('ltEncl', 'Enclosures', L.encl, 'e.g. Quotation QT-0012')}${inp('ltCc', 'Copy to (cc)', L.cc, 'e.g. Head of Admin')}</div></div>`;
+  h += `<div class="card"><h2>PREVIEW</h2><div id="ltPrev" class="lt-prev" style="border:1px solid #ddd;border-radius:8px;padding:14px;background:#fff;overflow:auto"></div></div>`;
+  h += `<div class="q-bar rf-noprint"><button class="btn-save" id="ltSave">Save</button><button class="btn-pdf" id="ltPrint">Print</button><button class="btn-share" id="ltShare">📤 Share PDF</button><button class="rf-btn grey" id="ltCopyTxt" style="flex:1">📋 Copy text</button><button class="rf-btn grey" id="ltDup" style="flex:1">⧉ Save a copy</button></div>`;
+  if((L.history || []).length) h += wrap('HISTORY', L.history.slice().reverse().map(x => `<div class="rf-note" style="margin:2px 0">${esc(fmtDate(String(x.at).slice(0, 10)))} ${esc(String(x.at).slice(11, 16))} · ${esc(x.by)} — ${esc(x.what)}</div>`).join(''));
+  return h;
+}
+function letHeadHtml(){
+  const cos = landingCompanies(), cur = letCoIdx();
+  return wrap('BLANK LETTERHEAD', `<p class="rf-note">Print plain letterhead paper, or share it as a PDF to write on in another app.</p>
+    <div class="field"><label for="lhCo">Company</label><select id="lhCo">${(cos.length ? cos : COMPANIES.map((c, i) => ({c, i}))).map(x => `<option value="${x.i}"${cur === x.i ? ' selected' : ''}>${esc(x.c.name)}</option>`).join('')}</select></div>
+    <div class="rf-tools"><button class="rf-btn big" id="lhPrint">🖨 Print letterhead</button><button class="rf-btn green big" id="lhShare">📤 Share as PDF</button></div>
+    <div id="lhPrev" class="lt-prev" style="border:1px solid #ddd;border-radius:8px;padding:14px;background:#fff;margin-top:10px;overflow:auto"></div>`, true);
+}
+function letListHtml(){
+  let rows = Store.list('letter').slice().sort((a, b) => String(b.date + b.updatedAt).localeCompare(String(a.date + a.updatedAt)));
+  const all = rows.length;
+  if(letQ) rows = rows.filter(r => lc([r.ref, r.subject, r.toName, r.toOrg, r.body, r.status].join(' ')).includes(lc(letQ)));
+  let h = `<div class="card"><h2 class="red">LETTERS</h2><div class="rf-tools"><button class="rf-btn green big" id="ltNew">＋ New letter</button><input id="ltQ" placeholder="Search ref, subject, recipient…" value="${esc(letQ)}" style="flex:1;min-width:160px"></div>
+    <p class="rf-note">${all} saved letter${all === 1 ? '' : 's'}. Saved letters are shared with your team and included in backups.</p>`;
+  h += rows.map(r => `<div class="rf-row"><div class="t"><span>${esc(r.ref || '')} · ${esc(r.subject || '(no subject)')}</span><span class="rf-badge ${r.status === 'Sent' ? 'green' : r.status === 'Filed' ? '' : 'amber'}">${esc(r.status || 'Draft')}</span></div>
+    <div class="m">${esc(fmtDate(r.date))} · To: ${esc([r.toName, r.toOrg].filter(Boolean).join(', ') || '—')} · ${esc((COMPANIES[N(r.companyIdx)] || {}).name || '')}</div>
+    <div class="m">By ${esc(r.createdBy || '')}${r.updatedBy && r.updatedBy !== r.createdBy ? ' · last edit ' + esc(r.updatedBy) : ''}</div>
+    <div class="acts"><button class="rf-btn" data-ltopen="${esc(r.id)}">Open</button><button class="rf-btn grey" data-ltcopy="${esc(r.id)}">⧉ Copy</button><button class="rf-btn grey" data-ltprint="${esc(r.id)}">Print</button><button class="rf-btn grey" data-lttxt="${esc(r.id)}">📋 Text</button>${myRole() === 'admin' ? `<button class="rf-btn red" data-ltdel="${esc(r.id)}">Delete</button>` : ''}</div></div>`).join('')
+    || `<div class="rf-empty">${letQ ? 'No letters match “' + esc(letQ) + '”.' : 'No letters yet. Tap “＋ New letter”.'}</div>`;
+  return h + '</div>';
+}
+function bindLetters(v){
+  bind(v, '[data-ltnew]', 'click', el => newLetter(el.dataset.ltnew));
+  if($('ltNew')) $('ltNew').onclick = () => { letDoc = null; letSeg = 'edit'; renderLetters(); };
+  if($('ltQ')){ let t; $('ltQ').oninput = e => { clearTimeout(t); t = setTimeout(() => { letQ = e.target.value; renderLetters(); const q = $('ltQ'); if(q){ q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }, 300); }; }
+  bind(v, '[data-ltopen]', 'click', el => openLetter(el.dataset.ltopen));
+  bind(v, '[data-ltcopy]', 'click', el => { const L = Store.get('letter', el.dataset.ltcopy); if(L) copyLetter(L); });
+  bind(v, '[data-ltprint]', 'click', el => { const L = Store.get('letter', el.dataset.ltprint); if(L) printLetter(L); });
+  bind(v, '[data-lttxt]', 'click', el => { const L = Store.get('letter', el.dataset.lttxt); if(L) copyLetterText(L); });
+  bind(v, '[data-ltdel]', 'click', async el => { const L = Store.get('letter', el.dataset.ltdel); if(!L) return; if(!(await askConfirm('Delete letter ' + (L.ref || '') + ' — “' + (L.subject || '') + '”? This cannot be undone.'))) return; Store.remove('letter', L.id); if(letDoc && letDoc.id === L.id) letDoc = null; toast('Letter deleted.'); renderLetters(); });
+  if($('ltPrev')){
+    const upd = () => { const L = readLetterForm(); $('ltPrev').innerHTML = letterHtml(L); };
+    v.querySelectorAll('#ltCo,#ltDate,#ltStatus,#ltToName,#ltToTitle,#ltToOrg,#ltToAddr,#ltSal,#ltSubject,#ltBody,#ltClose,#ltSignName,#ltSignTitle,#ltUseSig,#ltEncl,#ltCc').forEach(el => el.addEventListener(el.type === 'checkbox' || el.tagName === 'SELECT' ? 'change' : 'input', upd));
+    upd();
+    $('ltSave').onclick = async () => { if(await saveLetter()) renderLetters(); };
+    $('ltPrint').onclick = async () => { const L = await saveLetter(true); if(L){ renderLetters(); printLetter(L); } };
+    $('ltShare').onclick = async () => { const L = await saveLetter(true); if(L){ renderLetters(); shareLetter(L); } };
+    $('ltCopyTxt').onclick = () => copyLetterText(readLetterForm());
+    $('ltDup').onclick = async () => { const L = await saveLetter(true); if(L) copyLetter(L); };
+  }
+  if($('lhPrev')){
+    const hd = () => ({companyIdx:parseInt($('lhCo').value, 10) || 0});
+    const upd = () => { $('lhPrev').innerHTML = letterHtml(hd(), true); };
+    $('lhCo').onchange = upd; upd();
+    $('lhPrint').onclick = () => printLetter(hd(), true);
+    $('lhShare').onclick = () => shareLetter(hd(), true);
+  }
+}
+listeners.push(kinds => { if(curTab === 'letters' && letSeg === 'list' && (kinds.includes('*') || kinds.includes('letter'))) renderLetters(); });
+Object.assign(window.RF = window.RF || {}, {letterText, letterHtml, saveLetter, newLetter, letBodyHtml});
+/* ===================== v5.5 PAYMENT RECEIPTS FROM INVOICES ===================== */
+/* One receipt per payment (or one for all payments). Kind 'receipt' keeps the number so a reprint shows the same number. */
+const RCT_METHODS = ['Cash', 'Bank transfer', 'Card payment (POS)'];
+function rctMethodKey(m){ const x = lc(m); if(/cash/.test(x)) return 'Cash'; if(/pos|card/.test(x)) return 'Card payment (POS)'; if(/transfer|bank|trf|ussd/.test(x)) return 'Bank transfer'; return ''; }
+function nairaWords(amount){
+  const ones = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+  const tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+  const under1000 = n => { let w = []; if(n >= 100){ w.push(ones[Math.floor(n / 100)] + ' hundred'); n %= 100; if(n) w.push('and'); } if(n >= 20){ w.push(tens[Math.floor(n / 10)] + (n % 10 ? '-' + ones[n % 10] : '')); } else if(n) w.push(ones[n]); return w.join(' '); };
+  const words = n => { if(n === 0) return 'zero'; const parts = [], scales = [[1e9, 'billion'], [1e6, 'million'], [1e3, 'thousand']];
+    scales.forEach(([v, l]) => { if(n >= v){ parts.push(under1000(Math.floor(n / v)) + ' ' + l); n %= v; } });
+    if(n) parts.push((parts.length && n < 100 ? 'and ' : '') + under1000(n)); return parts.join(', ').replace(/, and /g, ' and '); };
+  const k = Math.round(N(amount) * 100), naira = Math.floor(k / 100), kobo = k % 100;
+  const s = words(naira) + ' naira' + (kobo ? ', ' + words(kobo) + ' kobo' : '') + ' only';
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+/* What this payment is: full payment, deposit, part payment or balance (final) payment */
+function rctInfo(doc, payId){
+  const pays = (doc.paymentEntries || []).filter(p => N(p.amount) > 0), grand = N(doc.grand);
+  const all = payId === 'all';
+  const idx = all ? pays.length - 1 : pays.findIndex((p, i) => (p.id || 'i' + i) === payId);
+  if(idx < 0) return null;
+  const before = all ? 0 : pays.slice(0, idx).reduce((s, p) => s + N(p.amount), 0);
+  const amount = all ? pays.reduce((s, p) => s + N(p.amount), 0) : N(pays[idx].amount);
+  const toDate = before + amount, bal = Math.max(0, grand - toDate), full = grand > 0 && bal < 0.01;
+  const type = full ? (before > 0.01 ? 'Balance payment — invoice fully paid' : 'Full payment') : (before > 0.01 ? 'Part payment' : 'Deposit');
+  const p = all ? {date:pays[idx].date, method:[...new Set(pays.map(x => x.method).filter(Boolean))].join(', '), reference:pays.map(x => x.reference).filter(Boolean).join(', '), receivedBy:[...new Set(pays.map(x => x.receivedBy).filter(Boolean))].join(', ')} : pays[idx];
+  return {all, pays:all ? pays : [pays[idx]], pay:p, amount, before, toDate, bal, grand, full, type, payKey:all ? 'all' + pays.length : (pays[idx].id || 'i' + idx)};
+}
+async function rctRecord(doc, info){
+  const id = 'rct_' + doc.id + '_' + info.payKey;
+  let r = Store.get('receipt', id);
+  if(!r){
+    const no = await nextNumber('receipt', 'RCT', Store.list('receipt').map(x => x.no));
+    r = Store.put('receipt', {id, no, docId:doc.id, docNo:doc.docNo, custName:doc.custName || '', amount:info.amount, type:info.type, method:info.pay.method || '', payDate:info.pay.date || '', issuedAt:nowIso(), issuedBy:myName() || 'Staff', companyIdx:N(doc.companyIdx)}) || {id, no};
+  }
+  return r;
+}
+const RCT_CSS = `.rc{font-family:Arial,Helvetica,sans-serif;color:#111;font-size:12.5px;line-height:1.45;background:#fff;box-sizing:border-box;width:100%}
+  .rc *{box-sizing:border-box}.rc .lh-hd{display:flex;gap:14px;align-items:center}.rc .lh-hd img{height:66px}.rc .lh-co{flex:1}.rc .lh-co b{display:block;font-size:18px;color:#1F3864}.rc .lh-co div{font-size:10.5px;color:#333;line-height:1.4}
+  .rc .lh-rule{height:4px;background:#E30613;margin-top:8px;border-bottom:2px solid #1F3864}
+  .rc .top{display:flex;justify-content:space-between;align-items:flex-start;margin-top:14px;gap:10px}.rc h1{margin:0;font-size:22px;color:#1F3864;letter-spacing:1px}
+  .rc .no{text-align:right;font-size:12px}.rc .no b{font-size:14px;color:#E30613}
+  .rc .stamp{display:inline-block;margin-top:8px;padding:6px 14px;border:3px solid;border-radius:8px;font-weight:bold;font-size:15px;letter-spacing:.5px;text-transform:uppercase;transform:rotate(-2deg)}
+  .rc .stamp.full{color:#0b7a3e;border-color:#0b7a3e}.rc .stamp.dep{color:#b45309;border-color:#b45309}
+  .rc table{width:100%;border-collapse:collapse;margin-top:12px}.rc td{padding:7px 8px;border-bottom:1px solid #dde3ee;vertical-align:top}.rc td.k{width:34%;color:#555;font-size:11px;text-transform:uppercase;letter-spacing:.3px}
+  .rc .amt{font-size:20px;font-weight:bold;color:#1F3864}.rc .words{font-style:italic}
+  .rc .meth{display:flex;gap:16px;flex-wrap:wrap}.rc .box{display:inline-block;width:14px;height:14px;border:2px solid #1F3864;margin-right:5px;vertical-align:-2px;text-align:center;line-height:10px;font-size:12px;font-weight:bold;color:#fff}.rc .box.on{background:#1F3864}
+  .rc .sum{margin-top:14px;border:1px solid #1F3864;border-radius:6px;overflow:hidden}.rc .sum td{border-bottom:1px solid #e3e8f2}.rc .sum td.n{text-align:right;font-variant-numeric:tabular-nums;width:40%}
+  .rc .sum tr.hl td{background:#1F3864;color:#fff;font-weight:bold}.rc .sum tr.bal td{font-weight:bold}
+  .rc .sig{display:flex;gap:40px;margin-top:130px}.rc .sig>div{flex:1;border-top:1px solid #111;padding-top:4px;font-size:10.5px;text-align:center;color:#444;position:relative}
+  .rc .sig img{position:absolute;bottom:100%;left:0;right:0;margin:0 auto 2px;height:120px;max-width:300px;object-fit:contain}
+  .rc .note{margin-top:10px;font-size:11px;color:#333}.rc .thanks{text-align:center;margin-top:16px;color:#1F3864;font-weight:bold}`;
+function receiptHtml(doc, info, rec){
+  const co = COMPANIES[N(doc.companyIdx)] || COMPANIES[0], p = info.pay;
+  const mk = rctMethodKey(p.method), otherM = info.all ? '' : (!mk && p.method ? p.method : '');
+  const methods = info.all ? [...new Set(info.pays.map(x => rctMethodKey(x.method)))] : [mk];
+  const veh = [doc.vehMakeModel, doc.vehReg].filter(Boolean).join(' — ');
+  let h = `<div class="rc"><style>${RCT_CSS}</style>${letterheadTop(co)}
+    <div class="top"><div><h1>PAYMENT RECEIPT</h1><span class="stamp ${info.full ? 'full' : 'dep'}">${esc(info.type)}</span></div>
+    <div class="no">Receipt no: <b>${esc(rec.no || '')}</b><br>Date: <b>${esc(fmtDate(p.date || today()))}</b><br>Invoice: <b>${esc(doc.docNo || '')}</b></div></div>
+    <table><tr><td class="k">Received from</td><td><b>${esc(doc.custName || '')}</b>${doc.custPhone ? ' · ' + esc(doc.custPhone) : ''}</td></tr>
+    <tr><td class="k">The sum of</td><td><span class="amt">${money(info.amount)}</span><div class="words">${esc(nairaWords(info.amount))}</div></td></tr>
+    <tr><td class="k">Being</td><td>${esc(info.type)} for invoice <b>${esc(doc.docNo || '')}</b> dated ${esc(fmtDate(doc.date))}${veh ? '<br>Vehicle: ' + esc(veh) : ''}</td></tr>
+    <tr><td class="k">Payment method</td><td><div class="meth">${RCT_METHODS.map(m => `<span><span class="box ${methods.includes(m) ? 'on' : ''}">${methods.includes(m) ? '✓' : ''}</span>${esc(m)}</span>`).join('')}${otherM ? `<span><span class="box on">✓</span>${esc(otherM)}</span>` : ''}</div></td></tr>
+    ${p.reference ? `<tr><td class="k">Reference</td><td>${esc(p.reference)}</td></tr>` : ''}
+    ${p.receivedBy ? `<tr><td class="k">Received by</td><td>${esc(p.receivedBy)}</td></tr>` : ''}</table>`;
+  if(info.all && info.pays.length > 1) h += `<table><tr><td class="k" style="width:auto">Payments</td><td>${info.pays.map(x => `${esc(fmtDate(x.date))} · ${esc(x.method || '')} · ${money(x.amount)}`).join('<br>')}</td></tr></table>`;
+  h += `<table class="sum"><tr><td>Invoice total</td><td class="n">${money(info.grand)}</td></tr>
+    ${info.all ? '' : `<tr><td>Paid before this receipt</td><td class="n">${money(info.before)}</td></tr><tr class="hl"><td>This payment</td><td class="n">${money(info.amount)}</td></tr>`}
+    <tr${info.all ? ' class="hl"' : ''}><td>Total paid to date</td><td class="n">${money(info.toDate)}</td></tr>
+    <tr class="bal"><td>Balance outstanding</td><td class="n">${money(info.bal)}</td></tr></table>`;
+  h += info.full ? `<div class="note">This invoice is <b>fully paid</b>.</div>` : `<div class="note">This is a <b>${esc(info.type.toLowerCase())}</b>. The balance of <b>${money(info.bal)}</b> is due ${/job card|quotation/i.test(doc.type) ? 'on completion' : 'on or before collection of the vehicle'}.</div>`;
+  h += `<div class="sig"><div>${co.signature ? `<img src="${esc(co.signature)}" alt="">` : ''}For ${esc(co.name)}</div><div>Customer</div></div>
+    <div class="thanks">Thank you for your patronage.</div><div style="text-align:center;margin-top:10px">${footerStripHtml()}</div>${EDITION === 'partner' ? '<div style="text-align:center;font-size:9px;color:#888;margin-top:8px">Powered by Robotik Fix</div>' : ''}</div>`;
+  return h;
+}
+async function issueReceipt(doc, payId, how){
+  if(!doc || !isInv(doc)){ toast('Receipts are issued from a saved invoice.', true); return; }
+  const info = rctInfo(doc, payId); if(!info){ toast('That payment is not saved on the invoice yet. Save the invoice first.', true); return; }
+  let rec; try{ rec = await rctRecord(doc, info); }catch(e){ toast('Could not give the receipt a number: ' + (e.message || e), true); return; }
+  const html = receiptHtml(doc, info, rec);
+  const fname = String(rec.no || 'Receipt').replace(/[^A-Za-z0-9_-]/g, '_') + '.pdf';
+  if(how === 'share') return shareHtmlPdf(html, fname, 'Payment receipt ' + rec.no + ' for invoice ' + doc.docNo + ' — ' + money(info.amount) + ' (' + info.type + ')', () => printHtmlDoc(html, rec.no));
+  printHtmlDoc(html, rec.no);
+}
+function receiptPicker(doc){
+  if(!doc){ toast('Save the invoice first, then issue the receipt.', true); return; }
+  const pays = (doc.paymentEntries || []).filter(p => N(p.amount) > 0);
+  if(!pays.length){ toast('No payment recorded on this invoice yet. Add it under PAYMENT TRACKING, save, then tap Receipt.', true); const pp = $('paymentPanel'); if(pp) pp.scrollIntoView({behavior:'smooth'}); return; }
+  const row = (key, label, sub) => `<div class="rf-row"><div class="t"><span>${label}</span></div><div class="m">${sub}</div><div class="acts"><button class="rf-btn" data-rcgo="${esc(key)}" data-how="print">🖨 Print</button><button class="rf-btn green" data-rcgo="${esc(key)}" data-how="share">📤 Share PDF</button></div></div>`;
+  let h = `<h3 style="margin-top:0">Payment receipt — ${esc(doc.docNo)}</h3><p class="rf-note">Choose the payment to issue a receipt for. Each receipt keeps its own number; printing it again shows the same number.</p>`;
+  h += pays.map((p, i) => { const inf = rctInfo(doc, p.id || 'i' + i); return row(p.id || 'i' + i, money(p.amount) + ' · ' + esc(inf.type), esc(fmtDate(p.date)) + ' · ' + esc(p.method || 'method not set') + (p.reference ? ' · ' + esc(p.reference) : '')); }).join('');
+  if(pays.length > 1) h += row('all', 'All payments together · ' + money(pays.reduce((s, p) => s + N(p.amount), 0)), 'One receipt listing every payment on this invoice');
+  h += `<div class="rf-tools" style="justify-content:flex-end"><button class="rf-btn grey" id="rcClose">Close</button></div>`;
+  const box = modal(h);
+  box.querySelectorAll('[data-rcgo]').forEach(b => b.onclick = () => { closeModal(); issueReceipt(doc, b.dataset.rcgo, b.dataset.how); });
+  $('rcClose').onclick = closeModal;
+}
+/* ---- main document screen: Receipt button for invoices, method list, per-payment buttons ---- */
+function savedInvoiceForScreen(){ const id = (($('docNo') || {}).dataset || {}).savedId; return id ? Store.get('doc', id) : null; }
+function ledgerRowsOnScreen(){ return [...document.querySelectorAll('#paymentsTable tbody tr')].map(tr => (tr.children[1] || {}).textContent || ''); }
+function ledgerMatchesSaved(d){
+  const rows = ledgerRowsOnScreen(), saved = (d && d.paymentEntries || []);
+  return rows.length === saved.length && saved.every((p, i) => rows[i] === fmtMoney(N(p.amount)));
+}
+function rctOpenFromDoc(){
+  const d = savedInvoiceForScreen();
+  if(d && !ledgerMatchesSaved(d)){ toast('You have payments that are not saved yet. Tap Save Record first, then Receipt.', true); return; }
+  receiptPicker(d);
+}
+const prevUpdateModeUI21 = window.updateModeUI;
+window.updateModeUI = function(){
+  prevUpdateModeUI21.apply(this, arguments);
+  const btn = $('convertBtn'), type = ($('docType') || {}).value;
+  if(btn && type === 'INVOICE'){ btn.style.display = 'block'; btn.textContent = '🧾 Receipt'; btn.onclick = rctOpenFromDoc; }
+};
+function setupPayMethodSelect(){
+  const old = $('payMethod'); if(!old || old.tagName === 'SELECT') return;
+  const s = document.createElement('select'); s.id = 'payMethod';
+  s.innerHTML = '<option value="">— choose —</option>' + RCT_METHODS.map(m => `<option>${m}</option>`).join('') + '<option>Paystack / online</option>';
+  old.replaceWith(s);
+}
+const prevAddPay21 = window.addPaymentEntry;
+window.addPaymentEntry = function(){
+  const m = $('payMethod'); if(m && !m.value){ toast('Choose how the customer paid: cash, bank transfer or card.', true); m.focus(); return; }
+  return prevAddPay21.apply(this, arguments);
+};
+function addLedgerReceiptButtons(){
+  const tb = document.querySelector('#paymentsTable tbody'); if(!tb) return;
+  if(($('docType') || {}).value !== 'INVOICE') return;
+  [...tb.querySelectorAll('tr')].forEach(tr => { const td = tr.lastElementChild; if(!td || td.querySelector('.rf-rct')) return;
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = '🧾 Receipt'; b.className = 'rf-btn rf-rct'; b.style.cssText = 'margin-left:4px;padding:4px 8px;font-size:12px';
+    b.onclick = rctOpenFromDoc; td.appendChild(b); });
+}
+(function(){ const tb = document.querySelector('#paymentsTable tbody'); if(tb && window.MutationObserver) new MutationObserver(addLedgerReceiptButtons).observe(tb, {childList:true}); })();
+document.addEventListener('click', e => { const b = e.target.closest('[data-qrct]'); if(!b) return; const d = Store.get('doc', b.dataset.qrct); if(!d){ toast('Save the invoice first.', true); return; } receiptPicker(d); });
+setupPayMethodSelect();
+try{ window.updateModeUI(); }catch(e){}
+Object.assign(window.RF = window.RF || {}, {newQuick, rctInfo, receiptHtml, nairaWords, issueReceipt, rctMethodKey});
 
 })();
 </script>
