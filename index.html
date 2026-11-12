@@ -2461,8 +2461,8 @@ body.role-technician #paymentPanel,body.role-technician #convertBtn{display:none
 
 /* signature over the signature line, brands footer */
 .signrow > div{position:relative;}
-.signrow.has-sig{margin-top:58px !important;}
-img.rf-sig{position:absolute;bottom:100%;left:0;right:0;margin:0 auto 2px;height:50px;max-width:170px;object-fit:contain;}
+.signrow.has-sig{margin-top:132px !important;}
+img.rf-sig{position:absolute;bottom:100%;left:0;right:0;margin:0 auto 2px;height:120px;max-width:300px;object-fit:contain;}
 #rfMakesFooter{text-align:center;margin:10px 0 4px;padding:8px 6px;border-top:1px solid #ddd;}
 #rfMakesFooter:empty{display:none;}
 /* ---- Home (v4.5) ---- */
@@ -2574,7 +2574,7 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
    database (Supabase) with staff logins and roles (admin / cashier / technician).
    Without the team database everything still works on this device alone, as before.
 =========================================================================================== */
-const RF_VERSION = '5.4';
+const RF_VERSION = '5.4.3';
 /* Multi-user team database: built, but switched OFF for now. Set to true to turn it back on. */
 const EDITION = 'robotik';      // build script switches this to 'partner' for the partner-garage app
 const TEAM_ENABLED = EDITION === 'robotik' && true;
@@ -4311,7 +4311,7 @@ function quickHtml(doc){
     .qi .w{width:30px;height:40px;border:2px solid #111;border-radius:6px;font-size:9px;font-weight:bold;display:flex;align-items:center;justify-content:center}
     .qi .w.on{background:#111;color:#fff}.qi .bd{grid-row:1/3;grid-column:2;width:62px;height:88px;border:2px solid #111;border-radius:16px 16px 10px 10px;font-size:8px;display:flex;align-items:flex-start;justify-content:center;padding-top:4px}
     .qi .sp{grid-column:1/4;width:auto;height:22px;padding:0 10px;border-radius:11px}
-    .qi .foot{display:flex;gap:16px;margin-top:10px}.qi .foot>div{flex:1}.qi .sig{display:flex;gap:30px;margin-top:58px}.qi .sig div{flex:1;border-top:1px solid #111;padding-top:3px;font-size:10px;text-align:center;color:#444}
+    .qi .foot{display:flex;gap:16px;margin-top:10px}.qi .foot>div{flex:1}.qi .sig{display:flex;gap:30px;margin-top:130px}.qi .sig div{flex:1;border-top:1px solid #111;padding-top:3px;font-size:10px;text-align:center;color:#444}
     .qi .note{font-size:10px;color:#333;margin-top:6px;white-space:pre-wrap}.qi .bad{color:#c0392b;font-weight:bold}
   </style>
   <div class="hd"><img src="${esc(logo)}" alt=""><div class="co"><b>${esc(co.name)}</b><div>${esc(co.address)}</div><div>Tel: ${esc(co.tel)} · ${esc(co.email)}</div>${co.tin ? `<div>TIN: ${esc(co.tin)}</div>` : ''}</div>
@@ -4349,7 +4349,7 @@ function quickHtml(doc){
   h += `<div class="foot"><div><div class="sec">PAYMENT DETAILS</div><div style="margin-top:4px">Bank: <b>${esc(doc.bankName || '')}</b><br>Account no: <b>${esc(doc.bankAcctNo || '')}</b><br>Account name: <b>${esc(doc.bankAcctName || '')}</b><br>Reference: <b>${esc(doc.docNo)}</b></div>${(doc.paymentEntries || []).length ? '<div style="margin-top:6px">' + doc.paymentEntries.map(p => `${esc(fmtDate(p.date))} — ${esc(p.method || '')} ${money(p.amount)}`).join('<br>') + '</div>' : ''}</div>
     <div><table class="tot"><tr><td>Subtotal</td><td class="n">${money(doc.subtotal)}</td></tr>${N(doc.discountAmt) ? `<tr><td>Discount (${N(doc.discountPct)}%)</td><td class="n">−${money(doc.discountAmt)}</td></tr>` : ''}${N(doc.vat) ? `<tr><td>VAT 7.5%</td><td class="n">${money(doc.vat)}</td></tr>` : ''}<tr class="g"><td>TOTAL</td><td class="n">${money(doc.grand)}</td></tr><tr><td>Paid</td><td class="n">${money(paid)}</td></tr><tr><td><b>Balance due</b></td><td class="n"><b>${money(bal)}</b></td></tr></table></div></div>`;
   if(doc.notes) h += `<div class="note">${esc(doc.notes)}</div>`;
-  h += `<div class="sig"><div style="position:relative">${co.signature ? `<img src="${esc(co.signature)}" alt="" style="position:absolute;bottom:100%;left:0;right:0;margin:0 auto;height:46px;max-width:170px">` : ''}For ${esc(co.name)}</div><div>Customer signature</div></div><div style="text-align:center;margin-top:12px">${footerStripHtml()}</div>${EDITION === 'partner' ? '<div style="text-align:center;font-size:9px;color:#888;margin-top:10px">Powered by Robotik Fix · Lekki, Lagos</div>' : ''}</div>`;
+  h += `<div class="sig"><div style="position:relative">${co.signature ? `<img src="${esc(co.signature)}" alt="" style="position:absolute;bottom:100%;left:0;right:0;margin:0 auto 2px;height:120px;max-width:300px;object-fit:contain">` : ''}For ${esc(co.name)}</div><div>Customer signature</div></div><div style="text-align:center;margin-top:12px">${footerStripHtml()}</div>${EDITION === 'partner' ? '<div style="text-align:center;font-size:9px;color:#888;margin-top:10px">Powered by Robotik Fix · Lekki, Lagos</div>' : ''}</div>`;
   return h;
 }
 function printQuick(doc){
@@ -5739,7 +5739,7 @@ function homeStats(){
   const invoiced = new Set(); docs.filter(d => (d.type || '').toUpperCase() === 'INVOICE').forEach(d => jobFamily(d.id).forEach(x => invoiced.add(x)));
   const invM = docs.filter(d => isInv(d) && String(d.date || '').startsWith(m));
   let due = 0; try{ due = receivables().reduce((s, x) => s + x.bal, 0); }catch(e){}
-  return {today:jc.filter(d => d.date === t).length, open:jc.filter(d => d.date >= addDays(t, -60) && !invoiced.has(d.id) && !/complete|cancel|closed|deliver/i.test(d.status || '')).length, invN:invM.length, due};
+  return {today:jc.filter(d => d.date === t).length, open:jc.filter(d => d.date >= addDays(t, -60) && !invoiced.has(d.id) && !/complete|cancel|closed|deliver/i.test(d.status || '') && (Store.get('jobtrack', 'jt_' + d.id) || {}).stage !== 'Delivered').length, invN:invM.length, due};
 }
 function renderHome(){
   const v = $('view-home'); if(!v) return;
