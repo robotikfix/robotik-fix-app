@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#1F3864">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co; media-src 'self' blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co http://localhost:*; base-uri 'none'; form-action 'none'">
+<title>Track my car — Robotik Fix</title>
+<link rel="icon" href="icons/icon-192.png">
+<style>
+  :root{--navy:#1F3864;--red:#E30613;--green:#0f9d58;--amber:#b45309;--bg:#eef1f5}
+  *{box-sizing:border-box}body{margin:0;font:15px/1.45 -apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:#1d1d1f}
+  .top{background:var(--navy);color:#fff;padding:14px 0 18px;border-bottom:5px solid var(--red)}
+  .wrap{max-width:680px;margin:0 auto;padding:0 14px}
+  .brand{display:flex;gap:12px;align-items:center}.brand img{width:52px;height:52px;border-radius:12px;background:#fff;padding:3px;object-fit:contain}
+  .brand b{display:block;font-size:18px;letter-spacing:.3px}.brand span{font-size:13px;color:#c9d6ee}
+  .card{background:#fff;border-radius:16px;padding:16px;margin:12px 0;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+  h1{font-size:20px;color:var(--navy);margin:0 0 4px}h2{font-size:13px;letter-spacing:.5px;color:var(--red);margin:0 0 10px;text-transform:uppercase}
+  .muted{color:#5b6472;font-size:13px}
+  label{display:block;font-size:13px;font-weight:600;margin:12px 0 4px}
+  input{width:100%;font:inherit;font-size:17px;padding:13px;border:1px solid #c9ced6;border-radius:12px}
+  input#reg{text-transform:uppercase;letter-spacing:1px;font-weight:700}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;border-radius:12px;padding:14px 18px;font:inherit;font-weight:800;font-size:16px;color:#fff;background:var(--red);cursor:pointer;text-decoration:none}
+  .btn.navy{background:var(--navy)}.btn.green{background:#25D366}.btn.ghost{background:#fff;color:var(--navy);border:2px solid var(--navy)}
+  .btn:disabled{opacity:.6}.full{width:100%;margin-top:14px}
+  .row{display:flex;gap:10px;flex-wrap:wrap}.row .btn{flex:1}
+  .banner{border-radius:12px;padding:12px 14px;font-weight:600}.bad{background:#fdecea;color:#a12622}.info{background:#eaf2fb;color:#1F3864}.good{background:#e8f8f1;color:#0b6b3d}
+  .stage{font-size:22px;font-weight:800;color:var(--navy);margin:4px 0}
+  .steps{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin:10px 0 4px}
+  .steps div{height:8px;border-radius:4px;background:#dde3ee}.steps div.on{background:var(--green)}.steps div.cur{background:var(--red)}
+  .stepl{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;font-size:10px;color:#5b6472;text-align:center}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin-top:10px;font-size:14px}.kv b{color:#5b6472;font-weight:600}
+  .eta{font-size:18px;font-weight:800}
+  .tl{border-left:3px solid #dde3ee;margin-left:6px;padding-left:14px}
+  .tl .it{position:relative;margin-bottom:16px}.tl .it::before{content:"";position:absolute;left:-21px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--navy)}
+  .tl .when{font-size:12px;color:#5b6472}.tl p{margin:2px 0 6px;white-space:pre-wrap}
+  .media{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px}
+  .media img,.media video{width:100%;height:130px;object-fit:cover;border-radius:10px;background:#000;display:block}
+  .media a{display:block}
+  table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:7px 4px;border-bottom:1px solid #eee;text-align:left;vertical-align:top}th{font-size:12px;color:#666}.n{text-align:right;white-space:nowrap}
+  .tot td{font-weight:800;border-bottom:0;font-size:16px}
+  .foot{text-align:center;color:#7a8291;font-size:12px;margin:18px 0 30px}
+  .lnk{background:none;border:0;color:var(--navy);text-decoration:underline;font:inherit;font-size:13px;cursor:pointer;padding:0}
+  #viewer{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:9;padding:10px}
+  #viewer.on{display:flex}#viewer img{max-width:100%;max-height:100%;border-radius:8px}
+</style>
+</head>
+<body>
+<div class="top"><div class="wrap brand"><img src="icons/icon-192.png" alt=""><div><b>ROBOTIK FIX</b><span>Track my car · job progress, photos and quotation</span></div></div></div>
+<div class="wrap" id="app"></div>
+<div id="viewer" role="dialog" aria-label="Photo"><img id="viewerImg" alt=""></div>
+<script>
+(function(){
+  'use strict';
+  var HQ_URL = 'https://pispfmbqjxewonqswcmr.supabase.co', HQ_KEY = 'sb_publishable_20-hdWEag4Y2LjGDO7dwyw_UNXAoODo', HQ_TEL = '0803 251 6258';
+  var $ = function(id){ return document.getElementById(id); };
+  var esc = function(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var N = function(v){ var n = parseFloat(String(v == null ? '' : v).replace(/[^\d.-]/g, '')); return isFinite(n) ? n : 0; };
+  var money = function(v){ return '₦' + N(v).toLocaleString('en-NG', {minimumFractionDigits:2, maximumFractionDigits:2}); };
+  var fmt = function(iso){ if(!iso) return ''; try{ var d = new Date(String(iso).length <= 10 ? iso + 'T12:00' : String(iso).replace(' ', 'T').replace(/(\+\d\d)$/, '$1:00')); return isNaN(d) ? iso : d.toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short', year:'numeric'}); }catch(e){ return iso; } };
+  var fmtT = function(iso){ try{ var d = new Date(String(iso).replace(' ', 'T').replace(/(\+\d\d)$/, '$1:00')); return isNaN(d) ? fmt(iso) : d.toLocaleString('en-GB', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}); }catch(e){ return iso; } };
+  var today = function(){ var d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+  var telIntl = function(p){ var d = String(p || '').replace(/\D/g, ''); if(d.charAt(0) === '0' && d.length === 11) d = '234' + d.slice(1); return d; };
+  var STEPS = ['Received', 'Diagnosis', 'Approval', 'Repair', 'Quality check', 'Ready'];
+  var STAGE = {
+    'Received':['Your vehicle has been received', 0], 'Diagnosing':['Inspection and diagnosis', 1], 'Waiting approval':['Waiting for your approval', 2],
+    'Approved':['Approved, work is scheduled', 2], 'Waiting parts':['Waiting for parts', 3], 'In progress':['Repair in progress', 3],
+    'Quality check':['Quality check and road test', 4], 'Ready for pickup':['Ready for pickup', 5], 'Delivered':['Delivered. Thank you!', 6]
+  };
+  var app = $('app'), qs = new URLSearchParams(location.search), state = {busy:false, data:null, error:'', reg:'', name:''}, timer = null;
+  try{ state.reg = qs.get('reg') || localStorage.getItem('rf_trk_reg') || ''; state.name = localStorage.getItem('rf_trk_name') || ''; }catch(e){ state.reg = qs.get('reg') || ''; }
+  function rpc(fn, body){
+    return fetch(HQ_URL + '/rest/v1/rpc/' + fn, {method:'POST', headers:{apikey:HQ_KEY, 'Content-Type':'application/json'}, body:JSON.stringify(body)})
+      .then(function(r){ return r.text().then(function(t){ var j = null; try{ j = t ? JSON.parse(t) : null; }catch(e){} if(!r.ok) throw new Error((j && (j.message || j.hint)) || 'Connection problem (' + r.status + ')'); return j; }); });
+  }
+  function formHtml(){
+    return '<div class="card"><h1>Track my car</h1><p class="muted">Enter your plate number and the name on your job card (your company name or your own name).</p>' +
+      '<label for="reg">Plate number</label><input id="reg" autocomplete="off" autocapitalize="characters" placeholder="e.g. AKD 602 JE" value="' + esc(state.reg) + '">' +
+      '<label for="name">Company or owner name</label><input id="name" autocomplete="name" placeholder="e.g. Maersk Nigeria Limited" value="' + esc(state.name) + '">' +
+      (state.error ? '<div class="banner bad" style="margin-top:12px">' + esc(state.error) + '</div>' : '') +
+      '<button class="btn full" id="go"' + (state.busy ? ' disabled' : '') + '>' + (state.busy ? 'Checking…' : 'Show my car’s progress') + '</button></div>';
+  }
+  function lines(arr, title){
+    var rows = (arr || []).filter(function(l){ return l && l.desc; });
+    if(!rows.length) return '';
+    return '<tr><td colspan="3" style="background:#f6f8fb;font-weight:700;color:#1F3864;font-size:12px">' + esc(title) + '</td></tr>' + rows.map(function(l){ return '<tr><td>' + esc(l.desc) + '</td><td class="n">' + esc(l.qty || 1) + ' × ' + money(l.price) + '</td><td class="n">' + money(N(l.qty || 1) * N(l.price)) + '</td></tr>'; }).join('');
+  }
+  function jobHtml(j){
+    var st = STAGE[j.stage] || [j.stage || 'In the workshop', 3], idx = st[1], h = '<div class="card">';
+    h += '<div class="muted">' + esc(j.reg || '') + (j.vehicle ? ' · ' + esc(j.vehicle) : '') + '</div><div class="stage">' + esc(st[0]) + '</div>';
+    h += '<div class="steps">' + STEPS.map(function(s, i){ return '<div class="' + (i < idx || idx === 6 ? 'on' : i === idx ? 'cur' : '') + '"></div>'; }).join('') + '</div><div class="stepl">' + STEPS.map(function(s){ return '<span>' + esc(s) + '</span>'; }).join('') + '</div>';
+    h += '<div class="kv"><b>Job no.</b><span>' + esc(j.docNo || '') + '</span><b>Received</b><span>' + esc(fmt(j.date)) + '</span>' + (j.complaint ? '<b>Your concern</b><span>' + esc(j.complaint) + '</span>' : '') + '</div>';
+    if(j.stage === 'Delivered') h += '<div class="banner good" style="margin-top:12px">Collected ' + esc(fmt(String(j.deliveredAt || '').slice(0, 10))) + '. Thank you for choosing us.</div>';
+    else if(j.stage === 'Ready for pickup') h += '<div class="banner good" style="margin-top:12px">Your vehicle is ready. Please come and collect it.</div>';
+    else if(j.promised){ var late = j.promised < today(); h += '<div class="banner ' + (late ? 'bad' : 'info') + '" style="margin-top:12px">Expected completion: <span class="eta">' + esc(fmt(j.promised)) + '</span>' + (late ? '<br><span style="font-weight:500">This is taking longer than planned. We will call you with an update.</span>' : '') + '</div>'; }
+    else h += '<div class="banner info" style="margin-top:12px">We will confirm the completion date after inspection.</div>';
+    h += '</div>';
+    if(j.quote){
+      var q = j.quote, ap = q.approval || {};
+      h += '<div class="card"><h2>Quotation ' + esc(q.docNo || '') + '</h2><div class="muted">' + esc(fmt(q.date)) + '</div><table><tr><th>Item</th><th class="n">Qty × price</th><th class="n">Amount</th></tr>' + lines(q.labour, 'Labour / services') + lines(q.parts, 'Parts') +
+        (N(q.discount) ? '<tr><td colspan="2">Discount</td><td class="n">−' + money(q.discount) + '</td></tr>' : '') + (N(q.vat) ? '<tr><td colspan="2">VAT (7.5%)</td><td class="n">' + money(q.vat) + '</td></tr>' : '') +
+        '<tr class="tot"><td colspan="2">Total</td><td class="n">' + money(q.grand) + '</td></tr></table>' + (q.notes ? '<p class="muted">' + esc(q.notes) + '</p>' : '');
+      if(ap.status === 'approved') h += '<div class="banner good">You approved this quotation. Thank you.</div>';
+      else if(ap.status === 'declined') h += '<div class="banner bad">You declined this quotation. Call us if you would like to discuss it.</div>';
+      else if(ap.token) h += '<a class="btn green full" href="approve.html?t=' + encodeURIComponent(ap.token) + '">Review and approve the quotation</a>';
+      h += '</div>';
+    }
+    var ups = j.updates || [];
+    h += '<div class="card"><h2>Updates from the workshop</h2>';
+    h += ups.length ? '<div class="tl">' + ups.map(function(u){
+      var media = (u.media || []).filter(function(m){ return m && /^https:\/\//.test(m.url || ''); });
+      return '<div class="it"><div class="when">' + esc(fmtT(u.at)) + '</div>' + (u.text ? '<p>' + esc(u.text) + '</p>' : '') +
+        (media.length ? '<div class="media">' + media.map(function(m){ return m.type === 'video' ? '<video src="' + esc(m.url) + '" controls playsinline preload="metadata"></video>' : '<a href="' + esc(m.url) + '" data-img="' + esc(m.url) + '"><img src="' + esc(m.url) + '" alt="Workshop photo" loading="lazy"></a>'; }).join('') + '</div>' : '') + '</div>';
+    }).join('') + '</div>' : '<p class="muted">No updates yet. We post photos and notes as the work goes on.</p>';
+    h += '</div>';
+    return h;
+  }
+  function contactHtml(){
+    var t = telIntl(HQ_TEL);
+    return '<div class="card"><h2>Questions about your car?</h2><div class="row"><a class="btn navy" href="tel:+' + esc(t) + '">📞 Call us</a><a class="btn green" href="https://wa.me/' + esc(t) + '?text=' + encodeURIComponent('Hello, I am checking on my vehicle ' + state.reg.toUpperCase()) + '" target="_blank" rel="noopener">💬 WhatsApp</a></div><p class="muted" style="margin-bottom:0">' + esc(HQ_TEL) + '</p></div>';
+  }
+  function render(){
+    var h = '';
+    if(state.data){
+      h += '<div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div><b>' + esc(state.reg.toUpperCase()) + '</b><div class="muted">' + esc(state.name) + '</div></div><div class="row" style="flex:0 0 auto"><button class="btn ghost" id="refresh" style="padding:10px 14px">↻ Refresh</button><button class="lnk" id="other">Other car</button></div></div>';
+      h += state.data.jobs.map(jobHtml).join('') + contactHtml();
+      h += '<p class="foot">Updated ' + esc(new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'})) + ' · this page refreshes every 2 minutes</p>';
+    } else h += formHtml() + contactHtml();
+    app.innerHTML = h; bind();
+  }
+  function lookup(silent){
+    if(!silent){ state.busy = true; state.error = ''; render(); }
+    return rpc('rf_customer_track', {p_reg:state.reg, p_name:state.name}).then(function(r){
+      state.busy = false;
+      if(!r || r.error){ state.data = null; state.error = (r && r.error) || 'Something went wrong. Please try again.'; render(); return; }
+      state.data = r; state.error = '';
+      try{ localStorage.setItem('rf_trk_reg', state.reg); localStorage.setItem('rf_trk_name', state.name); }catch(e){}
+      render(); clearInterval(timer); timer = setInterval(function(){ if(document.visibilityState === 'visible') lookup(true); }, 120000);
+    }).catch(function(e){ state.busy = false; if(!silent){ state.error = /fetch|network|load/i.test(e.message) ? 'No internet connection. Check your data and try again.' : e.message; render(); } });
+  }
+  function bind(){
+    var go = $('go'); if(go) go.onclick = function(){ state.reg = $('reg').value.trim(); state.name = $('name').value.trim(); if(state.reg.replace(/[^A-Za-z0-9]/g, '').length < 4 || state.name.replace(/[^A-Za-z0-9]/g, '').length < 3){ state.error = 'Enter the plate number and the name on your job card.'; render(); return; } lookup(); };
+    ['reg', 'name'].forEach(function(id){ var el = $(id); if(el) el.addEventListener('keydown', function(e){ if(e.key === 'Enter' && go) go.click(); }); });
+    var rf = $('refresh'); if(rf) rf.onclick = function(){ lookup(); };
+    var ot = $('other'); if(ot) ot.onclick = function(){ clearInterval(timer); state.data = null; state.reg = ''; state.error = ''; render(); };
+    app.querySelectorAll('[data-img]').forEach(function(a){ a.onclick = function(e){ e.preventDefault(); $('viewerImg').src = a.getAttribute('data-img'); $('viewer').classList.add('on'); }; });
+  }
+  $('viewer').onclick = function(){ this.classList.remove('on'); $('viewerImg').src = ''; };
+  render();
+  if(state.reg && state.name) lookup();
+})();
+</script>
+</body>
+</html>

@@ -1584,7 +1584,7 @@ async function generatePdfBlob(){
   try{
     const W = element.offsetWidth;
     const pageH = (11.69 - 0.6) * (W / (8.27 - 0.6));
-    const blocks = Array.from(element.querySelectorAll('tr, .totals .row, .signrow, .rp-photo-row, .photo-item, .rp-legend, .rp-complaint, .card > h2, .field'))
+    const blocks = Array.from(element.querySelectorAll('tr, .rfc-bar, .rfc-box, .rfc-veh, .rfc-tot, .rfc-sign, .totals .row, .signrow, .rp-photo-row, .photo-item, .rp-legend, .rp-complaint, .card > h2, .field'))
       .filter(el => el.offsetParent !== null && el.getBoundingClientRect().height > 0);
     for(const el of blocks){
       const base = element.getBoundingClientRect().top;
@@ -2574,7 +2574,7 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
    database (Supabase) with staff logins and roles (admin / cashier / technician).
    Without the team database everything still works on this device alone, as before.
 =========================================================================================== */
-const RF_VERSION = '5.5';
+const RF_VERSION = '5.8';
 /* Multi-user team database: built, but switched OFF for now. Set to true to turn it back on. */
 const EDITION = 'robotik';      // build script switches this to 'partner' for the partner-garage app
 const TEAM_ENABLED = EDITION === 'robotik' && true;
@@ -2637,7 +2637,7 @@ const bucket = k => mem[k] || (mem[k] = new Map());
 const listeners = [];
 let emitTimer = null;
 function emit(kinds){ clearTimeout(emitTimer); emitTimer = setTimeout(() => listeners.forEach(fn => { try{ fn(kinds); }catch(e){ console.error(e); } }), 60); }
-const LOCAL_KINDS = ['letter', 'receipt', 'consent', 'porder', 'income', 'transfer', 'item','stockmove','labour','bundle','po','expense','appt','reminder','truck','tyreevent','timelog','payconfirm','setting','counter','joblink','jobpart','comeback','tow','supplier','supbill','suppay','worker','staffpay','tool','toolmove','corp','jobtrack','assetlog','msglog','diag','vehspec'];
+const LOCAL_KINDS = ['jobupdate', 'letter', 'receipt', 'customer', 'crmtask', 'crmnote', 'deal', 'consent', 'porder', 'income', 'transfer', 'item','stockmove','labour','bundle','po','expense','appt','reminder','truck','tyreevent','timelog','payconfirm','setting','counter','joblink','jobpart','comeback','tow','supplier','supbill','suppay','worker','staffpay','tool','toolmove','corp','jobtrack','assetlog','msglog','diag','vehspec'];
 function loadLocal(){
   LOCAL_KINDS.forEach(k => {
     const b = bucket(k); b.clear();
@@ -3313,9 +3313,9 @@ function decorateDocScreen(){
 /* ===================== Navigation ===================== */
 const TABS = EDITION === 'partner'
   ? [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['stock', 'Stock'], ['workshop', 'Workshop'], ['money', 'Money'], ['send', '📦 Send to Robotik Fix'], ['sync', 'Setup']]
-  : [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['stock', 'Stock'], ['book', 'Bookings'], ['workshop', 'Workshop'],
+  : [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['crm', 'Customers', 'need-cashier'], ['stock', 'Stock'], ['book', 'Bookings'], ['workshop', 'Workshop'],
      ['money', 'Money', 'need-cashier'], ['partners', 'Partners', 'need-cashier'], ['fleet', 'Fleet'], ['team', 'Team'], ['sync', 'Setup']];
-const NEW_VIEWS = EDITION === 'partner' ? ['home', 'letters', 'quick', 'send', 'system', 'assets', 'tech', 'stock', 'workshop', 'money'] : ['home', 'letters', 'system', 'plugins', 'assets', 'tech', 'quick', 'stock', 'book', 'workshop', 'money', 'partners', 'fleet', 'team'];
+const NEW_VIEWS = EDITION === 'partner' ? ['home', 'crm', 'letters', 'quick', 'send', 'system', 'assets', 'tech', 'stock', 'workshop', 'money'] : ['home', 'crm', 'letters', 'system', 'plugins', 'assets', 'tech', 'quick', 'stock', 'book', 'workshop', 'money', 'partners', 'fleet', 'team'];
 let curTab = 'doc';
 const segState = {partners:'orders', stock:'items', book:'day', money:'reports', fleet:'trucks', team:'clock', workshop:'jobs'};
 function buildNav(){
@@ -3348,7 +3348,7 @@ window.showTab = function(tab){
 function renderView(v){
   ensureLists();
   try{
-    if(v === 'home') renderHome(); else if(v === 'letters') renderLetters(); else if(v === 'system') renderSystem(); else if(v === 'plugins') renderPlugins(); else if(v === 'assets') renderAssetsView(); else if(v === 'tech') renderTech(); else if(v === 'quick') renderQuick(); else if(v === 'send') renderSend(); else if(v === 'partners') renderPartners(); else if(v === 'stock') renderStock(); else if(v === 'book') renderBook(); else if(v === 'money') renderMoney();
+    if(v === 'home') renderHome(); else if(v === 'letters') renderLetters(); else if(v === 'crm') renderCrm(); else if(v === 'system') renderSystem(); else if(v === 'plugins') renderPlugins(); else if(v === 'assets') renderAssetsView(); else if(v === 'tech') renderTech(); else if(v === 'quick') renderQuick(); else if(v === 'send') renderSend(); else if(v === 'partners') renderPartners(); else if(v === 'stock') renderStock(); else if(v === 'book') renderBook(); else if(v === 'money') renderMoney();
     else if(v === 'fleet') renderFleet(); else if(v === 'workshop') renderWorkshop(); else if(v === 'team') renderTeam();
   }catch(e){ console.error(e); const el = $('view-' + v); if(el) el.innerHTML = '<div class="card"><p>Something went wrong showing this screen: ' + esc(e.message) + '</p></div>'; }
 }
@@ -5590,6 +5590,8 @@ const IC = {
   brake:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/><path d="M12 5.5a6.5 6.5 0 0 1 6.5 6.5"/><path d="M7.5 9h.01M7.5 15h.01M16.5 15h.01"/>',
   wheel:'<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>',
   letter:'<path d="M6 2h9l5 5v15H6z"/><path d="M15 2v5h5M9 12h8M9 16h8M9 8h3"/>',
+  crm:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>',
+  pipe:'<path d="M3 4h18l-7 8v6l-4 2v-8z"/>',
   edit:'<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/>',
   records:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
   stock:'<path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M3 7l9 5 9-5M12 12v10"/>',
@@ -5701,6 +5703,10 @@ function homeTiles(){
     t('work', 'Appointments', 'book', 'purple', 'book', goSeg('book', 'book', 'day')),
     t('work', 'Towing', 'tow', 'orange', 'workshop', goSeg('workshop', 'workshop', 'tow')),
     t('work', 'Warranty & Comebacks', 'comeback', 'red', 'workshop', goSeg('workshop', 'workshop', 'come'), '', comeOpen),
+    t('track', 'Customers (CRM)', 'crm', 'blue', 'crm', () => { segState.crm = 'cust'; showTab('crm'); window.scrollTo({top:0}); }, 'need-cashier'),
+    t('track', 'Follow-ups', 'bell', 'red', 'crm', () => { segState.crm = 'tasks'; showTab('crm'); window.scrollTo({top:0}); }, 'need-cashier', (() => { try{ return crmDueCount(); }catch(e){ return 0; } })()),
+    t('track', 'Sales Pipeline', 'pipe', 'purple', 'crm', () => { segState.crm = 'pipe'; showTab('crm'); window.scrollTo({top:0}); }, 'need-cashier'),
+    t('track', 'Win-back Campaigns', 'wa', 'green', 'crm', () => { segState.crm = 'wb'; showTab('crm'); window.scrollTo({top:0}); }, 'need-cashier'),
     t('track', 'Records', 'records', 'navy', 'search', () => showTab('search')),
     t('track', 'Inventory', 'stock', 'green', 'stock', goSeg('stock', 'stock', 'items')),
     t('track', 'Labour Guide', 'labour', 'blue', 'stock', goSeg('stock', 'stock', 'labour')),
@@ -8183,6 +8189,431 @@ document.addEventListener('click', e => { const b = e.target.closest('[data-qrct
 setupPayMethodSelect();
 try{ window.updateModeUI(); }catch(e){}
 Object.assign(window.RF = window.RF || {}, {newQuick, rctInfo, receiptHtml, nairaWords, issueReceipt, rctMethodKey});
+/* ===================== v5.6 CRM: customers, follow-ups, sales pipeline, win-back ===================== */
+/* Customers are built from saved documents (name + phone) and enriched by 'customer' records (phone, email, tags, notes).
+   Kinds: customer, crmtask, crmnote, deal. */
+let crmSeg = 'cust', crmQ = '', crmTag = '', crmOpen = null, crmWbDays = 90, crmWbMode = 'lapsed';
+const CRM_TAGS = ['VIP', 'Fleet', 'Corporate', 'Garage', 'Walk-in', 'Insurance'];
+const DEAL_STAGES = ['New lead', 'Contacted', 'Proposal sent', 'Negotiation', 'Won', 'Lost'];
+const TASK_KINDS = ['Call', 'WhatsApp', 'Visit', 'Email', 'Other'];
+const crmKey = n => lc(n).replace(/&/g, 'and').replace(/\b(limited|ltd|plc|nig|nigeria)\b/g, '').replace(/[^a-z0-9]/g, '');
+const crmId = p => p + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+(function(){ if($('rfCrmCss')) return; const s = document.createElement('style'); s.id = 'rfCrmCss';
+  s.textContent = `.crm-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:8px 0}
+  .crm-tag{display:inline-block;font-size:11px;font-weight:bold;padding:2px 8px;border-radius:10px;background:#e8eef9;color:#1F3864;margin:0 4px 2px 0}
+  .crm-tag.VIP{background:#fff3cd;color:#8a5a00}.crm-tag.Fleet{background:#e0f2f1;color:#00695c}.crm-tag.Garage{background:#fde8e8;color:#a40e17}
+  .crm-board{display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch}
+  .crm-col{flex:0 0 250px;background:#f3f5f9;border-radius:10px;padding:8px}.crm-col h3{margin:2px 4px 8px;font-size:13px;color:#1F3864;display:flex;justify-content:space-between}
+  .crm-deal{background:#fff;border:1px solid #dde3ee;border-radius:8px;padding:8px 10px;margin-bottom:8px;cursor:pointer}.crm-deal b{display:block;color:#1F3864}
+  .crm-deal .v{font-weight:bold;margin-top:2px}.crm-deal .m{font-size:12px;color:#555}
+  .crm-tl{border-left:3px solid #dde3ee;margin-left:6px;padding-left:12px}.crm-tl .it{margin-bottom:10px;position:relative}
+  .crm-tl .it::before{content:"";position:absolute;left:-19px;top:5px;width:11px;height:11px;border-radius:50%;background:#1F3864}
+  .crm-tl .it.note::before{background:#E30613}.crm-tl .it.task::before{background:#12B886}.crm-tl .d{font-size:11px;color:#666}`;
+  document.head.appendChild(s); })();
+
+/* ---------- the customer index ---------- */
+function crmIndex(){
+  const map = new Map();
+  const get = (name) => { const k = crmKey(name); if(!k) return null; if(!map.has(k)) map.set(k, {key:k, name:String(name).trim(), phone:'', email:'', address:'', tags:[], rec:null, docs:[], vehicles:new Map(), spent:0, paid:0, owed:0, jobs:0, last:'', first:''}); return map.get(k); };
+  const docs = Store.list('doc').filter(d => d && d.custName && d.status !== 'Cancelled').sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  docs.forEach(d => { const c = get(d.custName); if(!c) return;
+    c.docs.push(d); c.name = String(d.custName).trim();
+    if(d.custPhone) c.phone = d.custPhone; if(d.custAddress) c.address = d.custAddress;
+    if(d.vehReg){ const rg = String(d.vehReg).toUpperCase().replace(/\s+/g, ' '); c.vehicles.set(rg, d.vehMakeModel || c.vehicles.get(rg) || ''); }
+    if(isInv(d)){ c.spent += N(d.grand); c.paid += N(d.paymentsReceived); c.owed += Math.max(0, N(d.grand) - N(d.paymentsReceived)); }
+    if(/JOB CARD|INVOICE/.test(d.type || '')) c.jobs++;
+    if(!c.first || d.date < c.first) c.first = d.date; if(!c.last || d.date > c.last) c.last = d.date; });
+  Store.list('customer').forEach(r => { const c = get(r.key || r.name); if(!c) return; c.rec = r;
+    if(r.name) c.name = r.name; if(r.phone) c.phone = r.phone; if(r.email) c.email = r.email; if(r.address) c.address = r.address; c.tags = r.tags || []; });
+  return map;
+}
+const crmTasksOpen = () => Store.list('crmtask').filter(t => !t.done);
+const crmDueCount = () => crmTasksOpen().filter(t => (t.due || '') <= today()).length;
+
+/* ---------- customer edit ---------- */
+function crmEditCustomer(c, after){
+  const r = (c && c.rec) || {};
+  formModal(c && c.rec ? 'Edit customer' : (c ? 'Customer details' : 'New customer'), [
+    {k:'name', label:'Customer / company name', req:true}, {k:'phone', label:'Phone (WhatsApp)', half:true}, {k:'email', label:'Email', half:true},
+    {k:'address', label:'Address', type:'textarea', rows:2},
+    {k:'tags', label:'Tags (comma separated) — ' + CRM_TAGS.join(', '), ph:'e.g. Fleet, VIP'},
+    {k:'source', label:'How they found us', ph:'e.g. Referral, Instagram, walk-in', half:true}, {k:'birthday', label:'Birthday / anniversary', type:'date', half:true},
+    {k:'notes', label:'Notes', type:'textarea', rows:3}
+  ], {name:r.name || (c && c.name) || '', phone:r.phone || (c && c.phone) || '', email:r.email || (c && c.email) || '', address:r.address || (c && c.address) || '', tags:(r.tags || (c && c.tags) || []).join(', '), source:r.source || '', birthday:r.birthday || '', notes:r.notes || ''}, v => {
+    const key = (c && c.key) || crmKey(v.name);
+    if(!key){ toast('Enter a name.', true); return false; }
+    const ex = Store.list('customer').find(x => x.key === key);
+    const rec = Object.assign({}, ex || {id:crmId('cus'), key, createdAt:nowIso(), createdBy:myName() || 'Staff'}, {name:v.name, phone:v.phone, email:v.email, address:v.address,
+      tags:v.tags.split(',').map(s => s.trim()).filter(Boolean).map(s => CRM_TAGS.find(t => lc(t) === lc(s)) || s), source:v.source, birthday:v.birthday, notes:v.notes, updatedAt:nowIso(), updatedBy:myName() || 'Staff'});
+    Store.put('customer', rec); toast('Customer saved.'); crmOpen = key; if(after) after(); else renderCrm();
+  });
+}
+function crmAddNote(key, name){
+  formModal('Add a note — ' + name, [{k:'text', label:'Note', type:'textarea', rows:4, req:true, ph:'e.g. Spoke with the fleet manager; they want a quote for 10 Hilux brake jobs.'}], {}, v => {
+    Store.put('crmnote', {id:crmId('cn'), custKey:key, custName:name, text:v.text, at:nowIso(), by:myName() || 'Staff'}); toast('Note added.'); renderCrm(); });
+}
+function crmEditTask(t, preset){
+  t = t || {}; preset = preset || {};
+  const fields = [{k:'custName', label:'Customer', type:'list', list:'rfCrmCustList', req:true}, {k:'title', label:'What to do', req:true, ph:'e.g. Call about the Hilux brake quote'},
+    {k:'kind', label:'Type', type:'select', opts:TASK_KINDS, half:true}, {k:'due', label:'Due date', type:'date', half:true, req:true},
+    {k:'assignee', label:'Who will do it', ph:'e.g. Abiodun'}, {k:'notes', label:'Notes', type:'textarea', rows:2}];
+  formModal(t.id ? 'Edit follow-up' : 'New follow-up', fields, {custName:t.custName || preset.custName || '', title:t.title || '', kind:t.kind || 'Call', due:t.due || addDays(today(), 1), assignee:t.assignee || myName() || '', notes:t.notes || ''}, v => {
+    const rec = Object.assign({}, t.id ? t : {id:crmId('task'), createdAt:nowIso(), createdBy:myName() || 'Staff', done:false}, v, {custKey:crmKey(v.custName), updatedAt:nowIso()});
+    Store.put('crmtask', rec); toast('Follow-up saved.'); renderCrm();
+  }, t.id ? {label:'Delete', fn:async () => { if(await askConfirm('Delete this follow-up?')){ Store.remove('crmtask', t.id); renderCrm(); } }} : null);
+}
+function crmDoneTask(t){
+  formModal('Done — ' + t.title, [{k:'outcome', label:'What happened?', type:'textarea', rows:3, ph:'e.g. They approved the quote; job booked for Monday.'}, {k:'next', label:'Next follow-up date (optional)', type:'date'}], {}, v => {
+    Store.put('crmtask', Object.assign({}, t, {done:true, doneAt:nowIso(), doneBy:myName() || 'Staff', outcome:v.outcome}));
+    if(v.next) Store.put('crmtask', {id:crmId('task'), custKey:t.custKey, custName:t.custName, title:t.title, kind:t.kind, due:v.next, assignee:t.assignee, done:false, createdAt:nowIso(), createdBy:myName() || 'Staff'});
+    toast('Follow-up done.'); renderCrm();
+  });
+}
+function crmEditDeal(d, preset){
+  d = d || {}; preset = preset || {};
+  formModal(d.id ? 'Edit deal' : 'New deal / lead', [
+    {k:'title', label:'Deal', req:true, ph:'e.g. Fleet tyre management — 50 tipper trucks'}, {k:'custName', label:'Customer / prospect', type:'list', list:'rfCrmCustList', req:true},
+    {k:'contact', label:'Contact person & phone', ph:'e.g. Mr. Okafor 0803…'}, {k:'value', label:'Value (₦)', type:'number', half:true}, {k:'stage', label:'Stage', type:'select', opts:DEAL_STAGES, half:true},
+    {k:'close', label:'Expected decision date', type:'date', half:true}, {k:'owner', label:'Owner', half:true}, {k:'notes', label:'Notes', type:'textarea', rows:3},
+    {k:'lostReason', label:'If lost: why?', ph:'e.g. Price, chose another vendor'}
+  ], {title:d.title || '', custName:d.custName || preset.custName || '', contact:d.contact || '', value:d.value || '', stage:d.stage || 'New lead', close:d.close || '', owner:d.owner || myName() || '', notes:d.notes || '', lostReason:d.lostReason || ''}, v => {
+    const h = (d.history || []).slice(-30); if(v.stage !== d.stage) h.push({at:nowIso(), by:myName() || 'Staff', stage:v.stage});
+    const rec = Object.assign({}, d.id ? d : {id:crmId('deal'), createdAt:nowIso(), createdBy:myName() || 'Staff'}, v, {custKey:crmKey(v.custName), value:N(v.value), history:h, updatedAt:nowIso()});
+    if(/Won|Lost/.test(v.stage) && !d.closedAt) rec.closedAt = today();
+    Store.put('deal', rec); toast('Deal saved.'); renderCrm();
+  }, d.id ? {label:'Delete', fn:async () => { if(await askConfirm('Delete this deal?')){ Store.remove('deal', d.id); renderCrm(); } }} : null);
+}
+
+/* ---------- screens ---------- */
+function renderCrm(){
+  const v = $('view-crm'); if(!v) return;
+  if(segState.crm){ crmSeg = segState.crm; delete segState.crm; if(crmSeg === 'cust') crmOpen = null; }
+  if(mode === 'cloud' && !can('cashier')){ v.innerHTML = wrap('CUSTOMERS (CRM)', '<p class="rf-note">The CRM is for the owner, manager and cashier.</p>', true); return; }
+  const idx = crmIndex();
+  let dl = $('rfCrmCustList'); if(!dl){ dl = document.createElement('datalist'); dl.id = 'rfCrmCustList'; document.body.appendChild(dl); }
+  dl.innerHTML = [...idx.values()].map(c => `<option value="${esc(c.name)}">`).join('');
+  const due = crmDueCount();
+  let h = seg('crm', [['cust', 'Customers'], ['tasks', 'Follow-ups' + (due ? ' (' + due + ')' : '')], ['pipe', 'Sales pipeline'], ['wb', 'Win-back']], crmSeg);
+  if(crmSeg === 'tasks') h += crmTasksHtml();
+  else if(crmSeg === 'pipe') h += crmPipeHtml();
+  else if(crmSeg === 'wb') h += crmWbHtml(idx);
+  else h += crmOpen && idx.has(crmOpen) ? crmProfileHtml(idx.get(crmOpen)) : crmListHtml(idx);
+  v.innerHTML = h; bindCrm(v, idx);
+}
+function crmListHtml(idx){
+  let all = [...idx.values()];
+  const total = all.length;
+  if(crmTag) all = all.filter(c => c.tags.includes(crmTag));
+  if(crmQ){ const q = lc(crmQ); all = all.filter(c => lc([c.name, c.phone, c.email, ...c.vehicles.keys(), ...c.tags].join(' ')).includes(q)); }
+  all.sort((a, b) => String(b.last || b.rec && b.rec.createdAt || '').localeCompare(String(a.last || a.rec && a.rec.createdAt || '')));
+  const owed = [...idx.values()].reduce((s, c) => s + c.owed, 0), active = [...idx.values()].filter(c => c.last >= addDays(today(), -90)).length;
+  let h = `<div class="card"><h2 class="red">CUSTOMERS</h2><div class="crm-kpis"><div class="rf-kpi"><div class="l">Customers</div><div class="v">${total}</div></div><div class="rf-kpi"><div class="l">Seen in last 90 days</div><div class="v pos">${active}</div></div><div class="rf-kpi"><div class="l">Owed to us</div><div class="v ${owed ? 'neg' : ''}">${money(owed)}</div></div><div class="rf-kpi"><div class="l">Follow-ups due</div><div class="v ${crmDueCount() ? 'neg' : ''}">${crmDueCount()}</div></div></div>
+    <div class="rf-tools"><button class="rf-btn green" id="crmNew">＋ New customer</button><input id="crmQ" placeholder="Search name, phone, plate number…" value="${esc(crmQ)}" style="flex:1;min-width:150px">
+    <select id="crmTagF"><option value="">All tags</option>${CRM_TAGS.map(t => `<option${crmTag === t ? ' selected' : ''}>${t}</option>`).join('')}</select></div>`;
+  h += all.slice(0, 150).map(c => `<div class="rf-row" data-crmopen="${esc(c.key)}" style="cursor:pointer"><div class="t"><span>${esc(c.name)}</span><span>${c.owed > 0.01 ? `<span class="rf-badge red">owes ${money(c.owed)}</span>` : ''}</span></div>
+    <div class="m">${c.tags.map(t => `<span class="crm-tag ${esc(t)}">${esc(t)}</span>`).join('')}${esc(c.phone || 'no phone')} · ${c.vehicles.size} vehicle${c.vehicles.size === 1 ? '' : 's'} · ${c.jobs} job${c.jobs === 1 ? '' : 's'}${c.spent ? ' · spent ' + money(c.spent) : ''}</div>
+    <div class="m">${c.last ? 'Last visit ' + esc(fmtDate(c.last)) : 'No visits yet'}</div></div>`).join('') || `<div class="rf-empty">${crmQ || crmTag ? 'No customers match.' : 'No customers yet. They appear here automatically from job cards and invoices.'}</div>`;
+  if(all.length > 150) h += `<p class="rf-note">Showing 150 of ${all.length}. Search to find others.</p>`;
+  return h + '</div>';
+}
+function crmProfileHtml(c){
+  const notes = Store.list('crmnote').filter(n => n.custKey === c.key);
+  const tasks = Store.list('crmtask').filter(t => t.custKey === c.key);
+  const deals = Store.list('deal').filter(d => d.custKey === c.key);
+  const letters = Store.list('letter').filter(l => crmKey(l.toOrg) === c.key || crmKey(l.toName) === c.key);
+  const rcts = Store.list('receipt').filter(r => crmKey(r.custName) === c.key);
+  const avg = c.jobs ? c.spent / Math.max(1, c.docs.filter(isInv).length) : 0;
+  let h = `<div class="card"><div class="rf-tools"><button class="rf-btn grey" id="crmBack">‹ All customers</button></div>
+    <h2 class="red" style="margin-top:6px">${esc(c.name)}</h2><div>${c.tags.map(t => `<span class="crm-tag ${esc(t)}">${esc(t)}</span>`).join('')}</div>
+    <div class="rf-note" style="margin-top:6px">${c.phone ? '📞 ' + esc(c.phone) : 'No phone saved'}${c.email ? ' · ✉ ' + esc(c.email) : ''}${c.address ? '<br>' + esc(c.address) : ''}${c.rec && c.rec.source ? '<br>Found us: ' + esc(c.rec.source) : ''}${c.rec && c.rec.birthday ? ' · Birthday: ' + esc(fmtDate(c.rec.birthday)) : ''}</div>
+    ${c.rec && c.rec.notes ? `<div class="rf-note" style="background:#fffbea;border-radius:8px;padding:8px;white-space:pre-wrap">${esc(c.rec.notes)}</div>` : ''}
+    ${consentOf(c.phone) === 'opted-out' ? '<div class="rf-note" style="color:#c0392b">⚠ This customer asked not to receive WhatsApp messages.</div>' : ''}
+    <div class="crm-kpis"><div class="rf-kpi"><div class="l">Total spent</div><div class="v">${money(c.spent)}</div></div><div class="rf-kpi"><div class="l">Owed to us</div><div class="v ${c.owed > 0.01 ? 'neg' : 'pos'}">${money(c.owed)}</div></div><div class="rf-kpi"><div class="l">Jobs</div><div class="v">${c.jobs}</div></div><div class="rf-kpi"><div class="l">Average invoice</div><div class="v">${money(avg)}</div></div><div class="rf-kpi"><div class="l">Customer since</div><div class="v" style="font-size:15px">${esc(c.first ? fmtDate(c.first) : '—')}</div></div><div class="rf-kpi"><div class="l">Last visit</div><div class="v" style="font-size:15px">${esc(c.last ? fmtDate(c.last) : '—')}</div></div></div>
+    <div class="rf-tools" style="flex-wrap:wrap">${c.phone ? `<button class="rf-btn wa" id="crmWa">💬 WhatsApp</button><a class="rf-btn grey" href="tel:${esc(c.phone)}">📞 Call</a>` : ''}<button class="rf-btn" id="crmEdit">✎ Edit details</button><button class="rf-btn grey" id="crmNote">＋ Note</button><button class="rf-btn grey" id="crmTask">＋ Follow-up</button><button class="rf-btn grey" id="crmDeal">＋ Deal</button><button class="rf-btn grey" id="crmJob">＋ Job card</button><button class="rf-btn grey" id="crmLetter">＋ Letter</button></div></div>`;
+  const open = tasks.filter(t => !t.done).sort((a, b) => String(a.due).localeCompare(String(b.due)));
+  if(open.length) h += wrap('FOLLOW-UPS', open.map(crmTaskRow).join(''));
+  if(deals.length) h += wrap('DEALS', deals.map(d => `<div class="rf-row" data-crmdeal="${esc(d.id)}" style="cursor:pointer"><div class="t"><span>${esc(d.title)}</span><span class="rf-badge ${d.stage === 'Won' ? 'green' : d.stage === 'Lost' ? 'red' : 'blue'}">${esc(d.stage)}</span></div><div class="m">${money(d.value)}${d.close ? ' · decision ' + esc(fmtDate(d.close)) : ''}</div></div>`).join(''));
+  if(c.vehicles.size) h += wrap('VEHICLES', [...c.vehicles.entries()].map(([reg, mm]) => { const vd = c.docs.filter(d => String(d.vehReg || '').toUpperCase().replace(/\s+/g, ' ') === reg); const lastV = vd[vd.length - 1];
+    return `<div class="rf-row"><div class="t"><span>${esc(reg)}</span><span class="rf-note" style="margin:0">${vd.length} visit${vd.length === 1 ? '' : 's'}</span></div><div class="m">${esc(mm || '')}${lastV ? ' · last ' + esc(fmtDate(lastV.date)) + (lastV.vehKm ? ' at ' + N(lastV.vehKm).toLocaleString() + ' km' : '') : ''}</div></div>`; }).join(''));
+  const tl = [];
+  c.docs.forEach(d => tl.push({at:d.date, cls:'', html:`<b>${esc(d.type)} ${esc(d.docNo || '')}</b> · ${money(d.grand)}${isInv(d) ? ' · ' + esc(d.status || '') : ''}${d.vehReg ? ' · ' + esc(d.vehReg) : ''} <a href="#" data-crmdoc="${esc(d.id)}">Open</a>`}));
+  rcts.forEach(r => tl.push({at:r.payDate || String(r.issuedAt).slice(0, 10), cls:'', html:`🧾 Receipt ${esc(r.no)} · ${money(r.amount)} · ${esc(r.type)} · ${esc(r.method || '')}`}));
+  letters.forEach(l => tl.push({at:l.date, cls:'', html:`✉ Letter ${esc(l.ref || '')} · ${esc(l.subject || '')}`}));
+  notes.forEach(n => tl.push({at:n.at, cls:'note', html:`📝 ${esc(n.text).replace(/\n/g, '<br>')} <span class="d">— ${esc(n.by || '')}</span>`}));
+  tasks.filter(t => t.done).forEach(t => tl.push({at:t.doneAt, cls:'task', html:`✓ ${esc(t.kind || '')}: ${esc(t.title)}${t.outcome ? ' — ' + esc(t.outcome) : ''} <span class="d">— ${esc(t.doneBy || '')}</span>`}));
+  tl.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  h += wrap('HISTORY', tl.length ? `<div class="crm-tl">${tl.slice(0, 120).map(x => `<div class="it ${x.cls}"><div class="d">${esc(fmtDate(String(x.at).slice(0, 10)))}</div>${x.html}</div>`).join('')}</div>` : '<div class="rf-empty">No history yet.</div>');
+  return h;
+}
+function crmTaskRow(t){
+  const late = t.due < today(), dueToday = t.due === today();
+  return `<div class="rf-row"${late ? ' style="border-left:3px solid #E30613"' : ''}><div class="t"><span>${esc(t.kind || 'Call')}: ${esc(t.title)}</span><span class="rf-badge ${late ? 'red' : dueToday ? 'amber' : ''}">${late ? 'Overdue · ' : dueToday ? 'Today · ' : ''}${esc(fmtDate(t.due))}</span></div>
+    <div class="m"><a href="#" data-crmopenk="${esc(t.custKey)}">${esc(t.custName)}</a>${t.assignee ? ' · ' + esc(t.assignee) : ''}${t.notes ? ' · ' + esc(t.notes) : ''}</div>
+    <div class="acts"><button class="rf-btn green" data-crmdone="${esc(t.id)}">✓ Done</button><button class="rf-btn grey" data-crmtask="${esc(t.id)}">Edit</button></div></div>`;
+}
+function crmTasksHtml(){
+  const open = crmTasksOpen().sort((a, b) => String(a.due).localeCompare(String(b.due)));
+  const late = open.filter(t => t.due < today()), tod = open.filter(t => t.due === today()), soon = open.filter(t => t.due > today());
+  const recent = Store.list('crmtask').filter(t => t.done).sort((a, b) => String(b.doneAt).localeCompare(String(a.doneAt))).slice(0, 15);
+  let h = `<div class="card"><h2 class="red">FOLLOW-UPS</h2><div class="rf-tools"><button class="rf-btn green" id="crmTaskNew">＋ New follow-up</button></div>`;
+  const grp = (t, list) => list.length ? `<h3 style="color:#1F3864;margin:12px 0 6px">${t} (${list.length})</h3>` + list.map(crmTaskRow).join('') : '';
+  h += grp('Overdue', late) + grp('Today', tod) + grp('Coming up', soon);
+  if(!open.length) h += '<div class="rf-empty">Nothing to follow up. Add one from a customer page or here.</div>';
+  h += '</div>';
+  if(recent.length) h += wrap('RECENTLY DONE', recent.map(t => `<div class="rf-row"><div class="t"><span>✓ ${esc(t.title)}</span><span class="rf-note" style="margin:0">${esc(fmtDate(String(t.doneAt).slice(0, 10)))}</span></div><div class="m">${esc(t.custName)}${t.outcome ? ' — ' + esc(t.outcome) : ''}</div></div>`).join(''));
+  return h;
+}
+function crmPipeHtml(){
+  const deals = Store.list('deal');
+  const openD = deals.filter(d => !/Won|Lost/.test(d.stage)), m = today().slice(0, 7);
+  const wonM = deals.filter(d => d.stage === 'Won' && String(d.closedAt || '').slice(0, 7) === m);
+  const closed = deals.filter(d => /Won|Lost/.test(d.stage)), rate = closed.length ? Math.round(100 * closed.filter(d => d.stage === 'Won').length / closed.length) : null;
+  let h = `<div class="card"><h2 class="red">SALES PIPELINE</h2><div class="crm-kpis"><div class="rf-kpi"><div class="l">Open deals</div><div class="v">${openD.length}</div></div><div class="rf-kpi"><div class="l">Open pipeline value</div><div class="v">${money(openD.reduce((s, d) => s + N(d.value), 0))}</div></div><div class="rf-kpi"><div class="l">Won this month</div><div class="v pos">${money(wonM.reduce((s, d) => s + N(d.value), 0))}</div></div><div class="rf-kpi"><div class="l">Win rate</div><div class="v">${rate == null ? '—' : rate + '%'}</div></div></div>
+    <div class="rf-tools"><button class="rf-btn green" id="crmDealNew">＋ New deal / lead</button></div><p class="rf-note">Tap a deal to update it. Tap ➜ to move it to the next stage. Swipe sideways to see all stages.</p>
+    <div class="crm-board">${DEAL_STAGES.map(s => { const ds = deals.filter(d => d.stage === s).sort((a, b) => N(b.value) - N(a.value));
+      return `<div class="crm-col"><h3><span>${esc(s)}</span><span>${ds.length}</span></h3><div class="rf-note" style="margin:0 4px 6px">${money(ds.reduce((x, d) => x + N(d.value), 0))}</div>${ds.map(d => `<div class="crm-deal" data-crmdeal="${esc(d.id)}"><b>${esc(d.title)}</b><div class="m">${esc(d.custName)}</div><div class="v">${money(d.value)}</div>${d.close ? `<div class="m${d.close < today() && !/Won|Lost/.test(s) ? '" style="color:#c0392b' : ''}">Decision ${esc(fmtDate(d.close))}</div>` : ''}${/Won|Lost/.test(s) ? '' : `<div style="text-align:right"><button class="rf-btn grey" style="padding:3px 10px" data-crmnext="${esc(d.id)}" title="Next stage">➜</button></div>`}</div>`).join('') || '<div class="rf-note" style="margin:4px">—</div>'}</div>`; }).join('')}</div></div>`;
+  return h;
+}
+function crmWbList(idx){
+  const cut = addDays(today(), -crmWbDays);
+  let list = [...idx.values()].filter(c => c.phone && c.docs.length);
+  if(crmWbMode === 'owed') list = list.filter(c => c.owed > 0.01);
+  else if(crmWbMode === 'service'){ const due = new Set(Store.list('reminder').filter(r => r.status === 'pending' && r.dueDate <= addDays(today(), 14)).map(r => crmKey(r.name || r.custName || ''))); list = list.filter(c => due.has(c.key)); }
+  else list = list.filter(c => c.last && c.last < cut);
+  return list.sort((a, b) => String(a.last).localeCompare(String(b.last)));
+}
+function crmWbTemplate(){
+  const b = brandVals(), def = {lapsed:'Hello {name}, it has been a while since we last serviced your {vehicle} at ' + b.biz + '. We would love to see you again — reply here to book a check-up this week.',
+    owed:'Hello {name}, this is a friendly reminder from ' + b.biz + ' that {balance} is still outstanding on your account. Kindly reply if you need the invoice again. Thank you.',
+    service:'Hello {name}, your {vehicle} is due for its next service at ' + b.biz + '. Reply here to book a convenient time.'};
+  let t = ''; try{ t = localStorage.getItem('rf3_crm_wb_' + crmWbMode) || ''; }catch(e){}
+  return t || def[crmWbMode];
+}
+function crmWbFill(tpl, c){ const veh = [...c.vehicles.entries()][c.vehicles.size - 1]; return tpl.replace(/\{name\}/g, c.name).replace(/\{vehicle\}/g, veh ? (veh[1] || veh[0]) : 'vehicle').replace(/\{balance\}/g, money(c.owed)).replace(/\{last\}/g, fmtDate(c.last)); }
+function crmWbHtml(idx){
+  const list = crmWbList(idx), blocked = list.filter(c => consentOf(c.phone) === 'opted-out');
+  const sentToday = new Set(Store.list('crmnote').filter(n => n.campaign && String(n.at).slice(0, 10) === today()).map(n => n.custKey));
+  const go = list.filter(c => consentOf(c.phone) !== 'opted-out');
+  let h = `<div class="card"><h2 class="red">WIN-BACK & CAMPAIGNS</h2><div class="rf-tools" style="flex-wrap:wrap"><select id="crmWbMode"><option value="lapsed"${crmWbMode === 'lapsed' ? ' selected' : ''}>Not seen recently</option><option value="owed"${crmWbMode === 'owed' ? ' selected' : ''}>Owe us money</option><option value="service"${crmWbMode === 'service' ? ' selected' : ''}>Service due (next 14 days)</option></select>
+    ${crmWbMode === 'lapsed' ? `<select id="crmWbDays">${[[60, '2 months'], [90, '3 months'], [180, '6 months'], [365, '12 months']].map(([d, l]) => `<option value="${d}"${crmWbDays === d ? ' selected' : ''}>Not seen in ${l}</option>`).join('')}</select>` : ''}</div>
+    <div class="field"><label for="crmWbMsg">Message (use {name}, {vehicle}, {balance}, {last})</label><textarea id="crmWbMsg" rows="4">${esc(crmWbTemplate())}</textarea></div>
+    <p class="rf-note">${go.length} customer${go.length === 1 ? '' : 's'} to message${blocked.length ? ` · ${blocked.length} left out because they opted out of WhatsApp` : ''}. Tap 💬 on each one: WhatsApp opens with the message ready, you press send. Each send is noted on the customer’s history.</p>`;
+  h += go.map(c => `<div class="rf-row"><div class="t"><span>${esc(c.name)}</span>${sentToday.has(c.key) ? '<span class="rf-badge green">sent today</span>' : ''}</div><div class="m">${esc(c.phone)} · last visit ${esc(fmtDate(c.last))}${c.owed > 0.01 ? ' · owes ' + money(c.owed) : ''}</div>
+    <div class="acts"><button class="rf-btn wa" data-crmwb="${esc(c.key)}">💬 Send</button><button class="rf-btn grey" data-crmopenk="${esc(c.key)}">Profile</button></div></div>`).join('') || '<div class="rf-empty">No customers in this group.</div>';
+  return h + '</div>';
+}
+function bindCrm(v, idx){
+  const on = (id, f) => { const el = $(id); if(el) el.onclick = f; };
+  on('crmNew', () => crmEditCustomer(null));
+  if($('crmQ')){ let t; $('crmQ').oninput = e => { clearTimeout(t); t = setTimeout(() => { crmQ = e.target.value; renderCrm(); const q = $('crmQ'); if(q){ q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }, 300); }; }
+  if($('crmTagF')) $('crmTagF').onchange = e => { crmTag = e.target.value; renderCrm(); };
+  bind(v, '[data-crmopen]', 'click', el => { crmOpen = el.dataset.crmopen; renderCrm(); window.scrollTo({top:0}); });
+  bind(v, '[data-crmopenk]', 'click', (el, e) => { e.preventDefault(); crmOpen = el.dataset.crmopenk; crmSeg = 'cust'; renderCrm(); window.scrollTo({top:0}); });
+  bind(v, '[data-crmdoc]', 'click', (el, e) => { e.preventDefault(); Promise.resolve(window.loadDoc(el.dataset.crmdoc)).then(() => showTab('doc')); });
+  bind(v, '[data-crmdone]', 'click', el => { const t = Store.get('crmtask', el.dataset.crmdone); if(t) crmDoneTask(t); });
+  bind(v, '[data-crmtask]', 'click', el => { const t = Store.get('crmtask', el.dataset.crmtask); if(t) crmEditTask(t); });
+  bind(v, '[data-crmdeal]', 'click', (el, e) => { if(e.target.closest('[data-crmnext]')) return; const d = Store.get('deal', el.dataset.crmdeal); if(d) crmEditDeal(d); });
+  bind(v, '[data-crmnext]', 'click', (el, e) => { e.stopPropagation(); const d = Store.get('deal', el.dataset.crmnext); if(!d) return; const i = DEAL_STAGES.indexOf(d.stage); const nx = DEAL_STAGES[Math.min(i + 1, 4)];
+    const h = (d.history || []).slice(-30); h.push({at:nowIso(), by:myName() || 'Staff', stage:nx}); Store.put('deal', Object.assign({}, d, {stage:nx, history:h, updatedAt:nowIso(), closedAt:nx === 'Won' ? today() : d.closedAt})); toast('Moved to ' + nx + '.'); renderCrm(); });
+  on('crmTaskNew', () => crmEditTask(null));
+  on('crmDealNew', () => crmEditDeal(null));
+  const c = crmOpen && idx.get(crmOpen);
+  if(c){
+    on('crmBack', () => { crmOpen = null; renderCrm(); });
+    on('crmEdit', () => crmEditCustomer(c));
+    on('crmNote', () => crmAddNote(c.key, c.name));
+    on('crmTask', () => crmEditTask(null, {custName:c.name}));
+    on('crmDeal', () => crmEditDeal(null, {custName:c.name}));
+    on('crmWa', () => openWhatsApp(c.phone, 'Hello ' + c.name + ', '));
+    on('crmJob', async () => { await newDocType('JOB CARD'); const set = (id, val) => { const el = $(id); if(el && val){ el.value = val; el.dispatchEvent(new Event('input', {bubbles:true})); } }; set('custName', c.name); set('custPhone', c.phone); set('custAddress', c.address); });
+    on('crmLetter', () => { showTab('letters'); newLetter('blank'); const corp = /limited|ltd|plc|company|services|enterprise|nig/i.test(c.name) || c.tags.some(t => /Fleet|Corporate|Garage|Insurance/.test(t)); Object.assign(letDoc, corp ? {toOrg:c.name} : {toName:c.name}, {toAddr:c.address || ''}); renderLetters(); });
+  }
+  if($('crmWbMode')) $('crmWbMode').onchange = e => { crmWbMode = e.target.value; renderCrm(); };
+  if($('crmWbDays')) $('crmWbDays').onchange = e => { crmWbDays = N(e.target.value); renderCrm(); };
+  if($('crmWbMsg')) $('crmWbMsg').onchange = e => { try{ localStorage.setItem('rf3_crm_wb_' + crmWbMode, e.target.value); }catch(x){} };
+  bind(v, '[data-crmwb]', 'click', el => { const cu = idx.get(el.dataset.crmwb); if(!cu) return; if(consentOf(cu.phone) === 'opted-out'){ toast('This customer opted out of WhatsApp messages.', true); return; }
+    const text = crmWbFill(($('crmWbMsg') || {}).value || crmWbTemplate(), cu); openWhatsApp(cu.phone, text);
+    Store.put('crmnote', {id:crmId('cn'), custKey:cu.key, custName:cu.name, text:'WhatsApp campaign message sent: ' + text, at:nowIso(), by:myName() || 'Staff', campaign:crmWbMode}); setTimeout(renderCrm, 300); });
+}
+listeners.push(kinds => { if(curTab === 'crm' && (kinds.includes('*') || kinds.some(k => ['doc', 'customer', 'crmtask', 'crmnote', 'deal'].includes(k)))){ const a = document.activeElement; if(!(a && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && $('view-crm').contains(a))) renderCrm(); } });
+Object.assign(window.RF = window.RF || {}, {crmIndex, crmKey, crmWbList: () => crmWbList(crmIndex()), crmDueCount, nairaWords});
+/* ===================== v5.7 CUSTOMER TRACKING PAGE: staff post updates, photos, videos =====================
+   Customers open track.html, enter plate number + name, and see stage, promised date, these updates and (if shared) the quotation.
+   Kind 'jobupdate' {rootId, text, media:[{url,path,type,name}], at, by}. Media goes to Supabase Storage bucket 'rf-media'. */
+const MEDIA_BUCKET = 'rf-media', VIDEO_MAX = 50 * 1024 * 1024;
+let cuDraft = {}, cuBusy = false, cuFiles = [];
+function portalBase(){ return location.href.split('#')[0].split('?')[0].replace(/\/partner\/[^/]*$/, '/').replace(/[^/]*$/, ''); }
+function portalLink(reg){ const r = String(reg || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); return portalBase() + 'track.html' + (r ? '?reg=' + encodeURIComponent(r) : ''); }
+function portalMsg(d){ return 'Hello ' + (d.custName || '') + ', you can follow the progress of your vehicle ' + (d.vehReg || '') + ' at ' + brandVals().biz + ' here: ' + portalLink(d.vehReg) +
+  '\nType your plate number and the name on your job card (' + (d.custName || '') + ') to see photos, videos, the quotation and the expected completion date.'; }
+async function uploadMedia(blob, rootId, ext, type){
+  const path = 'jobs/' + String(rootId).replace(/[^A-Za-z0-9_-]/g, '') + '/' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10) + '.' + ext;
+  const r = await fetch(Cloud.cfg.url + '/storage/v1/object/' + MEDIA_BUCKET + '/' + path, {method:'POST', headers:{apikey:Cloud.cfg.key, Authorization:'Bearer ' + await Cloud.token(), 'Content-Type':type, 'x-upsert':'false', 'cache-control':'31536000'}, body:blob});
+  if(!r.ok){ let m = ''; try{ const j = await r.json(); m = j.message || j.error || ''; }catch(e){} throw new Error(/bucket not found|not found/i.test(m) ? 'Photo storage is not set up yet — run the v5.7 database update (PART 1) in Supabase.' : /row-level|policy|unauthor/i.test(m) ? 'Your login is not allowed to upload photos.' : /size|large/i.test(m) ? 'The file is too large (limit 50 MB).' : 'Upload failed: ' + (m || r.status)); }
+  return {url:Cloud.cfg.url + '/storage/v1/object/public/' + MEDIA_BUCKET + '/' + path, path, type:/^video/.test(type) ? 'video' : 'image'};
+}
+async function deleteMedia(paths){
+  if(!paths.length || mode !== 'cloud') return;
+  try{ await fetch(Cloud.cfg.url + '/storage/v1/object/' + MEDIA_BUCKET, {method:'DELETE', headers:{apikey:Cloud.cfg.key, Authorization:'Bearer ' + await Cloud.token(), 'Content-Type':'application/json'}, body:JSON.stringify({prefixes:paths})}); }catch(e){}
+}
+function cuUpdates(root){ return Store.list('jobupdate').filter(u => u.rootId === root).sort((a, b) => String(b.at).localeCompare(String(a.at))); }
+function renderCustUpdates(force){
+  if(EDITION === 'partner') return;
+  const jt = $('rfJobTrack'); if(!jt) return;
+  let box = $('rfCustUpd');
+  if(!box){ box = document.createElement('div'); box.className = 'card no-print'; box.id = 'rfCustUpd'; jt.parentNode.insertBefore(box, jt.nextSibling); }
+  const id = ($('docNo').dataset || {}).savedId;
+  if(!id || jt.style.display === 'none'){ box.style.display = 'none'; return; }
+  if(!force && (cuBusy || cuFiles.length || (document.activeElement && box.contains(document.activeElement)))) return;
+  box.style.display = 'block';
+  const root = jobRoot(id), rd = Store.get('doc', root) || Store.get('doc', id) || {}, t = trackOf(root) || {stage:'Received'};
+  if(mode !== 'cloud'){ box.innerHTML = `<h2>CUSTOMER UPDATES</h2><p class="rf-note">Customers can follow their car’s progress, photos and videos online once this device is connected to the team database (Setup → Team database).</p>`; return; }
+  const isJC = rd.type === 'JOB CARD';
+  const quotes = jobFamily(root).map(x => Store.get('doc', x)).filter(d => d && d.type === 'QUOTATION' && d.status !== 'Cancelled').sort((a, b) => String(b.date + b.savedAt).localeCompare(String(a.date + a.savedAt)));
+  const q = quotes.find(x => x.id === t.portalQuote) || quotes[0];
+  const ups = cuUpdates(root);
+  let h = `<h2>CUSTOMER UPDATES <span class="rf-note" style="font-weight:normal">— seen by the customer</span></h2>`;
+  if(!isJC) h += `<p class="rf-note">⚠ The customer page shows jobs that start with a <b>job card</b>. This job has no job card, so the customer will not find it.</p>`;
+  h += `<p class="rf-note" style="margin-top:0">Customer sees: <b>${esc(t.stage || 'Received')}</b> · expected completion <b>${t.promised ? esc(fmtDate(t.promised)) : 'not set'}</b> (set both in JOB STATUS above).</p>`;
+  h += q ? `<label class="chk" style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="cuQuote"${t.portalQuote === q.id ? ' checked' : ''}> Show quotation <b>${esc(q.docNo)}</b> (${money(q.grand)}) to the customer</label>`
+    : `<p class="rf-note">No quotation on this job yet. After you convert the job card to a quotation, you can show it to the customer here.</p>`;
+  h += `<div class="field"><label for="cuText">Write an update</label><textarea id="cuText" rows="3" placeholder="e.g. Front brake discs measured at 22.1 mm — below limit. New discs ordered, fitting tomorrow.">${esc(cuDraft[root] || '')}</textarea></div>
+    <div class="rf-tools" style="flex-wrap:wrap"><label class="rf-btn grey" style="cursor:pointer">📷 Add photos / videos<input type="file" id="cuFiles" accept="image/*,video/*" multiple style="display:none"></label><span class="rf-note" id="cuPicked" style="margin:0"></span></div>
+    <div class="rf-tools"><button class="rf-btn green big" id="cuPost">Post update</button><span class="rf-note" id="cuStatus" style="margin:0"></span></div>
+    <p class="rf-note">Photos are reduced before upload. Videos up to 50 MB — keep them short (under 1 minute).</p>`;
+  h += ups.length ? ups.map(u => `<div class="rf-row"><div class="t"><span>${esc(fmtDate(String(u.at).slice(0, 10)))} ${esc(String(u.at).slice(11, 16))}</span><span class="rf-note" style="margin:0">${esc(u.by || '')}</span></div>
+      ${u.text ? `<div class="m" style="white-space:pre-wrap">${esc(u.text)}</div>` : ''}
+      ${(u.media || []).length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">${u.media.map(m => m.type === 'video' ? `<video src="${esc(m.url)}" controls playsinline preload="metadata" style="width:120px;height:90px;border-radius:8px;background:#000"></video>` : `<a href="${esc(m.url)}" target="_blank" rel="noopener"><img src="${esc(m.url)}" alt="" style="width:90px;height:90px;object-fit:cover;border-radius:8px"></a>`).join('')}</div>` : ''}
+      ${can('cashier') || u.by === myName() ? `<div class="acts"><button class="rf-btn red" data-cudel="${esc(u.id)}">Remove</button></div>` : ''}</div>`).join('')
+    : '<div class="rf-empty">No updates posted yet.</div>';
+  h += `<div class="rf-tools" style="margin-top:10px;flex-wrap:wrap">${rd.custPhone ? '<button class="rf-btn wa" id="cuSend">💬 Send tracking link to customer</button>' : ''}<button class="rf-btn grey" id="cuCopy">📋 Copy tracking link</button></div>
+    <p class="rf-note">The customer opens <b>${esc(portalLink(rd.vehReg))}</b> and types the plate number and the name on the job card (<b>${esc(rd.custName || '—')}</b>).</p>`;
+  box.innerHTML = h;
+  bindCustUpdates(box, root, rd, q);
+}
+function bindCustUpdates(box, root, rd, q){
+  if($('cuText')) $('cuText').oninput = e => { cuDraft[root] = e.target.value; };
+  if($('cuQuote')) $('cuQuote').onchange = e => { saveTrack(root, {portalQuote:e.target.checked ? q.id : ''}, e.target.checked ? 'Quotation ' + q.docNo + ' shown to customer' : 'Quotation hidden from customer'); toast(e.target.checked ? 'The customer can now see the quotation.' : 'Quotation hidden from the customer.'); renderCustUpdates(true); };
+  if($('cuFiles')) $('cuFiles').onchange = e => {
+    const fs = [...(e.target.files || [])], big = fs.filter(f => /^video/.test(f.type) && f.size > VIDEO_MAX);
+    if(big.length) toast(big.map(f => f.name).join(', ') + ' is over 50 MB — trim the video or record at a lower quality.', true);
+    cuFiles = fs.filter(f => /^(image|video)\//.test(f.type) && !big.includes(f));
+    const ni = cuFiles.filter(f => /^image/.test(f.type)).length, nv = cuFiles.length - ni;
+    $('cuPicked').textContent = cuFiles.length ? [ni ? ni + ' photo' + (ni === 1 ? '' : 's') : '', nv ? nv + ' video' + (nv === 1 ? '' : 's') : ''].filter(Boolean).join(' and ') + ' ready to post' : '';
+  };
+  if($('cuPost')) $('cuPost').onclick = async () => {
+    const text = ($('cuText').value || '').trim();
+    if(!text && !cuFiles.length){ toast('Write an update or add a photo or video.', true); return; }
+    cuBusy = true; $('cuPost').disabled = true; const st = $('cuStatus');
+    const media = [];
+    try{
+      for(let i = 0; i < cuFiles.length; i++){
+        const f = cuFiles[i]; st.textContent = 'Uploading ' + (i + 1) + ' of ' + cuFiles.length + '…';
+        if(/^image/.test(f.type)){ const du = await resizeImage(f, 1600); const blob = await (await fetch(du)).blob(); media.push(Object.assign(await uploadMedia(blob, root, 'jpg', 'image/jpeg'), {name:f.name})); }
+        else { const ext = (f.name.split('.').pop() || 'mp4').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) || 'mp4'; media.push(Object.assign(await uploadMedia(f, root, ext, f.type || 'video/mp4'), {name:f.name})); }
+      }
+      Store.put('jobupdate', {id:'ju_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), rootId:root, docNo:rd.docNo || '', vehReg:rd.vehReg || '', custName:rd.custName || '', text, media, at:nowIso(), by:myName() || 'Staff'});
+      cuDraft[root] = ''; cuFiles = []; toast('Update posted — the customer can see it now.');
+    }catch(e){ toast(e.message || String(e), true); await deleteMedia(media.map(m => m.path)); }
+    finally{ cuBusy = false; renderCustUpdates(true); }
+  };
+  box.querySelectorAll('[data-cudel]').forEach(b => b.onclick = async () => { const u = Store.get('jobupdate', b.dataset.cudel); if(!u) return;
+    if(!(await askConfirm('Remove this update' + ((u.media || []).length ? ' and its ' + u.media.length + ' photo/video file(s)' : '') + '? The customer will no longer see it.'))) return;
+    Store.remove('jobupdate', u.id); deleteMedia((u.media || []).map(m => m.path).filter(Boolean)); toast('Update removed.'); renderCustUpdates(true); });
+  if($('cuSend')) $('cuSend').onclick = () => openWhatsApp(rd.custPhone, portalMsg(rd));
+  if($('cuCopy')) $('cuCopy').onclick = () => { const t = portalMsg(rd); (navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('Tracking link and instructions copied.'), () => toast(portalLink(rd.vehReg))); };
+}
+const prevRenderJobTrack23 = renderJobTrack;
+renderJobTrack = function(force){ prevRenderJobTrack23(force); try{ renderCustUpdates(); }catch(e){ console.error(e); } };
+listeners.push(kinds => { if(curTab === 'doc' && (kinds.includes('*') || kinds.includes('jobupdate') || kinds.includes('jobtrack'))) try{ renderCustUpdates(); }catch(e){} });
+Object.assign(window.RF = window.RF || {}, {portalLink, renderCustUpdates});
+/* ===================== v5.8 COMPACT PRINT / PDF FOR INVOICES & QUOTATIONS =====================
+   Keeps the letterhead header (#printHeader) and the brands footer (#rfMakesFooter); everything in between
+   prints as one compact block: details side by side, one items table, totals beside notes & bank, signatures. */
+const RFC_TYPES = ['INVOICE', 'QUOTATION'];
+function compactOn(){ let off = false; try{ off = localStorage.getItem('rf3_compact_off') === '1'; }catch(e){} return !off && RFC_TYPES.includes(($('docType') || {}).value); }
+(function(){ if($('rfCompactCss')) return; const s = document.createElement('style'); s.id = 'rfCompactCss';
+  s.textContent = `#rfCompact{display:none}
+  @media print{body.rfc-on #rfCompact{display:block}body.rfc-on #view-doc > *:not(#printHeader):not(#rfCompact):not(#rfMakesFooter){display:none !important}}
+  body.pdf-mode.rfc-on #rfCompact{display:block}body.pdf-mode.rfc-on #view-doc > *:not(#printHeader):not(#rfCompact):not(#rfMakesFooter){display:none !important}
+  .rfc{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1d1d1f;line-height:1.35;margin:4px 0 6px}
+  .rfc *{box-sizing:border-box}
+  .rfc-bar{display:flex;justify-content:space-between;align-items:center;background:#1F3864;color:#fff;padding:5px 10px;border-radius:4px}
+  .rfc-bar b{font-size:16px;letter-spacing:2px}.rfc-bar span{font-size:11px}
+  .rfc-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:8px;margin-top:6px}
+  .rfc-box{border:1px solid #c9d1df;border-radius:4px;padding:5px 8px}
+  .rfc-h{font-size:9px;font-weight:bold;letter-spacing:.6px;color:#E30613;text-transform:uppercase;margin-bottom:2px}
+  .rfc-kv{display:grid;grid-template-columns:auto 1fr;gap:1px 8px}.rfc-kv span:nth-child(odd){color:#5b6472}.rfc-kv span:nth-child(even){font-weight:bold}
+  .rfc-veh{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #c9d1df;border-radius:4px;margin-top:6px}
+  .rfc-veh div{padding:4px 8px;border-left:1px solid #e1e6ee}.rfc-veh div:first-child{border-left:0}.rfc-veh i{display:block;font-style:normal;font-size:9px;color:#5b6472;text-transform:uppercase;letter-spacing:.4px}.rfc-veh b{font-size:11px}
+  .rfc table{width:100%;border-collapse:collapse;margin-top:6px}
+  .rfc th{background:#1F3864;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.4px;padding:4px 6px;text-align:left}
+  .rfc td{padding:3px 6px;border-bottom:1px solid #e3e7ee;vertical-align:top}
+  .rfc tr:nth-child(even) td{background:#f7f9fc}
+  .rfc td,.rfc th{text-align:left !important;vertical-align:middle}.rfc .n{text-align:right !important;white-space:nowrap;font-variant-numeric:tabular-nums}.rfc .c{text-align:center !important}
+  .rfc .ty{font-size:9.5px;color:#5b6472}
+  .rfc-sec td{background:#eef2f8 !important;font-weight:bold;color:#1F3864;font-size:10px}
+  .rfc-low{display:grid;grid-template-columns:1fr 0.9fr;gap:8px;margin-top:6px;align-items:start}
+  .rfc-tot{border:1px solid #1F3864;border-radius:4px;overflow:hidden}
+  .rfc-tot div{display:flex;justify-content:space-between;padding:3px 8px;border-bottom:1px solid #e3e7ee}.rfc-tot div:last-child{border-bottom:0}
+  .rfc-tot .g{background:#1F3864;color:#fff;font-weight:bold;font-size:13px}.rfc-tot .b{font-weight:bold;color:#E30613}
+  .rfc-note{white-space:pre-wrap;font-size:10px;color:#333}
+  .rfc-sign{display:flex;gap:30px;margin-top:70px}.rfc-sign>div{flex:1;border-top:1px solid #333;text-align:center;font-size:9.5px;color:#555;padding-top:2px;position:relative}
+  .rfc tr,.rfc-box,.rfc-veh,.rfc-tot,.rfc-sign,.rfc-bar,.rfc-low{break-inside:avoid;page-break-inside:avoid}.rfc thead{display:table-header-group}.rfc-sign{break-before:avoid}
+  .rfc-sign img{position:absolute;bottom:100%;left:0;right:0;margin:0 auto 1px;height:64px;max-width:200px;object-fit:contain}`;
+  document.head.appendChild(s); })();
+function compactHtml(){
+  const d = collectDoc(), c = curCompany();
+  Object.keys(d).forEach(k => { if(d[k] === 'undefined' || d[k] === 'null') d[k] = ''; });
+  const _u = 0, type = d.type, isQ = type === 'QUOTATION';
+  const parts = (d.parts || []).filter(l => l && (l.desc || N(l.price))), lab = (d.labour || []).filter(l => l && (l.desc || N(l.price)));
+  const fmtQ = q => { const n = N(q); return n ? (Number.isInteger(n) ? n : n.toFixed(2)) : '1'; };
+  const row = (l, i, ty) => `<tr><td class="c">${i}</td><td class="ty">${ty}</td><td>${esc(l.desc || '')}</td><td class="c">${esc(fmtQ(l.qty))}</td><td class="n">${money(N(l.price))}</td><td class="n">${money((N(l.qty) || 1) * N(l.price))}</td></tr>`;
+  let n = 0;
+  const items = (parts.length ? (lab.length ? '<tr class="rfc-sec"><td colspan="6">Parts &amp; materials</td></tr>' : '') + parts.map(l => row(l, ++n, 'Part')).join('') : '') +
+    (lab.length ? (parts.length ? '<tr class="rfc-sec"><td colspan="6">Labour &amp; services</td></tr>' : '') + lab.map(l => row(l, ++n, 'Service')).join('') : '');
+  const valid = isQ ? (() => { const x = new Date((d.date || today()) + 'T12:00'); x.setDate(x.getDate() + 7); return x.toISOString().slice(0, 10); })() : '';
+  const kv = [['No.', d.docNo], ['Date', fmtDate(d.date)], isQ ? ['Valid until', fmtDate(valid)] : null, d.paymentTerms ? ['Payment terms', d.paymentTerms] : null,
+    d.serviceOrderNo ? ['Service order', d.serviceOrderNo] : null, d.tinNumber ? ['TIN', d.tinNumber] : null].filter(Boolean);
+  const mk = String(d.vehMakeModel || '');
+  const veh = [['Reg. no.', d.vehReg], ['Make / model', mk], ['VIN / chassis', d.vehVin], ['Odometer', d.vehKm ? N(d.vehKm).toLocaleString() + ' km' : '']];
+  const paid = N(d.paymentsReceived), grand = N(d.grand), adv = N(d.advanceAmt);
+  let tot = `<div><span>Subtotal</span><span>${money(d.subtotal)}</span></div>`;
+  if(N(d.discountAmt)) tot += `<div><span>Discount (${N(d.discountPct)}%)</span><span>−${money(d.discountAmt)}</span></div>`;
+  if(N(d.discountAmt) && N(d.vat)) tot += `<div><span>Net total</span><span>${money(d.afterDiscount)}</span></div>`;
+  if(N(d.vat)) tot += `<div><span>VAT (7.5%)</span><span>${money(d.vat)}</span></div>`;
+  tot += `<div class="g"><span>${isQ ? 'TOTAL' : 'INVOICE TOTAL'}</span><span>${money(grand)}</span></div>`;
+  if(adv) tot += `<div><span>Advance payment (${N(d.advancePct)}%)</span><span>${money(adv)}</span></div><div class="b"><span>Balance after advance</span><span>${money(d.balanceDue)}</span></div>`;
+  if(!isQ && paid) tot += `<div><span>Paid to date</span><span>${money(paid)}</span></div><div class="b"><span>Balance due</span><span>${money(Math.max(0, grand - paid))}</span></div>`;
+  const war = $('rfWarrantyNote'), warT = war && war.style.display !== 'none' ? war.textContent.trim() : '';
+  const notes = [String(d.notes || '').trim(), warT].filter(Boolean).join('\n');
+  const bank = [d.bankName, d.bankAcctName, d.bankAcctNo].some(Boolean) ? `<div class="rfc-box" style="margin-top:6px"><div class="rfc-h">Bank details</div><div class="rfc-kv"><span>Bank</span><span>${esc(d.bankName || '')}</span><span>Account name</span><span>${esc(d.bankAcctName || '')}</span><span>Account no.</span><span>${esc(d.bankAcctNo || '')}</span></div></div>` : '';
+  return `<div class="rfc">
+    <div class="rfc-bar"><b>${esc(type)}</b><span>${esc(d.docNo || '')} · ${esc(fmtDate(d.date))}</span></div>
+    <div class="rfc-grid"><div class="rfc-box"><div class="rfc-h">${isQ ? 'Prepared for' : 'Bill to'}</div><b style="font-size:12px">${esc(d.custName || '')}</b>${d.custAddress ? '<div>' + esc(d.custAddress) + '</div>' : ''}<div>${[d.custContact ? 'Attn: ' + esc(d.custContact) : '', d.custPhone ? 'Tel: ' + esc(d.custPhone) : ''].filter(Boolean).join(' · ')}</div></div>
+      <div class="rfc-box"><div class="rfc-h">${isQ ? 'Quotation details' : 'Invoice details'}</div><div class="rfc-kv">${kv.map(([k, v]) => `<span>${k}</span><span>${esc(v || '')}</span>`).join('')}</div></div></div>
+    ${veh.some(v => v[1]) ? `<div class="rfc-veh">${veh.map(([k, v]) => `<div><i>${k}</i><b>${esc(v || '—')}</b></div>`).join('')}</div>` : ''}
+    <table><thead><tr><th class="c" style="width:4%">#</th><th style="width:9%">Type</th><th>Description</th><th class="c" style="width:7%">Qty</th><th class="n" style="width:15%">Unit price</th><th class="n" style="width:16%">Amount</th></tr></thead><tbody>${items || '<tr><td colspan="6" class="c">—</td></tr>'}</tbody></table>
+    <div class="rfc-low"><div>${notes ? `<div class="rfc-box"><div class="rfc-h">Notes</div><div class="rfc-note">${esc(notes)}</div></div>` : ''}${bank}</div><div class="rfc-tot">${tot}</div></div>
+    <div class="rfc-sign"><div>${c.signature ? `<img src="${esc(c.signature)}" alt="">` : ''}Authorized signature · ${esc(c.name || '')}</div><div>Customer acceptance</div></div>
+  </div>`;
+}
+function compactPrep(){
+  const on = compactOn(); document.body.classList.toggle('rfc-on', on);
+  if(!on) return;
+  let box = $('rfCompact'); const hd = $('printHeader');
+  if(!box && hd){ box = document.createElement('div'); box.id = 'rfCompact'; hd.after(box); }
+  if(box) box.innerHTML = compactHtml();
+}
+function compactDone(){ document.body.classList.remove('rfc-on'); }
+window.addEventListener('beforeprint', () => { if(curTab === 'doc') try{ compactPrep(); }catch(e){ console.error(e); compactDone(); } });
+window.addEventListener('afterprint', compactDone);
+const prevGenPdf24 = window.generatePdfBlob;
+window.generatePdfBlob = async function(){
+  try{ compactPrep(); }catch(e){ console.error(e); compactDone(); }
+  try{ return await prevGenPdf24.apply(this, arguments); } finally { compactDone(); }
+};
+Object.assign(window.RF = window.RF || {}, {compactPrep, compactHtml});
 
 })();
 </script>
