@@ -1100,7 +1100,7 @@ function calcAll(){
   // Advance is based on the discounted net amount, before VAT.
   const advanceAmt = netAfterDiscount * (advancePct/100);
   const vatOn = document.getElementById('vatToggle').value === 'YES';
-  const vat = vatOn ? netAfterDiscount * 0.075 : 0;
+  const vat = vatOn ? netAfterDiscount * (window.RF_VAT_RATE != null ? window.RF_VAT_RATE : 0.075) : 0;
   const grand = netAfterDiscount + vat;
   const balanceDue = Math.max(0, grand - advanceAmt);
 
@@ -2574,10 +2574,12 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
    database (Supabase) with staff logins and roles (admin / cashier / technician).
    Without the team database everything still works on this device alone, as before.
 =========================================================================================== */
-const RF_VERSION = '5.8';
+const RF_VERSION = '6.1';
 /* Multi-user team database: built, but switched OFF for now. Set to true to turn it back on. */
 const EDITION = 'robotik';      // build script switches this to 'partner' for the partner-garage app
 const TEAM_ENABLED = EDITION === 'robotik' && true;
+const GARAGE = EDITION !== 'robotik';   // partner + global editions: the garage's own app, own branding
+const GLOBAL = EDITION === 'global';
 /* Robotik Fix's own database: partner garages send orders here (insert-only) and read the trade price list. */
 const HQ = {url:'https://pispfmbqjxewonqswcmr.supabase.co', key:'sb_publishable_20-hdWEag4Y2LjGDO7dwyw_UNXAoODo', name:'Robotik Fix', wa:'2347240013457',
   appUrl:'https://robotikfix.github.io/robotik-fix-app/'};
@@ -2936,6 +2938,64 @@ window.tryAutoConnect = function(){
   prevAuto();
   if(localStorage.getItem(LS_SHEETS_URL)) mode = 'sheets';
 };
+/* ===================== MULTI-CURRENCY & TAX PER COMPANY / BRANCH =====================
+   Each company profile carries currency (ISO code), taxName (VAT/GST/IVA…) and taxRate (%).
+   Money shows in the currency of the company you are working in (the company selector). */
+const CURRENCIES = {
+  NGN:['₦', 'Nigerian naira'], USD:['$', 'US dollar'], EUR:['€', 'Euro'], GBP:['£', 'British pound'], GHS:['GH₵', 'Ghanaian cedi'], KES:['KSh', 'Kenyan shilling'],
+  ZAR:['R', 'South African rand'], XOF:['CFA', 'West African CFA franc', 0], XAF:['FCFA', 'Central African CFA franc', 0], EGP:['E£', 'Egyptian pound'],
+  MAD:['MAD', 'Moroccan dirham'], DZD:['DA', 'Algerian dinar'], TND:['DT', 'Tunisian dinar', 3], AED:['AED', 'UAE dirham'], SAR:['SAR', 'Saudi riyal'], QAR:['QAR', 'Qatari riyal'],
+  TZS:['TSh', 'Tanzanian shilling'], UGX:['USh', 'Ugandan shilling', 0], RWF:['RF', 'Rwandan franc', 0], ZMW:['ZK', 'Zambian kwacha'], ETB:['Br', 'Ethiopian birr'],
+  AOA:['Kz', 'Angolan kwanza'], MZN:['MT', 'Mozambican metical'], CVE:['Esc', 'Cape Verdean escudo'], LRD:['L$', 'Liberian dollar'], SLE:['Le', 'Sierra Leonean leone'], GMD:['D', 'Gambian dalasi'],
+  BRL:['R$', 'Brazilian real'], MXN:['MX$', 'Mexican peso'], COP:['COL$', 'Colombian peso'], ARS:['AR$', 'Argentine peso'], CLP:['CLP$', 'Chilean peso', 0], PEN:['S/', 'Peruvian sol'],
+  CAD:['CA$', 'Canadian dollar'], AUD:['A$', 'Australian dollar'], INR:['₹', 'Indian rupee'], PKR:['Rs', 'Pakistani rupee'], PHP:['₱', 'Philippine peso'], CNY:['¥', 'Chinese yuan'], JPY:['¥', 'Japanese yen', 0]
+};
+const REGION_CUR = {NG:'NGN', US:'USD', GB:'GBP', GH:'GHS', KE:'KES', ZA:'ZAR', SN:'XOF', CI:'XOF', BJ:'XOF', TG:'XOF', BF:'XOF', ML:'XOF', NE:'XOF', CM:'XAF', GA:'XAF', CG:'XAF', TD:'XAF',
+  EG:'EGP', MA:'MAD', DZ:'DZD', TN:'TND', AE:'AED', SA:'SAR', QA:'QAR', TZ:'TZS', UG:'UGX', RW:'RWF', ZM:'ZMW', ET:'ETB', AO:'AOA', MZ:'MZN', CV:'CVE', LR:'LRD', SL:'SLE', GM:'GMD',
+  BR:'BRL', PT:'EUR', ES:'EUR', FR:'EUR', DE:'EUR', IT:'EUR', NL:'EUR', BE:'EUR', IE:'EUR', MX:'MXN', CO:'COP', AR:'ARS', CL:'CLP', PE:'PEN', CA:'CAD', AU:'AUD', IN:'INR', PK:'PKR', PH:'PHP', CN:'CNY', JP:'JPY'};
+function guessCurrency(){ try{ const loc = Intl.DateTimeFormat().resolvedOptions().locale || navigator.language || ''; const m = /-([A-Z]{2})\b/.exec(loc) || /-([A-Z]{2})\b/.exec(navigator.language || ''); return (m && REGION_CUR[m[1]]) || 'USD'; }catch(e){ return 'USD'; } }
+function activeCoIdx(){ const s = document.getElementById('companySelect'); const i = s ? parseInt(s.value, 10) || 0 : 0; return Math.min(Math.max(0, i), Math.max(0, COMPANIES.length - 1)); }
+function coOf(idx){ return COMPANIES[idx == null ? activeCoIdx() : Math.min(Math.max(0, parseInt(idx, 10) || 0), Math.max(0, COMPANIES.length - 1))] || COMPANIES[0] || {}; }
+function curCode(idx){ const c = coOf(idx).currency; return CURRENCIES[c] ? c : (EDITION === 'global' ? 'USD' : 'NGN'); }
+function curSym(idx){ return CURRENCIES[curCode(idx)][0]; }
+function curDecimals(idx){ const d = CURRENCIES[curCode(idx)][2]; return d == null ? 2 : d; }
+function taxRate(idx){ const c = coOf(idx); const r = c.taxRate; return r === '' || r == null || !isFinite(parseFloat(r)) ? (EDITION === 'global' ? 0 : 7.5) : parseFloat(r); }
+function taxName(idx){ return (coOf(idx).taxName || 'VAT').trim() || 'VAT'; }
+function vatRate(idx){ return taxRate(idx) / 100; }
+function vatLabel(idx){ return taxName(idx) + ' (' + +taxRate(idx).toFixed(3) + '%)'; }
+function fmtCur(n, idx){
+  n = Number.isFinite(Number(n)) ? Number(n) : 0; const code = curCode(idx), dp = curDecimals(idx), sym = CURRENCIES[code][0];
+  const s = Math.abs(n).toLocaleString(code === 'NGN' ? 'en-NG' : 'en-US', {minimumFractionDigits:dp, maximumFractionDigits:dp});
+  return (n < 0 ? '-' : '') + (sym.length > 1 && /^[A-Z]/.test(sym) ? sym + ' ' : sym) + s;
+}
+window.fmtMoney = function(n){ return fmtCur(n); };
+/* tax labels and rate on the main document screen */
+function applyTaxUi(){
+  window.RF_VAT_RATE = vatRate();
+  const tg = document.querySelector('.vatToggle > span'); if(tg) tg.textContent = 'Apply ' + vatLabel() + '?';
+  const vr = document.querySelector('#vatRow > span'); if(vr) vr.textContent = vatLabel();
+}
+/* replace the ₦ sign in labels with the active currency; originals are remembered so switching company switches back */
+const curOrig = new WeakMap(); let curObs = null, curSweeping = false;
+function fixText(t, sym){ let o = curOrig.get(t); if(o == null){ if(t.nodeValue.indexOf('₦') < 0) return; o = t.nodeValue; curOrig.set(t, o); } const v = o.replace(/₦/g, sym); if(t.nodeValue !== v) t.nodeValue = v; }
+function sweepCurrency(root){
+  const sym = curSym(); curSweeping = true;
+  try{
+    const w = document.createTreeWalker(root || document.body, NodeFilter.SHOW_TEXT);
+    let t; while((t = w.nextNode())) fixText(t, sym);
+    (root && root.querySelectorAll ? root : document).querySelectorAll('input[placeholder],textarea[placeholder]').forEach(el => { if(el.dataset.curPh == null){ if(el.placeholder.indexOf('₦') < 0) return; el.dataset.curPh = el.placeholder; } el.placeholder = el.dataset.curPh.replace(/₦/g, sym); });
+  } finally { curSweeping = false; }
+}
+function startCurrencyWatch(){
+  if(curObs || !window.MutationObserver) return;
+  curObs = new MutationObserver(ms => { if(curSweeping) return; const sym = curSym(); curSweeping = true;
+    try{ for(const m of ms){ if(m.type === 'characterData'){ if(m.target.nodeValue.indexOf('₦') >= 0){ curOrig.delete(m.target); fixText(m.target, sym); } } else m.addedNodes.forEach(n => { if(n.nodeType === 1){ curSweeping = false; sweepCurrency(n); curSweeping = true; } else if(n.nodeType === 3) fixText(n, sym); }); } }
+    finally{ curSweeping = false; } });
+  curObs.observe(document.body, {childList:true, subtree:true, characterData:true});
+}
+function refreshCurrency(){ applyTaxUi(); sweepCurrency(); try{ if(typeof calcAll === 'function') calcAll(); }catch(e){} }
+document.addEventListener('change', e => { if(e.target && e.target.id === 'companySelect') setTimeout(refreshCurrency, 0); });
+window.addEventListener('load', () => { startCurrencyWatch(); refreshCurrency(); });
 
 /* ===================== Team database: start, sign in, approve, disconnect ===================== */
 async function startCloud(){
@@ -3311,11 +3371,13 @@ function decorateDocScreen(){
 }
 
 /* ===================== Navigation ===================== */
-const TABS = EDITION === 'partner'
+const TABS = GLOBAL
+  ? [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['crm', 'Customers'], ['stock', 'Stock'], ['book', 'Bookings'], ['workshop', 'Workshop'], ['money', 'Money'], ['fleet', 'Fleet'], ['sync', 'Setup']]
+  : EDITION === 'partner'
   ? [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['stock', 'Stock'], ['workshop', 'Workshop'], ['money', 'Money'], ['send', '📦 Send to Robotik Fix'], ['sync', 'Setup']]
   : [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['crm', 'Customers', 'need-cashier'], ['stock', 'Stock'], ['book', 'Bookings'], ['workshop', 'Workshop'],
      ['money', 'Money', 'need-cashier'], ['partners', 'Partners', 'need-cashier'], ['fleet', 'Fleet'], ['team', 'Team'], ['sync', 'Setup']];
-const NEW_VIEWS = EDITION === 'partner' ? ['home', 'crm', 'letters', 'quick', 'send', 'system', 'assets', 'tech', 'stock', 'workshop', 'money'] : ['home', 'crm', 'letters', 'system', 'plugins', 'assets', 'tech', 'quick', 'stock', 'book', 'workshop', 'money', 'partners', 'fleet', 'team'];
+const NEW_VIEWS = GLOBAL ? ['home', 'crm', 'letters', 'quick', 'system', 'assets', 'tech', 'stock', 'book', 'workshop', 'money', 'fleet'] : EDITION === 'partner' ? ['home', 'crm', 'letters', 'quick', 'send', 'system', 'assets', 'tech', 'stock', 'workshop', 'money'] : ['home', 'crm', 'letters', 'system', 'plugins', 'assets', 'tech', 'quick', 'stock', 'book', 'workshop', 'money', 'partners', 'fleet', 'team'];
 let curTab = 'doc';
 const segState = {partners:'orders', stock:'items', book:'day', money:'reports', fleet:'trucks', team:'clock', workshop:'jobs'};
 function buildNav(){
@@ -3466,7 +3528,7 @@ function editLabour(id){
 function labourHtml(){
   const list = Store.list('labour').sort((a, b) => (a.cat || '').localeCompare(b.cat || '') || a.name.localeCompare(b.name));
   let h = '<p class="rf-note">Your own standard prices. Typing a job on a quotation fills in the price; jobs with a reminder period create a WhatsApp service reminder when invoiced.</p>';
-  if(can('admin')) h += `<div class="rf-tools"><button class="rf-btn big" id="rfAddLab">＋ Add job</button>${list.length ? '' : '<button class="rf-btn grey" id="rfSeedLab">Load suggested ' + (EDITION === 'partner' ? '' : 'Robotik Fix ') + 'jobs</button>'}</div>`;
+  if(can('admin')) h += `<div class="rf-tools"><button class="rf-btn big" id="rfAddLab">＋ Add job</button>${list.length ? '' : '<button class="rf-btn grey" id="rfSeedLab">Load suggested ' + (GARAGE ? '' : 'Robotik Fix ') + 'jobs</button>'}</div>`;
   let cat = '';
   list.forEach(l => { if(l.cat !== cat){ cat = l.cat; h += `<div class="rf-note" style="font-weight:bold;color:#1F3864;margin-top:10px">${esc(cat || 'Other')}</div>`; }
     h += `<div class="rf-row"><div class="t"><span>${esc(l.name)}</span><span>${N(l.price) ? money(l.price) : '<span class="rf-badge amber">set price</span>'}</span></div><div class="m">${N(l.hours) ? N(l.hours) + ' h std · ' : ''}${N(l.remindDays) || N(l.remindKm) ? '🔔 remind ' + [N(l.remindDays) ? N(l.remindDays) + ' days' : '', N(l.remindKm) ? N(l.remindKm).toLocaleString() + ' km' : ''].filter(Boolean).join(' / ') : 'no reminder'}</div>${can('admin') ? `<div class="acts"><button class="rf-btn grey" data-lab="${esc(l.id)}">Edit</button></div>` : ''}</div>`; });
@@ -4064,7 +4126,7 @@ function newQuick(tpl){
 function quickTotals(lines, discountPct, vatOn, paid){
   const sub = lines.reduce((s, l) => s + Math.max(0, N(l.qty)) * Math.max(0, N(l.price)), 0);
   const dPct = Math.min(100, Math.max(0, N(discountPct))), dAmt = sub * dPct / 100, after = sub - dAmt;
-  const vat = vatOn ? after * 0.075 : 0, grand = after + vat;
+  const vat = vatOn ? after * vatRate() : 0, grand = after + vat;
   return {sub, dPct, dAmt, after, vat, grand, paid, balance:Math.max(0, grand - paid)};
 }
 function readLines(){
@@ -4075,7 +4137,7 @@ function updateQuickTotals(){
   document.querySelectorAll('#qLines tbody tr:not(.q-sep)').forEach(tr => { tr.querySelector('.qt').textContent = N(tr.querySelector('.qq').value) && N(tr.querySelector('.qp').value) ? money(N(tr.querySelector('.qq').value) * N(tr.querySelector('.qp').value)) : ''; });
   const paidBefore = (quickDoc.paymentEntries || []).reduce((s, p) => s + N(p.amount), 0);
   const t = quickTotals(readLines(), $('qDisc').value, $('qVat').value === 'YES', paidBefore + Math.max(0, N($('qPayAmt').value)));
-  $('qTotals').innerHTML = `<div class="row"><span>Subtotal</span><b>${money(t.sub)}</b></div>${t.dAmt ? `<div class="row"><span>Discount (${t.dPct}%)</span><b>−${money(t.dAmt)}</b></div>` : ''}${t.vat ? `<div class="row"><span>VAT 7.5%</span><b>${money(t.vat)}</b></div>` : ''}<div class="row grand"><span>TOTAL</span><span>${money(t.grand)}</span></div><div class="row"><span>Paid${N($('qPayAmt').value) ? ' (incl. payment being added)' : ''}</span><b>${money(t.paid)}</b></div><div class="row"><span>Balance due</span><b style="color:${t.balance > 0 ? '#c0392b' : '#1e8449'}">${money(t.balance)}</b></div>`;
+  $('qTotals').innerHTML = `<div class="row"><span>Subtotal</span><b>${money(t.sub)}</b></div>${t.dAmt ? `<div class="row"><span>Discount (${t.dPct}%)</span><b>−${money(t.dAmt)}</b></div>` : ''}${t.vat ? `<div class="row"><span>${esc(vatLabel())}</span><b>${money(t.vat)}</b></div>` : ''}<div class="row grand"><span>TOTAL</span><span>${money(t.grand)}</span></div><div class="row"><span>Paid${N($('qPayAmt').value) ? ' (incl. payment being added)' : ''}</span><b>${money(t.paid)}</b></div><div class="row"><span>Balance due</span><b style="color:${t.balance > 0 ? '#c0392b' : '#1e8449'}">${money(t.balance)}</b></div>`;
 }
 function lineRow(l){
   if(l.kind === 'sep') return `<tr class="q-sep"><td colspan="4" style="background:#eef1f5;font-weight:bold;color:#1F3864;text-align:left;font-size:11px;padding:6px">${esc(l.desc)} <span style="font-weight:normal;color:#666">— type any extra service in the blank rows</span></td></tr>`;
@@ -4153,7 +4215,7 @@ function renderQuick(){
     <div class="rf-tools" style="margin-top:8px"><button class="rf-btn grey" id="qAddPart">＋ Part line</button><button class="rf-btn" id="qAddLab">＋ Extra service / charge</button>${can('admin') ? '<button class="rf-btn grey" id="qSavePrices">💾 Save these prices as defaults</button>' : ''}</div></div>`;
   // totals & payment
   h += `<div class="card"><h2>TOTALS & PAYMENT</h2>
-    <div class="grid2"><div class="field"><label>Discount %</label><input id="qDisc" type="number" min="0" max="100" value="${esc(d.discountPct || 0)}"></div><div class="field"><label>VAT 7.5%</label><select id="qVat"><option value="NO"${d.vatApplied !== 'YES' ? ' selected' : ''}>No VAT</option><option value="YES"${d.vatApplied === 'YES' ? ' selected' : ''}>Add VAT</option></select></div></div>
+    <div class="grid2"><div class="field"><label>Discount %</label><input id="qDisc" type="number" min="0" max="100" value="${esc(d.discountPct || 0)}"></div><div class="field"><label>${esc(vatLabel())}</label><select id="qVat"><option value="NO"${d.vatApplied !== 'YES' ? ' selected' : ''}>No VAT</option><option value="YES"${d.vatApplied === 'YES' ? ' selected' : ''}>Add VAT</option></select></div></div>
     ${(d.paymentEntries || []).length ? '<table class="rf-table"><tr><th>Payment</th><th>Method</th><th class="n">₦</th></tr>' + d.paymentEntries.map(p => `<tr><td>${esc(fmtDate(p.date))}</td><td>${esc(p.method || '')} ${esc(p.reference || '')}</td><td class="n">${money(p.amount)}</td></tr>`).join('') + '</table>' + (d.id && Store.get('doc', d.id) ? `<div class="rf-tools rf-noprint"><button class="rf-btn" type="button" data-qrct="${esc(d.id)}">🧾 Payment receipt</button></div>` : '') : ''}
     <div class="grid2"><div class="field"><label>${paidBefore ? 'Add another payment (₦)' : 'Amount paid now (₦)'}</label><input id="qPayAmt" type="number" min="0" inputmode="decimal" placeholder="0"></div><div class="field"><label>Method</label><select id="qPayMethod">${qOpts(['Cash', 'Bank transfer', 'Card payment (POS)', 'Paystack / online', 'Credit (pay later)'], 'Bank transfer')}</select></div></div>
     <div class="field"><label>Transfer / receipt reference</label><input id="qPayRef"></div>
@@ -4295,7 +4357,7 @@ async function saveQuick(silentIfUnchanged){
 /* ---------- printable / PDF layout (plain text, no form boxes, so nothing goes missing in the PDF) ---------- */
 function quickHtml(doc){
   const q = doc.quick, T = QUICK[q.tpl], x = q.extra || {}, co = COMPANIES[N(doc.companyIdx)] || COMPANIES[0];
-  const logo = ($('logoImg') || {}).src || '';
+  const logo = bizLogo();
   const cell = (l, v, w) => `<td${w ? ` style="width:${w}"` : ''}><span class="l">${esc(l)}</span><span class="v">${esc(v || '')}</span></td>`;
   let h = `<div class="qi"><style>
     .qi{font-family:Arial,Helvetica,sans-serif;color:#111;font-size:11.5px;width:100%;box-sizing:border-box;background:#fff}
@@ -4314,7 +4376,7 @@ function quickHtml(doc){
     .qi .foot{display:flex;gap:16px;margin-top:10px}.qi .foot>div{flex:1}.qi .sig{display:flex;gap:30px;margin-top:130px}.qi .sig div{flex:1;border-top:1px solid #111;padding-top:3px;font-size:10px;text-align:center;color:#444}
     .qi .note{font-size:10px;color:#333;margin-top:6px;white-space:pre-wrap}.qi .bad{color:#c0392b;font-weight:bold}
   </style>
-  <div class="hd"><img src="${esc(logo)}" alt=""><div class="co"><b>${esc(co.name)}</b><div>${esc(co.address)}</div><div>Tel: ${esc(co.tel)} · ${esc(co.email)}</div>${co.tin ? `<div>TIN: ${esc(co.tin)}</div>` : ''}</div>
+  ${GARAGE && (docStyle().header !== 'classic' || docStyle().color !== '#1F3864') ? docHeaderHtml(co) + '<div class="hd" style="border:0;justify-content:flex-end;padding:6px 0 0">' : `<div class="hd">${logo ? `<img src="${esc(logo)}" alt="">` : ''}<div class="co"><b>${esc(co.name)}</b><div>${esc(co.address)}</div><div>Tel: ${esc(co.tel)} · ${esc(co.email)}</div>${co.tin ? `<div>TIN: ${esc(co.tin)}</div>` : ''}</div>`}
   <div class="tt"><h1>${esc(T.title)}</h1><div>No: <b>${esc(doc.docNo)}</b></div><div>Date: <b>${esc(fmtDate(doc.date))}</b></div><div>Status: <b>${esc(doc.status)}</b></div></div></div>`;
   if(q.tpl === 'brake'){
     h += `<table><tr>${cell('Customer (' + (x.custType || '') + ')', doc.custName, '50%')}${cell('Contact person', doc.custContact)}${cell('Phone', doc.custPhone)}</tr>
@@ -4347,7 +4409,7 @@ function quickHtml(doc){
   h += `<table><tr><th class="c" style="width:12%">QUANTITY</th><th>DESCRIPTION</th><th class="n" style="width:18%">PRICE (₦)</th><th class="n" style="width:20%">TOTAL (₦)</th></tr>${lines.map(l => `<tr><td class="c">${esc(l.qty)}</td><td>${esc(l.desc)}</td><td class="n">${N(l.price).toLocaleString('en-NG', {minimumFractionDigits:2})}</td><td class="n">${(N(l.qty) * N(l.price)).toLocaleString('en-NG', {minimumFractionDigits:2})}</td></tr>`).join('')}</table>`;
   const paid = N(doc.paymentsReceived), bal = Math.max(0, N(doc.grand) - paid);
   h += `<div class="foot"><div><div class="sec">PAYMENT DETAILS</div><div style="margin-top:4px">Bank: <b>${esc(doc.bankName || '')}</b><br>Account no: <b>${esc(doc.bankAcctNo || '')}</b><br>Account name: <b>${esc(doc.bankAcctName || '')}</b><br>Reference: <b>${esc(doc.docNo)}</b></div>${(doc.paymentEntries || []).length ? '<div style="margin-top:6px">' + doc.paymentEntries.map(p => `${esc(fmtDate(p.date))} — ${esc(p.method || '')} ${money(p.amount)}`).join('<br>') + '</div>' : ''}</div>
-    <div><table class="tot"><tr><td>Subtotal</td><td class="n">${money(doc.subtotal)}</td></tr>${N(doc.discountAmt) ? `<tr><td>Discount (${N(doc.discountPct)}%)</td><td class="n">−${money(doc.discountAmt)}</td></tr>` : ''}${N(doc.vat) ? `<tr><td>VAT 7.5%</td><td class="n">${money(doc.vat)}</td></tr>` : ''}<tr class="g"><td>TOTAL</td><td class="n">${money(doc.grand)}</td></tr><tr><td>Paid</td><td class="n">${money(paid)}</td></tr><tr><td><b>Balance due</b></td><td class="n"><b>${money(bal)}</b></td></tr></table></div></div>`;
+    <div><table class="tot"><tr><td>Subtotal</td><td class="n">${money(doc.subtotal)}</td></tr>${N(doc.discountAmt) ? `<tr><td>Discount (${N(doc.discountPct)}%)</td><td class="n">−${money(doc.discountAmt)}</td></tr>` : ''}${N(doc.vat) ? `<tr><td>${esc(vatLabel(doc.companyIdx))}</td><td class="n">${money(doc.vat)}</td></tr>` : ''}<tr class="g"><td>TOTAL</td><td class="n">${money(doc.grand)}</td></tr><tr><td>Paid</td><td class="n">${money(paid)}</td></tr><tr><td><b>Balance due</b></td><td class="n"><b>${money(bal)}</b></td></tr></table></div></div>`;
   if(doc.notes) h += `<div class="note">${esc(doc.notes)}</div>`;
   h += `<div class="sig"><div style="position:relative">${co.signature ? `<img src="${esc(co.signature)}" alt="" style="position:absolute;bottom:100%;left:0;right:0;margin:0 auto 2px;height:120px;max-width:300px;object-fit:contain">` : ''}For ${esc(co.name)}</div><div>Customer signature</div></div><div style="text-align:center;margin-top:12px">${footerStripHtml()}</div>${EDITION === 'partner' ? '<div style="text-align:center;font-size:9px;color:#888;margin-top:10px">Powered by Robotik Fix · Lekki, Lagos</div>' : ''}</div>`;
   return h;
@@ -4393,27 +4455,28 @@ window.loadDoc = async function(id){
 const ORIGINAL_LOGO = ($('logoImg') || {}).src || '';
 const ORIGINAL_COMPANIES = COMPANIES.map(c => Object.assign({}, c));
 function brandSetting(){ return Store.setting().brand || null; }
+function bizLogo(){ return GARAGE ? ((brandSetting() || {}).logo || '') : (((brandSetting() || {}).logo) || ($('logoImg') || {}).src || ''); }
 function brandVals(){
   const b = brandSetting(), c = COMPANIES[0] || {};
-  const short = (b && b.short) || (EDITION === 'partner' ? (c.name || 'Our workshop') : 'Robotik Fix');
+  const short = (b && b.short) || (GARAGE ? (c.name || 'Our workshop') : 'Robotik Fix');
   return {biz:short, bizFull:c.name || short, bizAddr:c.address || '', bizPhone:c.tel || '', bizEmail:c.email || ''};
 }
 function applyBrand(){
   const b = brandSetting();
-  const comps = b && Array.isArray(b.companies) && b.companies.filter(c => c && c.name).length ? b.companies.filter(c => c && c.name) : (EDITION === 'partner' ? [{name:'YOUR GARAGE NAME', address:'', tel:'', email:'', bankName:'', bankAcctName:'', bankAcctNo:''}] : ORIGINAL_COMPANIES);
-  COMPANIES.length = 0; comps.forEach(c => { const x = Object.assign({name:'', address:'', tel:'', email:'', tin:'', bankName:'', bankAcctName:'', bankAcctNo:'', signature:''}, c);
+  const comps = b && Array.isArray(b.companies) && b.companies.filter(c => c && c.name).length ? b.companies.filter(c => c && c.name) : (GARAGE ? [{name:'YOUR GARAGE NAME', address:'', tel:'', email:'', bankName:'', bankAcctName:'', bankAcctNo:'', currency:GLOBAL ? guessCurrency() : 'NGN', taxName:'VAT', taxRate:GLOBAL ? '' : 7.5}] : ORIGINAL_COMPANIES);
+  COMPANIES.length = 0; comps.forEach(c => { const x = Object.assign({name:'', branch:'', address:'', tel:'', email:'', tin:'', bankName:'', bankAcctName:'', bankAcctNo:'', signature:'', currency:'', taxName:'VAT', taxRate:''}, c);
     const orig = ORIGINAL_COMPANIES.find(o => lc(o.name) === lc(x.name));   // fill details added later (TIN, Wema account) into older saved settings
     if(orig){ if(!x.tin) x.tin = orig.tin || ''; if(!x.bankAcctNo && orig.bankAcctNo){ x.bankAcctNo = orig.bankAcctNo; x.bankName = x.bankName || orig.bankName; } }
     COMPANIES.push(x); });
   const sel = $('companySelect');
-  if(sel){ const cur = Math.min(N(sel.value), COMPANIES.length - 1); sel.innerHTML = COMPANIES.map((c, i) => `<option value="${i}">${esc(c.name)}</option>`).join(''); sel.value = cur;
+  if(sel){ const cur = Math.min(N(sel.value), COMPANIES.length - 1); sel.innerHTML = COMPANIES.map((c, i) => `<option value="${i}">${esc(c.name + (c.branch ? ' — ' + c.branch : ''))}</option>`).join(''); sel.value = cur;
     if(!$('docNo').dataset.savedId) applyCompany(cur); else { $('companyNameDisplay').textContent = COMPANIES[cur].name; } }
-  const logo = (b && b.logo) || (EDITION === 'partner' ? '' : ORIGINAL_LOGO);
+  const logo = (b && b.logo) || (GARAGE ? '' : ORIGINAL_LOGO);
   document.querySelectorAll('img').forEach(img => { if(img.dataset.rfLogo || img.src === ORIGINAL_LOGO){ img.dataset.rfLogo = 1; if(logo){ img.src = logo; img.style.visibility = ''; } else img.style.visibility = 'hidden'; } });
   const h1 = document.querySelector('.topbar h1') || ($('syncStatus') && $('syncStatus').parentNode);
   if(h1 && h1.firstChild && h1.firstChild.nodeType === 3) h1.firstChild.textContent = brandVals().biz.toUpperCase();
   window.RF_BIZ = brandVals().biz; window.RF_BIZ_FULL = brandVals().bizFull;
-  document.title = brandVals().biz + (EDITION === 'partner' ? ' — Garage Manager' : ' - Workshop Manager');
+  document.title = brandVals().biz + (GLOBAL ? ' — Robotik Garage Manager' : GARAGE ? ' — Garage Manager' : ' - Workshop Manager');
   refreshDocExtras();
   if(EDITION === 'partner' && !$('rfPowered')){
     const tb = $('syncStatus'); if(tb){ const s = document.createElement('div'); s.id = 'rfPowered'; s.style.cssText = 'font-size:10px;opacity:.75;font-weight:normal'; s.textContent = 'Powered by Robotik Fix'; tb.parentNode.appendChild(s); }
@@ -4432,7 +4495,7 @@ const DEFAULT_MAKES = 'Toyota · Lexus · Mitsubishi · Mercedes-Benz · Kia · 
 function footerLogosHtml(b){
   const list = pendingFooter || b.footerLogos || [];
   return `<div class="field" style="margin-top:12px"><label>Vehicle brands footer (job cards, quotations, invoices)</label>
-    <input id="rfFLTitle" value="${esc(b.footerTitle || (EDITION === 'partner' ? '' : 'We service: ' + DEFAULT_MAKES))}" placeholder="e.g. We service: Toyota · Lexus · Mercedes-Benz">
+    <input id="rfFLTitle" value="${esc(b.footerTitle || (GARAGE ? '' : 'We service: ' + DEFAULT_MAKES))}" placeholder="e.g. We service: Toyota · Lexus · Mercedes-Benz">
     <div class="rf-note">This line prints at the bottom of the document. Add logo images below to show them as a row of logos instead (PNG/JPG; each one is shrunk automatically).</div>
     <div id="rfFLList" class="rf-tools" style="margin-top:6px">${list.map((l, i) => `<span style="display:inline-flex;align-items:center;gap:4px;border:1px solid #ddd;border-radius:6px;padding:3px 5px;background:#fff"><img src="${esc(l.img)}" alt="${esc(l.name)}" style="height:28px;max-width:70px"><button class="rf-btn red" data-fld="${i}" type="button" style="padding:2px 6px">✕</button></span>`).join('')}</div>
     <label class="rf-btn grey" style="cursor:pointer;display:inline-block;margin-top:6px">➕ Add logo images<input type="file" accept="image/*" multiple id="rfFLFile" style="display:none"></label></div>`;
@@ -4449,7 +4512,7 @@ function redrawFooterList(){ const box = $('rfFLList'); if(!box) return; const t
 
 /* ---------- signature, TIN and brands footer on the document screen ---------- */
 function footerStripHtml(){
-  const b = brandSetting() || {}, logos = b.footerLogos || [], title = b.footerTitle != null && b.footerTitle !== '' ? b.footerTitle : (EDITION === 'partner' ? '' : 'We service: ' + DEFAULT_MAKES);
+  const b = brandSetting() || {}, logos = b.footerLogos || [], title = b.footerTitle != null && b.footerTitle !== '' ? b.footerTitle : (GARAGE ? '' : 'We service: ' + DEFAULT_MAKES);
   if(!logos.length && !title) return '';
   if(logos.length) return `<div style="font-size:9px;color:#666;margin-bottom:4px">${esc(title.split(':')[0] && title.includes(':') ? title.split(':')[0] + ':' : 'We service:')}</div><div style="display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:14px">${logos.map(l => `<img src="${esc(l.img)}" alt="${esc(l.name)}" style="height:30px;max-width:80px;object-fit:contain">`).join('')}</div>`;
   return `<div style="font-size:10px;color:#555;font-weight:bold;letter-spacing:.3px">${esc(title)}</div>`;
@@ -4474,9 +4537,11 @@ const prevApplyCompany = window.applyCompany;
 window.applyCompany = function(idx){
   const tinBefore = ($('tinNumber') || {}).value || '';
   prevApplyCompany.apply(this, arguments);
+  { const cc = COMPANIES[parseInt(idx, 10) || 0] || {}; if(cc.branch && $('companyAddress')) $('companyAddress').textContent = cc.branch + ' · ' + (cc.address || ''); }
   const c = COMPANIES[parseInt(idx, 10) || 0] || {}, tin = $('tinNumber');
   if(tin && (!tinBefore || COMPANIES.some(x => x.tin && x.tin === tinBefore) || ORIGINAL_COMPANIES.some(x => x.tin === tinBefore))) tin.value = c.tin || '';
   refreshDocExtras();
+  try{ refreshCurrency(); }catch(e){}
 };
 /* Notes: the 7-day validity line belongs on quotations only */
 const QUOTE_VALIDITY = 'This Quotation is valid for 7 days from the date of issue. Prices are subject to change if not converted to an Invoice within this period.';
@@ -4490,46 +4555,70 @@ window.updateModeUI = function(){
   refreshDocExtras();
 };
 document.addEventListener('change', e => { if(e.target && e.target.id === 'companySelect') refreshDocExtras(); });
+let bizDraft = null;
+const PROFILE_KEYS = ['name', 'branch', 'address', 'tel', 'email', 'bankName', 'bankAcctNo', 'bankAcctName', 'tin', 'currency', 'taxName', 'taxRate', 'signature'];
+function bizProfiles(){
+  const b = brandSetting() || {};
+  const list = (b.companies && b.companies.length ? b.companies : (GARAGE ? [] : COMPANIES)).map(c => Object.assign({}, c));
+  if(!list.length) list.push({name:'', currency:GLOBAL ? guessCurrency() : 'NGN', taxName:'VAT', taxRate:GLOBAL ? '' : 7.5});
+  return list;
+}
+function readBizForm(){
+  if(!bizDraft) return;
+  const v = id => (($(id) || {}).value || '').trim();
+  bizDraft.forEach((c, k) => { const i = k + 1; if(!$('rfB' + i + 'Name')) return;
+    Object.assign(c, {name:v('rfB' + i + 'Name'), branch:v('rfB' + i + 'Branch'), address:v('rfB' + i + 'Addr'), tel:v('rfB' + i + 'Tel'), email:v('rfB' + i + 'Email'), bankName:v('rfB' + i + 'Bank'),
+      bankAcctNo:v('rfB' + i + 'AcNo'), bankAcctName:v('rfB' + i + 'AcName'), tin:v('rfB' + i + 'Tin'), currency:v('rfB' + i + 'Cur') || c.currency, taxName:v('rfB' + i + 'TaxN') || 'VAT', taxRate:v('rfB' + i + 'TaxR')}); });
+}
+function profileUsed(k){ return Store.list('doc').some(d => N(d.companyIdx) === k); }
 function myBusinessHtml(){
   if(mode === 'cloud' && !can('admin')) return '';
-  const b = brandSetting() || {}, comps = (b.companies && b.companies.length ? b.companies : (EDITION === 'partner' ? [] : COMPANIES)).slice(0, 2);
-  const c1 = comps[0] || {}, c2 = comps[1] || {};
-  const logo = pendingLogo || b.logo || (EDITION === 'partner' ? '' : ORIGINAL_LOGO);
-  const f = (id, label, v, ph) => `<div class="field"><label>${label}</label><input id="${id}" value="${esc(v || '')}" placeholder="${esc(ph || '')}"></div>`;
+  const b = brandSetting() || {};
+  if(!bizDraft) bizDraft = bizProfiles();
+  const logo = pendingLogo || b.logo || (GARAGE ? '' : ORIGINAL_LOGO);
+  const f = (id, label, v, ph, type) => `<div class="field"><label for="${id}">${label}</label><input id="${id}"${type ? ' type="' + type + '" step="any"' : ''} value="${esc(v == null ? '' : v)}" placeholder="${esc(ph || '')}"></div>`;
+  const curOpts = cur => Object.entries(CURRENCIES).map(([k, [sym, nm]]) => `<option value="${k}"${k === cur ? ' selected' : ''}>${esc(k + ' · ' + sym + ' · ' + nm)}</option>`).join('');
+  const block = (c, k) => { const i = k + 1, last = k === bizDraft.length - 1;
+    return `<div class="rf-biz" style="border:1px solid #dde3ee;border-radius:10px;padding:10px;margin:10px 0;background:${k ? '#fafbfd' : '#fff'}">
+      <div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#1F3864">${k ? 'Company / branch ' + i : 'Main company'}</b>${k && last ? `<button class="rf-btn red" type="button" id="rfBDel" style="padding:4px 10px">Remove</button>` : ''}</div>
+      <div class="grid2">${f('rfB' + i + 'Name', 'Business name on documents' + (k ? '' : ' *'), c.name, 'e.g. MAMA TUNDE MOTORS')}${f('rfB' + i + 'Branch', 'Branch / location (optional)', c.branch, 'e.g. Ikeja branch')}</div>
+      ${f('rfB' + i + 'Addr', 'Address', c.address, 'Street, area, city')}
+      <div class="grid2">${f('rfB' + i + 'Tel', 'Phone', c.tel)}${f('rfB' + i + 'Email', 'Email', c.email)}</div>
+      <div class="grid2"><div class="field"><label for="rfB${i}Cur">Currency</label><select id="rfB${i}Cur">${curOpts(CURRENCIES[c.currency] ? c.currency : (GLOBAL ? guessCurrency() : 'NGN'))}</select></div>
+        <div class="grid2">${f('rfB' + i + 'TaxN', 'Tax name', c.taxName || 'VAT', 'VAT, GST, IVA…')}${f('rfB' + i + 'TaxR', 'Tax rate %', c.taxRate == null ? (GARAGE ? '' : 7.5) : c.taxRate, 'e.g. 7.5', 'number')}</div></div>
+      <div class="grid2">${f('rfB' + i + 'Bank', 'Bank', c.bankName)}${f('rfB' + i + 'AcNo', 'Account number', c.bankAcctNo)}</div>
+      <div class="grid2">${f('rfB' + i + 'AcName', 'Account name', c.bankAcctName)}${f('rfB' + i + 'Tin', 'Tax ID / TIN', c.tin)}</div>
+      ${sigField(i, pendingSig[i] !== undefined ? pendingSig[i] : c.signature)}</div>`; };
   return `<div class="card"><h2 class="red">MY BUSINESS</h2>
-    ${EDITION === 'partner' && !brandSetting() ? '<div class="banner">Welcome! Enter your garage details once — they appear on your job cards, quotations and invoices.</div>' : ''}
+    ${GARAGE && !brandSetting() ? '<div class="banner">Welcome! Enter your garage details once — they appear on your job cards, quotations, invoices and receipts.</div>' : ''}
     <div class="rf-tools"><img src="${esc(logo)}" alt="" style="height:64px;max-width:120px;border:1px solid #ddd;border-radius:6px;background:#fff;${logo ? '' : 'display:none'}" id="rfBLogoPrev"><label class="rf-btn grey" style="cursor:pointer">📷 ${logo ? 'Change' : 'Upload'} logo<input type="file" accept="image/*" id="rfBLogo" style="display:none"></label></div>
-    ${f('rfBShort', 'Short name (used in WhatsApp messages)', b.short || (EDITION === 'partner' ? '' : 'Robotik Fix'), 'e.g. Mama Tunde Motors')}
-    ${f('rfB1Name', 'Business name on documents *', c1.name, 'e.g. MAMA TUNDE MOTORS')}
-    ${f('rfB1Addr', 'Address', c1.address, 'Street, area, city')}
-    <div class="grid2">${f('rfB1Tel', 'Phone', c1.tel)}${f('rfB1Email', 'Email', c1.email)}</div>
-    <div class="grid2">${f('rfB1Bank', 'Bank', c1.bankName)}${f('rfB1AcNo', 'Account number', c1.bankAcctNo)}</div>
-    <div class="grid2">${f('rfB1AcName', 'Account name', c1.bankAcctName)}${f('rfB1Tin', 'TIN', c1.tin)}</div>
-    ${sigField(1, c1.signature)}
-    <details${c2.name ? ' open' : ''}><summary style="font-size:12px;font-weight:bold;color:#1F3864;margin:8px 0;cursor:pointer">Second company (optional, e.g. the Limited company)</summary>
-      ${f('rfB2Name', 'Business name', c2.name)}${f('rfB2Addr', 'Address', c2.address)}
-      <div class="grid2">${f('rfB2Tel', 'Phone', c2.tel)}${f('rfB2Email', 'Email', c2.email)}</div>
-      <div class="grid2">${f('rfB2Bank', 'Bank', c2.bankName)}${f('rfB2AcNo', 'Account number', c2.bankAcctNo)}</div>
-      <div class="grid2">${f('rfB2AcName', 'Account name', c2.bankAcctName)}${f('rfB2Tin', 'TIN', c2.tin)}</div>${sigField(2, c2.signature)}</details>
+    ${f('rfBShort', 'Short name (used in WhatsApp messages)', b.short || (GARAGE ? '' : 'Robotik Fix'), 'e.g. Mama Tunde Motors')}
+    <p class="rf-note">Add a profile for each company you run and for each branch. Every profile has its own address, bank details, signature, <b>currency</b> and <b>tax rate</b>; choose the profile when you start work and documents, money and reports follow it.</p>
+    ${bizDraft.map(block).join('')}
+    <div class="rf-tools"><button class="rf-btn grey" type="button" id="rfBAdd">＋ Add a company or branch</button></div>
     ${footerLogosHtml(b)}
     <button class="addrow" id="rfBSave">Save business details</button></div>`;
 }
 function bindMyBusiness(){
   if(!$('rfBSave')) return;
   $('rfBLogo').onchange = async e => { const file = e.target.files[0]; if(!file) return; try{ pendingLogo = await resizeImage(file, 400); $('rfBLogoPrev').src = pendingLogo; $('rfBLogoPrev').style.display = ''; }catch(err){ toast('Could not read that image.', true); } };
-  [1, 2].forEach(i => { const inp = $('rfSigFile' + i); if(!inp) return;
+  (bizDraft || []).forEach((c, k) => { const i = k + 1, inp = $('rfSigFile' + i); if(!inp) return;
     inp.onchange = async e => { const file = e.target.files[0]; if(!file) return; try{ pendingSig[i] = await resizeImage(file, 500, true); const im = $('rfSigPrev' + i); im.src = pendingSig[i]; im.style.display = ''; }catch(err){ toast('Could not read that image.', true); } };
     const rm = $('rfSigDel' + i); if(rm) rm.onclick = () => { pendingSig[i] = ''; $('rfSigPrev' + i).style.display = 'none'; toast('Signature will be removed when you save.'); }; });
   bindFooterLogos();
+  $('rfBAdd').onclick = () => { readBizForm(); const m = bizDraft[0] || {}; bizDraft.push({name:m.name || '', branch:'', currency:m.currency, taxName:m.taxName || 'VAT', taxRate:m.taxRate, bankName:m.bankName, bankAcctNo:m.bankAcctNo, bankAcctName:m.bankAcctName, tin:m.tin}); renderSetup(); setTimeout(() => { const el = $('rfB' + bizDraft.length + 'Branch'); if(el){ el.scrollIntoView({block:'center'}); el.focus(); } }, 50); };
+  if($('rfBDel')) $('rfBDel').onclick = async () => { const k = bizDraft.length - 1;
+    if(profileUsed(k)){ toast('This profile is already used on saved documents, so it cannot be removed. You can rename it instead.', true); return; }
+    if(!(await askConfirm('Remove this company/branch profile?'))) return; readBizForm(); bizDraft.pop(); delete pendingSig[k + 1]; renderSetup(); };
   $('rfBSave').onclick = () => {
-    const v = id => ($(id).value || '').trim();
-    const mk = (p, i) => ({name:v(p + 'Name'), address:v(p + 'Addr'), tel:v(p + 'Tel'), email:v(p + 'Email'), tin:v(p + 'Tin'), bankName:v(p + 'Bank'), bankAcctNo:v(p + 'AcNo'), bankAcctName:v(p + 'AcName'), signature:pendingSig[i] !== undefined ? pendingSig[i] : sigOf(i)});
-    const c1 = mk('rfB1', 1), c2 = mk('rfB2', 2);
-    if(!c1.name){ toast('Enter the business name.', true); return; }
+    readBizForm();
+    const comps = bizDraft.map((c, k) => Object.assign({}, c, {taxRate:c.taxRate === '' ? '' : N(c.taxRate), signature:pendingSig[k + 1] !== undefined ? pendingSig[k + 1] : (c.signature || sigOf(k + 1))}));
+    if(!comps[0].name){ toast('Enter the business name.', true); return; }
+    const bad = comps.findIndex((c, k) => k && !c.name); if(bad > 0){ toast('Enter a business name for profile ' + (bad + 1) + ', or remove it.', true); return; }
     const prev = brandSetting() || {};
-    Store.saveSetting({brand:{short:v('rfBShort') || c1.name, companies:c2.name ? [c1, c2] : [c1], logo:pendingLogo || prev.logo || (EDITION === 'partner' ? '' : ORIGINAL_LOGO),
+    Store.saveSetting({brand:{short:(($('rfBShort') || {}).value || '').trim() || comps[0].name, companies:comps, logo:pendingLogo || prev.logo || (GARAGE ? '' : ORIGINAL_LOGO),
       footerTitle:($('rfFLTitle') ? $('rfFLTitle').value.trim() : prev.footerTitle) || '', footerLogos:pendingFooter || prev.footerLogos || []}});
-    pendingLogo = null; pendingSig = {}; pendingFooter = null; applyBrand(); toast('Business details saved.'); renderSetup();
+    pendingLogo = null; pendingSig = {}; pendingFooter = null; bizDraft = null; applyBrand(); try{ refreshCurrency(); }catch(e){} toast('Business details saved.'); renderSetup();
   };
 }
 listeners.push(kinds => { if(!kinds || kinds.includes('setting') || kinds.includes('*')) applyBrand(); });
@@ -4715,7 +4804,7 @@ async function loadPriceEditor(){
 
 /* ---------- start-up ---------- */
 window.addEventListener('load', () => applyBrand());
-if(EDITION === 'partner') window.addEventListener('load', () => { setTimeout(() => { if(!brandSetting()) { showTab('sync'); toast('Welcome! Please enter your garage details first.'); } }, 300); });
+if(GARAGE) window.addEventListener('load', () => { setTimeout(() => { if(!brandSetting()) { showTab('sync'); toast('Welcome! Please enter your garage details first.'); } }, 300); });
 
 /* ===================== BOOKKEEPING: cash book + activity reports ===================== */
 const pad2 = n => String(n).padStart(2, '0');
@@ -5642,10 +5731,10 @@ function showLanding(force){
   const list = landingCompanies();
   if(list.length < 2){ if(force) toast('Only one company is set up. Add another under Setup → My Business.', true); return false; }
   let el = $('rfLanding'); if(!el){ el = document.createElement('div'); el.id = 'rfLanding'; document.body.appendChild(el); }
-  const logo = ($('logoImg') || {}).src || '';
-  el.innerHTML = `<div class="lt">${logo ? `<img src="${esc(logo)}" alt="">` : ''}<h1>${esc(EDITION === 'partner' ? brandVals().biz : 'Robotik Fix')}</h1><p>Which company are you working for?</p></div>` +
+  const logo = bizLogo();
+  el.innerHTML = `<div class="lt">${logo ? `<img src="${esc(logo)}" alt="">` : ''}<h1>${esc(GARAGE ? brandVals().biz : 'Robotik Fix')}</h1><p>Which company or branch are you working for?</p></div>` +
     list.map(({c, i}) => { const [bg, fg] = i % 2 ? ['#feeceb', '#E30613'] : ['#e9eef7', '#1F3864'];
-      return `<div class="lc" data-lco="${i}"><div class="ic" style="background:${bg};color:${fg}">${svgI(i % 2 ? 'corp' : 'business')}</div><div><div class="n">${esc(c.name)}</div><div class="s">${esc([c.tin ? 'TIN ' + c.tin : '', c.bankName && c.bankAcctNo ? c.bankName + ' · ' + c.bankAcctNo : ''].filter(Boolean).join('\n')).replace(/\n/g, '<br>')}</div></div><div class="go">›</div></div>`; }).join('') +
+      return `<div class="lc" data-lco="${i}"><div class="ic" style="background:${bg};color:${fg}">${svgI(i % 2 ? 'corp' : 'business')}</div><div><div class="n">${esc(c.name + (c.branch ? ' — ' + c.branch : ''))}</div><div class="s">${esc([c.currency ? c.currency : '', c.tin ? 'TIN ' + c.tin : '', c.bankName && c.bankAcctNo ? c.bankName + ' · ' + c.bankAcctNo : ''].filter(Boolean).join('\n')).replace(/\n/g, '<br>')}</div></div><div class="go">›</div></div>`; }).join('') +
     `<p class="ft">Documents, quick invoices and expenses will use this company. Switch any time from Home.</p>`;
   el.classList.add('on');
   el.querySelectorAll('[data-lco]').forEach(b => b.onclick = () => pickCompany(N(b.dataset.lco)));
@@ -5677,7 +5766,7 @@ async function newDocType(type){
   showTab('doc'); window.scrollTo({top:0});
 }
 function homeTiles(){
-  const P = EDITION === 'partner';
+  const P = GARAGE;
   const remDue = Store.list('reminder').filter(r => r.status === 'pending' && r.dueDate <= addDays(today(), 7)).length;
   let pend = 0; try{ pend = payments().filter(p => isTransfer(p.method) && !bucket('payconfirm').has('pc_' + p.id)).length; }catch(e){}
   let toolsOver = 0, assetDue = 0; try{ toolsOver = toolList().filter(x => x.st.overdue).length; assetDue = Store.list('tool').filter(a => assetAlerts(a).some(x => x[0] === 'red')).length; }catch(e){}
@@ -6220,7 +6309,7 @@ async function callFn(name, body){
 const randToken = n => { const b = new Uint8Array(n || 24); crypto.getRandomValues(b); return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
 
 /* ---------- 1. CUSTOMER APPROVAL LINKS ---------- */
-function approveBase(){ return new URL(EDITION === 'partner' ? '../approve.html' : 'approve.html', location.href).href.split('#')[0].split('?')[0]; }
+function approveBase(){ return new URL(GARAGE ? '../approve.html' : 'approve.html', location.href).href.split('#')[0].split('?')[0]; }
 function approvalSnapshot(){
   const d = collectDoc($('docNo').dataset.savedId || 'x'), co = COMPANIES[N(d.companyIdx)] || COMPANIES[0] || {}, bv = brandVals();
   let logo = ($('logoImg') || {}).src || '';
@@ -6229,7 +6318,7 @@ function approvalSnapshot(){
   return {biz:co.name || bv.bizFull, bizAddr:co.address || bv.bizAddr, bizPhone:co.tel || bv.bizPhone, logo, docType:d.type, docNo:d.docNo, date:d.date,
     custName:d.custName, vehicle:d.vehMakeModel, reg:d.vehReg, km:d.vehKm, complaint:d.jcComplaint, findings:d.jcObservations, labour:ln(d.labour), parts:ln(d.parts),
     discount:N(d.discountAmt), vat:N(d.vat), grand:N(d.grand), notes:($('notes') || {}).value || '', terms:d.paymentTerms,
-    wa:waPhone(EDITION === 'partner' ? (co.tel || bv.bizPhone) : (Store.setting().waNumber || co.tel))};
+    wa:waPhone(GARAGE ? (co.tel || bv.bizPhone) : (Store.setting().waNumber || co.tel))};
 }
 let apprServer = null;   // null = unknown, true = rf_approvals table available
 async function approvalsAvailable(){
@@ -7898,7 +7987,7 @@ function letterText(L){
     L.closing, '', '', L.signName, L.signTitle, 'For: ' + co.name, L.cc ? '\ncc: ' + L.cc : '', L.encl ? 'Encl: ' + L.encl : ''].filter((x, i, a) => !(x === '' && a[i - 1] === '')).join('\n').trim();
 }
 function letterheadTop(co){
-  const logo = ($('logoImg') || {}).src || '';
+  const logo = bizLogo();
   return `<div class="lh-hd">${logo ? `<img src="${esc(logo)}" alt="">` : ''}<div class="lh-co"><b>${esc(co.name)}</b><div>${esc(co.address || '')}</div><div>Tel: ${esc(co.tel || '')}${co.email ? ' · ' + esc(co.email) : ''}</div>${co.tin ? `<div>TIN: ${esc(co.tin)}</div>` : ''}</div></div><div class="lh-rule"></div>`;
 }
 const LH_CSS = `.lh{font-family:Georgia,'Times New Roman',serif;color:#111;font-size:12.5px;line-height:1.55;width:100%;box-sizing:border-box;background:#fff;display:flex;flex-direction:column;min-height:10.2in}
@@ -8458,7 +8547,7 @@ async function deleteMedia(paths){
 }
 function cuUpdates(root){ return Store.list('jobupdate').filter(u => u.rootId === root).sort((a, b) => String(b.at).localeCompare(String(a.at))); }
 function renderCustUpdates(force){
-  if(EDITION === 'partner') return;
+  if(EDITION !== 'robotik') return;
   const jt = $('rfJobTrack'); if(!jt) return;
   let box = $('rfCustUpd');
   if(!box){ box = document.createElement('div'); box.className = 'card no-print'; box.id = 'rfCustUpd'; jt.parentNode.insertBefore(box, jt.nextSibling); }
@@ -8534,11 +8623,11 @@ const RFC_TYPES = ['INVOICE', 'QUOTATION'];
 function compactOn(){ let off = false; try{ off = localStorage.getItem('rf3_compact_off') === '1'; }catch(e){} return !off && RFC_TYPES.includes(($('docType') || {}).value); }
 (function(){ if($('rfCompactCss')) return; const s = document.createElement('style'); s.id = 'rfCompactCss';
   s.textContent = `#rfCompact{display:none}
-  @media print{body.rfc-on #rfCompact{display:block}body.rfc-on #view-doc > *:not(#printHeader):not(#rfCompact):not(#rfMakesFooter){display:none !important}}
-  body.pdf-mode.rfc-on #rfCompact{display:block}body.pdf-mode.rfc-on #view-doc > *:not(#printHeader):not(#rfCompact):not(#rfMakesFooter){display:none !important}
+  @media print{body.rfc-on #rfCompact{display:block}body.rfc-on #view-doc > *:not(#printHeader):not(#rfHdr):not(#rfCompact):not(#rfMakesFooter){display:none !important}}
+  body.pdf-mode.rfc-on #rfCompact{display:block}body.pdf-mode.rfc-on #view-doc > *:not(#printHeader):not(#rfHdr):not(#rfCompact):not(#rfMakesFooter){display:none !important}
   .rfc{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1d1d1f;line-height:1.35;margin:4px 0 6px}
   .rfc *{box-sizing:border-box}
-  .rfc-bar{display:flex;justify-content:space-between;align-items:center;background:#1F3864;color:#fff;padding:5px 10px;border-radius:4px}
+  .rfc-bar{display:flex;justify-content:space-between;align-items:center;background:var(--a,#1F3864);color:#fff;padding:5px 10px;border-radius:4px}
   .rfc-bar b{font-size:16px;letter-spacing:2px}.rfc-bar span{font-size:11px}
   .rfc-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:8px;margin-top:6px}
   .rfc-box{border:1px solid #c9d1df;border-radius:4px;padding:5px 8px}
@@ -8547,16 +8636,16 @@ function compactOn(){ let off = false; try{ off = localStorage.getItem('rf3_comp
   .rfc-veh{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #c9d1df;border-radius:4px;margin-top:6px}
   .rfc-veh div{padding:4px 8px;border-left:1px solid #e1e6ee}.rfc-veh div:first-child{border-left:0}.rfc-veh i{display:block;font-style:normal;font-size:9px;color:#5b6472;text-transform:uppercase;letter-spacing:.4px}.rfc-veh b{font-size:11px}
   .rfc table{width:100%;border-collapse:collapse;margin-top:6px}
-  .rfc th{background:#1F3864;color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.4px;padding:4px 6px;text-align:left}
+  .rfc th{background:var(--a,#1F3864);color:#fff;font-size:9.5px;text-transform:uppercase;letter-spacing:.4px;padding:4px 6px;text-align:left}
   .rfc td{padding:3px 6px;border-bottom:1px solid #e3e7ee;vertical-align:top}
   .rfc tr:nth-child(even) td{background:#f7f9fc}
   .rfc td,.rfc th{text-align:left !important;vertical-align:middle}.rfc .n{text-align:right !important;white-space:nowrap;font-variant-numeric:tabular-nums}.rfc .c{text-align:center !important}
   .rfc .ty{font-size:9.5px;color:#5b6472}
-  .rfc-sec td{background:#eef2f8 !important;font-weight:bold;color:#1F3864;font-size:10px}
+  .rfc-sec td{background:#eef2f8 !important;font-weight:bold;color:var(--a,#1F3864);font-size:10px}
   .rfc-low{display:grid;grid-template-columns:1fr 0.9fr;gap:8px;margin-top:6px;align-items:start}
-  .rfc-tot{border:1px solid #1F3864;border-radius:4px;overflow:hidden}
+  .rfc-tot{border:1px solid var(--a,#1F3864);border-radius:4px;overflow:hidden}
   .rfc-tot div{display:flex;justify-content:space-between;padding:3px 8px;border-bottom:1px solid #e3e7ee}.rfc-tot div:last-child{border-bottom:0}
-  .rfc-tot .g{background:#1F3864;color:#fff;font-weight:bold;font-size:13px}.rfc-tot .b{font-weight:bold;color:#E30613}
+  .rfc-tot .g{background:var(--a,#1F3864);color:#fff;font-weight:bold;font-size:13px}.rfc-tot .b{font-weight:bold;color:#E30613}
   .rfc-note{white-space:pre-wrap;font-size:10px;color:#333}
   .rfc-sign{display:flex;gap:30px;margin-top:70px}.rfc-sign>div{flex:1;border-top:1px solid #333;text-align:center;font-size:9.5px;color:#555;padding-top:2px;position:relative}
   .rfc tr,.rfc-box,.rfc-veh,.rfc-tot,.rfc-sign,.rfc-bar,.rfc-low{break-inside:avoid;page-break-inside:avoid}.rfc thead{display:table-header-group}.rfc-sign{break-before:avoid}
@@ -8581,7 +8670,7 @@ function compactHtml(){
   let tot = `<div><span>Subtotal</span><span>${money(d.subtotal)}</span></div>`;
   if(N(d.discountAmt)) tot += `<div><span>Discount (${N(d.discountPct)}%)</span><span>−${money(d.discountAmt)}</span></div>`;
   if(N(d.discountAmt) && N(d.vat)) tot += `<div><span>Net total</span><span>${money(d.afterDiscount)}</span></div>`;
-  if(N(d.vat)) tot += `<div><span>VAT (7.5%)</span><span>${money(d.vat)}</span></div>`;
+  if(N(d.vat)) tot += `<div><span>${esc(vatLabel(d.companyIdx))}</span><span>${money(d.vat)}</span></div>`;
   tot += `<div class="g"><span>${isQ ? 'TOTAL' : 'INVOICE TOTAL'}</span><span>${money(grand)}</span></div>`;
   if(adv) tot += `<div><span>Advance payment (${N(d.advancePct)}%)</span><span>${money(adv)}</span></div><div class="b"><span>Balance after advance</span><span>${money(d.balanceDue)}</span></div>`;
   if(!isQ && paid) tot += `<div><span>Paid to date</span><span>${money(paid)}</span></div><div class="b"><span>Balance due</span><span>${money(Math.max(0, grand - paid))}</span></div>`;
@@ -8614,6 +8703,110 @@ window.generatePdfBlob = async function(){
   try{ return await prevGenPdf24.apply(this, arguments); } finally { compactDone(); }
 };
 Object.assign(window.RF = window.RF || {}, {compactPrep, compactHtml});
+/* ===================== v6.1 DOCUMENT STYLES (garage editions): 5 header designs, 4 invoice/quotation layouts,
+   letterhead design and brand colour. Stored in brand.style = {header, layout, letter, color}. ===================== */
+const HEADER_DESIGNS = [['classic', 'Classic'], ['centered', 'Centred'], ['banner', 'Colour banner'], ['minimal', 'Minimal'], ['split', 'Split']];
+const DOC_LAYOUTS = [['compact', 'Compact', 'Everything on one page: details side by side, one items table.'], ['classic', 'Classic', 'The full layout with a heading for every section.'],
+  ['modern', 'Modern', 'Large title, light table, big total box in your colour.'], ['ink', 'Ink saver', 'Black and white lines only — cheapest to print.']];
+const BRAND_COLORS = ['#1F3864', '#0B6E4F', '#7A1F1F', '#1D4E89', '#5B2C83', '#B45309', '#111827', '#0E7490'];
+function docStyle(){ const s = (brandSetting() || {}).style || {}; return {header:s.header || 'classic', layout:s.layout || 'compact', letter:s.letter || s.header || 'classic', color:/^#[0-9a-f]{6}$/i.test(s.color || '') ? s.color : '#1F3864'}; }
+function hexA(hex, a){ const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; }
+/* self-contained (inline-styled) header so it works on screen, in print, in PDFs and in pop-up print windows */
+function docHeaderHtml(co, design, color){
+  co = co || {}; design = design || docStyle().header; color = color || docStyle().color;
+  const logo = bizLogo(), L = h => logo ? `<img src="${esc(logo)}" alt="" style="height:${h}px;max-width:${h * 2.2}px;object-fit:contain">` : '';
+  const name = esc(co.name || ''), br = co.branch ? esc(co.branch) : '';
+  const lines = [co.address ? esc(co.address) : '', [co.tel ? 'Tel: ' + esc(co.tel) : '', co.email ? esc(co.email) : ''].filter(Boolean).join(' · '), co.tin ? 'TIN: ' + esc(co.tin) : ''].filter(Boolean);
+  const F = 'font-family:Arial,Helvetica,sans-serif;';
+  if(design === 'centered') return `<div class="rf-hd" style="${F}text-align:center;padding-bottom:8px;border-bottom:3px double ${color}">${L(58)}<div style="font-size:20px;font-weight:bold;color:${color};letter-spacing:1.5px;margin-top:4px">${name}</div>${br ? `<div style="font-size:11px;font-weight:bold;color:#E30613;letter-spacing:1px;text-transform:uppercase">${br}</div>` : ''}<div style="font-size:10.5px;color:#333;margin-top:2px">${lines.join(' &nbsp;|&nbsp; ')}</div></div>`;
+  if(design === 'banner') return `<div class="rf-hd" style="${F}"><div style="background:${color};color:#fff;padding:10px 14px;border-radius:6px 6px 0 0;display:flex;gap:12px;align-items:center">${logo ? `<div style="background:#fff;border-radius:8px;padding:4px;display:flex">${L(50)}</div>` : ''}<div style="flex:1"><div style="font-size:19px;font-weight:bold;letter-spacing:.5px">${name}</div>${br ? `<div style="font-size:11px;opacity:.9;text-transform:uppercase;letter-spacing:1px">${br}</div>` : ''}</div><div style="text-align:right;font-size:10px;line-height:1.45;opacity:.95">${lines.join('<br>')}</div></div><div style="height:4px;background:#E30613"></div></div>`;
+  if(design === 'minimal') return `<div class="rf-hd" style="${F}display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:8px;border-bottom:1px solid #bbb"><div><div style="font-size:17px;font-weight:bold;color:#111;letter-spacing:2.5px;text-transform:uppercase">${name}</div>${br ? `<div style="font-size:10.5px;color:#555;letter-spacing:1px;text-transform:uppercase">${br}</div>` : ''}<div style="font-size:10px;color:#666;margin-top:3px">${lines.join(' · ')}</div></div>${L(46)}</div>`;
+  if(design === 'split') return `<div class="rf-hd" style="${F}"><div style="display:flex;justify-content:space-between;align-items:flex-end;gap:14px"><div style="display:flex;gap:10px;align-items:center">${L(60)}<div><div style="font-size:19px;font-weight:bold;color:${color};line-height:1.1">${name}</div>${br ? `<div style="font-size:11px;color:#E30613;font-weight:bold">${br}</div>` : ''}</div></div><div style="text-align:right;font-size:10px;color:#333;line-height:1.5;border-left:3px solid ${color};padding-left:10px">${lines.join('<br>')}</div></div><div style="display:flex;margin-top:8px;height:5px"><div style="flex:5;background:${color}"></div><div style="flex:1;background:#E30613"></div></div></div>`;
+  return `<div class="rf-hd" style="${F}"><div style="display:flex;gap:14px;align-items:center">${L(66)}<div style="flex:1"><div style="font-size:19px;font-weight:bold;color:${color}">${name}</div>${br ? `<div style="font-size:11px;color:#E30613;font-weight:bold">${br}</div>` : ''}${lines.map(l => `<div style="font-size:10.5px;color:#333;line-height:1.4">${l}</div>`).join('')}</div></div><div style="height:4px;background:#E30613;margin-top:8px;border-bottom:2px solid ${color}"></div></div>`;
+}
+/* letters and receipts use the letterhead design */
+letterheadTop = function(co){ return GARAGE ? docHeaderHtml(co, docStyle().letter) : docHeaderHtml(co, 'classic', '#1F3864'); };
+/* printed documents: swap the on-screen header for the chosen design while printing / making a PDF */
+(function(){ if($('rfStyleCss')) return; const s = document.createElement('style'); s.id = 'rfStyleCss';
+  s.textContent = `#rfHdr{display:none}@media print{body.rfh-on #rfHdr{display:block;margin:0 0 8px}body.rfh-on #printHeader{display:none !important}body.rfc-on #view-doc > #rfHdr{display:block !important}}
+  @media print{body.rfh-on.rfs-col #view-doc .card h2{background:var(--rfa) !important;color:#fff !important}}body.pdf-mode.rfh-on.rfs-col #view-doc .card h2{background:var(--rfa) !important;color:#fff !important}
+  body.pdf-mode.rfh-on #rfHdr{display:block;margin:0 0 8px}body.pdf-mode.rfh-on #printHeader{display:none !important}
+  .rfc.modern .rfc-bar{background:none;color:var(--a);padding:2px 0 4px;border-bottom:3px solid var(--a);border-radius:0}.rfc.modern .rfc-bar b{font-size:26px;letter-spacing:4px}.rfc.modern .rfc-bar span{color:#333;font-size:12px}
+  .rfc.modern .rfc-box{border:0;background:${'#f4f6fa'};border-radius:8px}.rfc.modern .rfc-veh{border:0;background:#f4f6fa;border-radius:8px}.rfc.modern .rfc-veh div{border-left-color:#fff}
+  .rfc.modern th{background:none !important;color:var(--a) !important;border-bottom:2px solid var(--a)}.rfc.modern tr:nth-child(even) td{background:none !important}.rfc.modern td{border-bottom:1px solid #eceff4}
+  .rfc.modern .rfc-tot{border:0;background:#f4f6fa;border-radius:8px}.rfc.modern .rfc-tot .g{background:var(--a);font-size:16px;padding:8px 10px;border-radius:0 0 8px 8px}
+  .rfc.ink *{color:#000 !important}.rfc.ink .rfc-bar{background:none;border:1.5px solid #000;border-radius:0}.rfc.ink .rfc-h{color:#000}.rfc.ink th{background:none !important;border-top:1.5px solid #000;border-bottom:1.5px solid #000}
+  .rfc.ink tr:nth-child(even) td{background:none !important}.rfc.ink .rfc-sec td{background:none !important;font-style:italic}.rfc.ink .rfc-box,.rfc.ink .rfc-veh,.rfc.ink .rfc-tot{border-color:#000;border-radius:0}
+  .rfc.ink .rfc-tot .g{background:none;border-top:1.5px solid #000;border-bottom:1.5px solid #000}.rfc.ink .rfc-tot .b{color:#000}`;
+  document.head.appendChild(s); })();
+function headerPrep(){
+  const st = docStyle(), on = GARAGE && (st.header !== 'classic' || st.color !== '#1F3864');
+  document.body.classList.toggle('rfh-on', on); document.body.classList.toggle('rfs-col', on && st.color !== '#1F3864'); document.body.style.setProperty('--rfa', st.color); if(!on) return;
+  let h = $('rfHdr'); const ph = $('printHeader');
+  if(!h && ph){ h = document.createElement('div'); h.id = 'rfHdr'; ph.before(h); }
+  if(h) h.innerHTML = docHeaderHtml(curCompany(), st.header, st.color);
+}
+function headerDone(){ document.body.classList.remove('rfh-on', 'rfs-col'); }
+/* layouts: 'classic' = the full form; the others are the compact block with a style variant */
+const prevCompactOn25 = compactOn;
+compactOn = function(){ if(!GARAGE) return prevCompactOn25(); return RFC_TYPES.includes(($('docType') || {}).value) && docStyle().layout !== 'classic'; };
+const prevCompactHtml25 = compactHtml;
+compactHtml = function(){ const st = docStyle(); let h = prevCompactHtml25(); if(!GARAGE) return h;
+  return h.replace('<div class="rfc">', `<div class="rfc ${st.layout === 'modern' ? 'modern' : st.layout === 'ink' ? 'ink' : ''}" style="--a:${st.color}">`).replace(/#1F3864/g, st.layout === 'ink' ? '#000' : st.color); };
+window.addEventListener('beforeprint', () => { if(curTab === 'doc') try{ headerPrep(); }catch(e){ console.error(e); } });
+window.addEventListener('afterprint', headerDone);
+const prevGenPdf25 = window.generatePdfBlob;
+window.generatePdfBlob = async function(){ try{ headerPrep(); }catch(e){ console.error(e); } try{ return await prevGenPdf25.apply(this, arguments); } finally { headerDone(); } };
+/* ---------- Setup: DOCUMENT STYLE card ---------- */
+let styleDraft = null;
+function layoutThumb(k, color){
+  const bar = k === 'ink' ? '#000' : color, light = k === 'modern' ? '#f4f6fa' : '#fff', bd = k === 'ink' ? '#000' : '#c9d1df';
+  const row = (w, c) => `<div style="height:4px;width:${w}%;background:${c || '#d5dbe6'};border-radius:2px;margin:2px 0"></div>`;
+  if(k === 'classic') return `<div style="padding:4px">${[0, 1, 2].map(() => `<div style="height:6px;background:${bar};border-radius:2px;margin:4px 0 2px"></div>${row(70)}${row(50)}`).join('')}</div>`;
+  return `<div style="padding:4px"><div style="height:${k === 'modern' ? 8 : 6}px;${k === 'modern' ? 'border-bottom:2px solid ' + bar : 'background:' + (k === 'ink' ? 'none;border:1px solid #000' : bar)};margin-bottom:3px"></div>
+    <div style="display:flex;gap:3px"><div style="flex:1;height:14px;border:1px solid ${bd};background:${light}"></div><div style="flex:1;height:14px;border:1px solid ${bd};background:${light}"></div></div>
+    <div style="height:4px;background:${k === 'compact' ? bar : 'none'};border-bottom:1px solid ${bar};margin:4px 0 2px"></div>${row(100)}${row(100)}${row(100)}
+    <div style="display:flex;justify-content:flex-end"><div style="width:45%;height:8px;background:${k === 'ink' ? 'none;border:1px solid #000' : bar};margin-top:3px"></div></div></div>`;
+}
+function documentStyleHtml(){
+  if(!GARAGE || (mode === 'cloud' && !can('admin'))) return '';
+  if(!styleDraft) styleDraft = docStyle();
+  const st = styleDraft, co = COMPANIES[activeCoIdx()] || COMPANIES[0] || {name:'YOUR GARAGE NAME'};
+  const sample = Object.assign({}, co, {name:co.name && !/YOUR GARAGE NAME/i.test(co.name) ? co.name : 'YOUR GARAGE NAME', address:co.address || '12 Example Road, City', tel:co.tel || '+000 000 0000'});
+  const tile = (grp, k, label, inner, on) => `<button type="button" class="rf-sty${on ? ' on' : ''}" data-sty="${grp}" data-k="${k}" aria-pressed="${on}" style="display:block;width:100%;text-align:left;border:2px solid ${on ? st.color : '#dde3ee'};border-radius:10px;padding:8px;background:#fff;cursor:pointer;margin-bottom:8px">
+    <div style="font-size:12px;font-weight:bold;color:${on ? st.color : '#333'};margin-bottom:6px">${on ? '✓ ' : ''}${esc(label)}</div><div style="overflow:hidden;pointer-events:none">${inner}</div></button>`;
+  const mini = d => `<div style="zoom:.62">${docHeaderHtml(sample, d, st.color)}</div>`;
+  return `<div class="card"><h2 class="red">DOCUMENT STYLE</h2><p class="rf-note">Choose how your invoices, quotations, job cards, receipts and letters look when printed or shared as PDF.</p>
+    <h3 style="font-size:13px;color:#1F3864;margin:10px 0 6px">Brand colour</h3>
+    <div class="rf-tools" style="flex-wrap:wrap">${BRAND_COLORS.map(c => `<button type="button" data-styc="${c}" aria-label="Colour ${c}" style="width:34px;height:34px;border-radius:50%;background:${c};border:3px solid ${c === st.color ? '#E30613' : '#fff'};box-shadow:0 0 0 1px #ccc;cursor:pointer"></button>`).join('')}
+      <label class="rf-note" style="display:flex;gap:6px;align-items:center;margin:0">Other: <input type="color" id="rfStyColor" value="${esc(st.color)}" style="width:44px;height:34px;padding:0;border:0"></label></div>
+    <h3 style="font-size:13px;color:#1F3864;margin:12px 0 6px">Header design (documents)</h3>
+    <div class="grid2">${HEADER_DESIGNS.map(([k, l]) => tile('header', k, l, mini(k), st.header === k)).join('')}</div>
+    <h3 style="font-size:13px;color:#1F3864;margin:12px 0 6px">Invoice & quotation layout</h3>
+    <div class="grid2">${DOC_LAYOUTS.map(([k, l, d]) => tile('layout', k, l, `<div style="display:flex;gap:8px;align-items:center"><div style="width:70px;flex:none;border:1px solid #ddd;border-radius:4px;background:#fff">${layoutThumb(k, st.color)}</div><div class="rf-note" style="margin:0">${esc(d)}</div></div>`, st.layout === k)).join('')}</div>
+    <h3 style="font-size:13px;color:#1F3864;margin:12px 0 6px">Letterhead design (letters & receipts)</h3>
+    <div class="grid2">${HEADER_DESIGNS.map(([k, l]) => tile('letter', k, l, mini(k), st.letter === k)).join('')}</div>
+    <button class="addrow" id="rfStySave">Save document style</button></div>`;
+}
+function bindDocumentStyle(){
+  if(!$('rfStySave')) return;
+  const re = () => { renderSetup(); const el = document.querySelector('.rf-sty.on'); };
+  document.querySelectorAll('[data-sty]').forEach(b => b.onclick = () => { styleDraft[b.dataset.sty] = b.dataset.k; const y = window.scrollY; re(); window.scrollTo(0, y); });
+  document.querySelectorAll('[data-styc]').forEach(b => b.onclick = () => { styleDraft.color = b.dataset.styc; const y = window.scrollY; re(); window.scrollTo(0, y); });
+  $('rfStyColor').onchange = e => { styleDraft.color = e.target.value; const y = window.scrollY; re(); window.scrollTo(0, y); };
+  $('rfStySave').onclick = () => { const b = Object.assign({}, brandSetting() || {}); if(!b.companies){ toast('Save your business details first.', true); return; }
+    b.style = Object.assign({}, styleDraft); Store.saveSetting({brand:b}); styleDraft = null; toast('Document style saved.'); renderSetup(); };
+}
+const prevRenderSetup25 = renderSetup;
+renderSetup = function(){
+  prevRenderSetup25.apply(this, arguments);
+  if(!GARAGE) return; const box = $('rfSetupCards'); if(!box) return;
+  const mb = [...box.querySelectorAll('.card')].find(c => /MY BUSINESS/.test((c.querySelector('h2') || {}).textContent || ''));
+  const w = document.createElement('div'); w.innerHTML = documentStyleHtml(); const card = w.firstElementChild; if(!card) return;
+  if(mb) mb.after(card); else box.prepend(card);
+  bindDocumentStyle();
+};
+Object.assign(window.RF = window.RF || {}, {docHeaderHtml, docStyle, headerPrep});
 
 })();
 </script>
