@@ -1,4 +1,4 @@
-const CACHE_NAME = 'robotik-fix-v6-1';
+const CACHE_NAME = 'robotik-fix-v6-7';
 const urlsToCache = [
   './',
   './index.html',
@@ -45,8 +45,9 @@ self.addEventListener('fetch', event => {
 
   if (isPage) {
     event.respondWith(
-      fetch(event.request)
+      fetch(event.request.url, {cache: 'no-cache', credentials: 'same-origin'})
         .then(response => {
+          if (!response || !response.ok) throw new Error('bad response');
           const copy = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
           return response;
