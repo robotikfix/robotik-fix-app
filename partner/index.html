@@ -2577,7 +2577,7 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
    database (Supabase) with staff logins and roles (admin / cashier / technician).
    Without the team database everything still works on this device alone, as before.
 =========================================================================================== */
-const RF_VERSION = '6.3';
+const RF_VERSION = '6.4';
 /* Multi-user team database: built, but switched OFF for now. Set to true to turn it back on. */
 const EDITION = 'partner';      // build script switches this to 'partner' for the partner-garage app
 const TEAM_ENABLED = EDITION === 'robotik' && true;
@@ -4050,10 +4050,11 @@ window.addEventListener('appinstalled', () => { installEvt = null; toast('App in
 function isInstalled(){ return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; }
 async function doInstall(){ if(!installEvt) return; installEvt.prompt(); try{ await installEvt.userChoice; }catch(e){} installEvt = null; renderSetup(); }
 function installCardHtml(){
-  if(isInstalled()) return '<div class="card"><h2>APP</h2><p class="rf-note">✅ Running as an installed app.</p></div>';
+  const upd = `<div class="rf-tools" style="align-items:center;margin-top:6px"><button class="rf-btn" type="button" id="rfHardUpd">🔄 Refresh &amp; update app</button><span class="rf-note" style="margin:0">Version <b>${esc(RF_VERSION)}</b> · goes online and loads the newest version. Your data stays.</span></div>`;
+  if(isInstalled()) return '<div class="card"><h2>APP</h2><p class="rf-note">✅ Running as an installed app.</p>' + upd + '</div>';
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
   return `<div class="card"><h2>INSTALL THE APP</h2>${installEvt ? '<button class="rf-btn big green" id="rfInstallBtn" style="width:100%">⬇ Install Robotik Fix on this device</button><p class="rf-note">Adds an icon to the home screen / desktop. Opens full-screen and works offline.</p>' :
-    '<p class="rf-note">' + (ios ? 'iPhone/iPad: tap Share ⬆ then <b>Add to Home Screen</b>.' : 'Android Chrome: tap ⋮ then <b>Install app</b> (or Add to Home screen). Laptop Chrome / Edge: click the install icon at the right end of the address bar, or ⋮ → <b>Cast, save and share → Install page as app</b>.') + '</p>'}</div>`;
+    '<p class="rf-note">' + (ios ? 'iPhone/iPad: tap Share ⬆ then <b>Add to Home Screen</b>.' : 'Android Chrome: tap ⋮ then <b>Install app</b> (or Add to Home screen). Laptop Chrome / Edge: click the install icon at the right end of the address bar, or ⋮ → <b>Cast, save and share → Install page as app</b>.') + '</p>'}${upd}</div>`;
 }
 
 /* ===================== Start-up ===================== */
@@ -5979,12 +5980,36 @@ async function checkForUpdate(){
     document.body.appendChild(updBanner);
     updBanner.querySelector('button').onclick = async () => {
       if(mode === 'cloud' && Cloud.pending){ toast('Sending your unsaved changes first…'); await Cloud.flush(); }
-      try{ const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if(reg) await reg.update(); }catch(e){}
-      location.reload();
+      forceUpdate(j.version);
     };
   }catch(e){}
 }
-window.addEventListener('load', () => { setTimeout(checkForUpdate, 4000); setInterval(checkForUpdate, 30 * 60000); });
+/* Refresh & update: always goes to the server, past the phone's web cache and the offline copy.
+   Only this app's offline copy is cleared — saved records, settings and logins stay on the phone. */
+const CACHE_PREFIX = EDITION === 'global' ? 'robotik-garage-' : EDITION === 'partner' ? 'partner-garage-' : 'robotik-fix-';
+async function forceUpdate(known){
+  if(!navigator.onLine){ toast('You are offline. Connect to the internet (data or Wi-Fi), then tap Refresh again.', true); return; }
+  toast('Checking for the newest version…');
+  if(mode === 'cloud' && Cloud.pending){ try{ await Cloud.flush(); }catch(e){} }
+  let ver = known || '';
+  try{ const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'}); if(r.ok){ const j = await r.json(); ver = (j && j.version) || ver; } }
+  catch(e){ toast('Could not reach the server. Check your internet and try again.', true); return; }
+  // download the newest page now, straight from the server (no-store skips the phone's web cache)
+  const page = location.href.split('#')[0].split('?')[0].replace(/index\.html$/, '');
+  try{
+    const res = await fetch(page + 'index.html?fresh=' + Date.now(), {cache:'no-store'});
+    if(res.ok && 'caches' in window){ const body = await res.clone().text();
+      if(/RF_VERSION/.test(body)){ const names = await caches.keys();
+        await Promise.all(names.filter(n => n.indexOf(CACHE_PREFIX) === 0).map(n => caches.delete(n))); } }
+  }catch(e){}
+  try{ const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if(reg){ await reg.update().catch(() => {}); if(ver && ver !== RF_VERSION) await reg.unregister(); } }catch(e){}
+  if(ver && ver === RF_VERSION){ toast('You already have the newest version (' + RF_VERSION + ').'); return; }
+  toast('Updating to version ' + (ver || 'latest') + '…');
+  setTimeout(() => location.replace(page + '?v=' + encodeURIComponent(ver || Date.now()) + location.hash), 600);
+}
+document.addEventListener('click', e => { if(e.target && e.target.id === 'rfHardUpd') forceUpdate(); });
+window.addEventListener('load', () => { if(/[?&]v=/.test(location.search)) try{ history.replaceState(null, '', location.pathname + location.hash); }catch(e){}
+  setTimeout(checkForUpdate, 4000); setInterval(checkForUpdate, 30 * 60000); });
 document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') checkForUpdate(); });
 
 /* ---------- 5. JOB TRACKING: stage, technician, approval, promised date ---------- */
@@ -6187,7 +6212,7 @@ async function sysErrors(box){
   h += `<div class="rf-tools"><button class="rf-btn" id="erUpd">Check for a new version</button><button class="rf-btn grey" id="erWa">💬 Send error report</button><button class="rf-btn grey" id="erClr">Clear list</button></div>`;
   h += '<h3 style="font-size:12.5px;color:#1F3864">Recent errors on this device</h3>' + (errs.slice(0, 60).map(e => `<div class="rf-row"><div class="m"><b>${esc(fmtDate(e.at))} ${esc(new Date(e.at).toLocaleTimeString('en-NG', {hour:'2-digit', minute:'2-digit'}))}</b> · ${esc(e.tab || '')} · ${esc(e.user || '')} · v${esc(e.ver || '')}</div><div class="m">${esc(e.msg)}${e.where ? ' <span class="rf-note">(' + esc(e.where) + ')</span>' : ''}</div></div>`).join('') || '<div class="rf-empty">No errors recorded. 👍</div>');
   box.innerHTML = wrap('ERRORS &amp; DEVICE', h, true);
-  $('erUpd').onclick = async () => { updBanner = null; await checkForUpdate(); if(!document.querySelector('.rf-update')) toast('You have the latest version (' + RF_VERSION + ').'); };
+  $('erUpd').onclick = () => forceUpdate();
   $('erWa').onclick = () => openWhatsApp(Store.setting().ownerWa || '', `${brandVals().biz} app error report (v${RF_VERSION}, ${myName() || 'staff'}):\n` + errs.slice(0, 12).map(e => `• ${e.at.slice(0, 16).replace('T', ' ')} ${e.msg}`).join('\n'));
   $('erClr').onclick = () => { localStorage.setItem(ERR_KEY, '[]'); renderSystem(); };
 }
