@@ -2577,7 +2577,7 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
    database (Supabase) with staff logins and roles (admin / cashier / technician).
    Without the team database everything still works on this device alone, as before.
 =========================================================================================== */
-const RF_VERSION = '6.4';
+const RF_VERSION = '6.7';
 /* Multi-user team database: built, but switched OFF for now. Set to true to turn it back on. */
 const EDITION = 'global';      // build script switches this to 'partner' for the partner-garage app
 const TEAM_ENABLED = EDITION === 'robotik' && true;
@@ -4067,7 +4067,7 @@ window.RF = {Store, Cloud, version:RF_VERSION, get mode(){ return mode; }, get m
 /* ===================== QUICK SERVICE INVOICES =====================
    One-screen invoices for counter jobs: Lube Service, Tyre & Wheel Service,
    Brake Disc Resurfacing (outside garages & fleet owners), Wheel Straightening & Welding,
-   AC Repair, Bodywork (Panel Beating) and Spray Painting.
+   AC Repair, Electrical Repairs, Bodywork (Panel Beating) and Spray Painting.
    Saved as ordinary INVOICE records (same numbering, Records, statements, payments, stock, P&L). */
 const POS5 = ['LF', 'RF', 'LR', 'RR', 'SPARE'];
 const QUICK = {
@@ -4096,6 +4096,16 @@ const QUICK = {
       ['Compressor', 'part'], ['Condenser', 'part'], ['Evaporator', 'part'], ['Expansion valve', 'part'], ['Receiver drier', 'part'], ['Cabin / AC filter', 'part'], ['Condenser fan / blower motor', 'part'],
       ['Leak repair', 'labour'], ['Compressor replacement', 'labour'], ['Evaporator / dashboard removal', 'labour'], ['AC system flush', 'labour'], ['EXTRA CHARGES', 'sep'], ['', 'labour'], ['', 'labour']],
     notes:'Run the AC for at least 10 minutes every week to keep the seals lubricated, and replace the cabin filter every 12 months. Thank you for choosing Robotik Fix.'},
+  elec: {name:'Electrical Repairs', title:'ELECTRICAL REPAIR INVOICE', icon:'⚡', blurb:'Battery, charging & starting tests, wiring faults, lights, fuses & relays, sensors',
+    detail:'ELECTRICAL TESTS & CHECKS',
+    fields:[['batRest', 'Battery voltage at rest (V)', 'number', 'e.g. 12.6'], ['batCrank', 'Cranking voltage (V)', 'number', 'e.g. 10.2'], ['charging', 'Charging voltage, engine running (V)', 'number', 'e.g. 14.2'],
+      ['batHealth', 'Battery health', 'select', ['Not tested', 'Good', 'Weak — charge & retest', 'Replace']], ['codes', 'Fault codes', 'text', 'e.g. P0562, B1318'], ['circuit', 'Circuit / fault found', 'text', 'e.g. short on tail-light harness']],
+    checks:['Battery terminals & clamps', 'Alternator charging', 'Starter motor', 'Earth (ground) straps', 'Fuses & relays', 'Headlamps (dip & main)', 'Indicators & hazards', 'Brake & tail lights', 'Horn', 'Wipers & washer', 'Power windows', 'Central locking', 'Dashboard warning lights', 'Wiring harness & connectors'],
+    checkOpts:['', 'OK', 'Needs attention', 'Repaired', 'Replaced'],
+    lines:[['Electrical diagnosis & fault finding', 'labour'], ['Wiring repair', 'labour'], ['Alternator repair / rewind', 'labour'], ['Starter motor repair', 'labour'], ['Battery test & charge', 'labour'], ['Sensor replacement', 'labour'], ['Key / remote programming', 'labour'],
+      ['Battery', 'part'], ['Alternator', 'part'], ['Starter motor', 'part'], ['Fuse', 'part'], ['Relay', 'part'], ['Bulb', 'part'], ['Switch', 'part'], ['Sensor', 'part'], ['Wire, connectors & terminals', 'part'],
+      ['EXTRA CHARGES', 'sep'], ['', 'labour'], ['', 'labour']],
+    notes:'Keep battery terminals clean and tight. If a warning light comes back on, bring the vehicle in early: electrical faults are cheaper to fix before they spread. Thank you for choosing Robotik Fix.'},
   body: {name:'Bodywork (Panel Beating)', title:'BODYWORK / PANEL BEATING INVOICE', icon:'🔨', blurb:'Accident & dent repair — panels damaged, insurance claim, parts replaced',
     detail:'DAMAGE & CLAIM DETAILS', panels:true, panelsLabel:'PANELS REPAIRED',
     fields:[['cause', 'Cause of damage', 'select', ['Accident', 'Dent', 'Scratch / scrape', 'Rust', 'Flood', 'Other']], ['incident', 'Date of damage', 'date'], ['ready', 'Expected completion', 'date'],
@@ -5734,6 +5744,9 @@ const IC = {
   ac:'<path d="M12 2v20M4.9 7l14.2 10M4.9 17L19.1 7"/><path d="M9.5 3.5L12 6l2.5-2.5M9.5 20.5L12 18l2.5 2.5"/>',
   body:'<path d="M3 16v-3l2-5h11l3 5h2v3z"/><circle cx="7" cy="16.5" r="2"/><circle cx="17" cy="16.5" r="2"/><path d="M14 4l-2 3 3 1-2 3"/>',
   paint:'<rect x="3" y="3" width="13" height="6" rx="1"/><path d="M16 6h3v5h-8v3"/><rect x="9.5" y="14" width="3" height="7" rx="1"/>',
+  elec:'<path d="M13 2L5 13h6l-1 9 8-12h-6z"/>',
+  manual:'<path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v17H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20v5H6.5"/><path d="M9 7h7M9 11h5"/>',
+  wiring:'<path d="M3 6h5a3 3 0 0 1 3 3v6a3 3 0 0 0 3 3h7"/><path d="M3 18h4M17 6h4"/><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="18" r="1.5"/><rect x="12" y="4" width="5" height="4" rx="1"/>',
   letter:'<path d="M6 2h9l5 5v15H6z"/><path d="M15 2v5h5M9 12h8M9 16h8M9 8h3"/>',
   crm:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>',
   pipe:'<path d="M3 4h18l-7 8v6l-4 2v-8z"/>',
@@ -5838,15 +5851,18 @@ function homeTiles(){
     t('work', 'Inspection Report', 'inspect', 'cyan', 'doc', () => newDocType('INSPECTION REPORT')),
     t('work', 'Diagnostic Report', 'diag', 'pink', 'doc', () => newDocType('DIAGNOSTIC REPORT')),
     t('work', 'Technical Support', 'support', 'red', 'tech', () => { showTab('tech'); window.scrollTo({top:0}); }, '', Store.list('diag').filter(d => d.status !== 'Resolved').length),
+    t('work', 'Repair Manuals', 'manual', 'green', 'home', () => openLink('https://lemon-manuals.la/', 'Opening LEMON Manuals: free repair & workshop manuals (about 10,000 models, 1960–2025).')),
+    t('work', 'Wiring Diagrams (Carmin)', 'wiring', 'orange', 'home', () => openLink(/iphone|ipad|ipod/i.test(navigator.userAgent) ? 'https://apps.apple.com/app/id1527982107' : 'https://play.google.com/store/apps/details?id=com.min.car', 'Opening Carmin (wiring diagrams app). Install it once, then open it from your phone.')),
     t('work', 'Letters & Letterhead', 'letter', 'navy', 'letters', () => { segState.letters = 'list'; showTab('letters'); window.scrollTo({top:0}); }, 'need-cashier'),
     t('work', 'Current Document', 'edit', 'slate', 'doc', () => showTab('doc')),
-    t('work', 'Lube Service', 'lube', 'yellow', 'quick', () => newQuick('lube')),
-    t('work', 'Tyre & Wheel', 'tyre', 'slate', 'quick', () => newQuick('tyre')),
-    t('work', 'Brake Disc Resurfacing', 'brake', 'orange', 'quick', () => newQuick('brake')),
-    t('work', 'Wheel Straightening & Welding', 'wheel', 'teal', 'quick', () => newQuick('wheel')),
-    t('work', 'AC Repair', 'ac', 'cyan', 'quick', () => newQuick('ac')),
-    t('work', 'Bodywork (Panel Beating)', 'body', 'slate', 'quick', () => newQuick('body')),
-    t('work', 'Spray Painting', 'paint', 'pink', 'quick', () => newQuick('paint')),
+    t('svc', 'Lube Service', 'lube', 'yellow', 'quick', () => newQuick('lube')),
+    t('svc', 'Tyre & Wheel', 'tyre', 'slate', 'quick', () => newQuick('tyre')),
+    t('svc', 'Brake Disc Resurfacing', 'brake', 'orange', 'quick', () => newQuick('brake')),
+    t('svc', 'Wheel Straightening & Welding', 'wheel', 'teal', 'quick', () => newQuick('wheel')),
+    t('svc', 'AC Repair', 'ac', 'cyan', 'quick', () => newQuick('ac')),
+    t('svc', 'Electrical Repairs', 'elec', 'yellow', 'quick', () => newQuick('elec')),
+    t('svc', 'Bodywork (Panel Beating)', 'body', 'slate', 'quick', () => newQuick('body')),
+    t('svc', 'Spray Painting', 'paint', 'pink', 'quick', () => newQuick('paint')),
     t('work', 'Send to Robotik Fix', 'send', 'red', 'send', goSeg('send')),
     t('work', 'Appointments', 'book', 'purple', 'book', goSeg('book', 'book', 'day')),
     t('work', 'Towing', 'tow', 'orange', 'workshop', goSeg('workshop', 'workshop', 'tow')),
@@ -5887,7 +5903,7 @@ function homeTiles(){
   ];
   return L.filter(x => hasTab(x.tab));
 }
-const HOME_GROUPS = [['all', 'All'], ['work', 'Work'], ['track', 'Track'], ['money', 'Money', 'need-cashier'], ['setup', 'Setup']];
+const HOME_GROUPS = [['all', 'All'], ['work', 'Work'], ['svc', 'Services'], ['track', 'Track'], ['money', 'Money', 'need-cashier'], ['setup', 'Setup']];
 let homeGroup = 'all';
 function homeStats(){
   const docs = Store.list('doc'), t = today(), m = t.slice(0, 7);
@@ -5897,6 +5913,7 @@ function homeStats(){
   let due = 0; try{ due = receivables().reduce((s, x) => s + x.bal, 0); }catch(e){}
   return {today:jc.filter(d => d.date === t).length, open:jc.filter(d => d.date >= addDays(t, -60) && !invoiced.has(d.id) && !/complete|cancel|closed|deliver/i.test(d.status || '') && (Store.get('jobtrack', 'jt_' + d.id) || {}).stage !== 'Delivered').length, invN:invM.length, due};
 }
+function openLink(url, msg){ if(msg) toast(msg); setTimeout(() => { const w = window.open(url, '_blank', 'noopener'); if(!w) location.href = url; }, 300); }
 function renderHome(){
   const v = $('view-home'); if(!v) return;
   const co = COMPANIES[curCoIdx()] || {}, logo = bizLogo();
@@ -8890,119 +8907,198 @@ renderSetup = function(){
   bindDocumentStyle();
 };
 Object.assign(window.RF = window.RF || {}, {docHeaderHtml, docStyle, headerPrep});
-/* ===================== FREE LOGO MAKER (v6.3) =====================
-   Setup → My Business → "✨ Make a free logo". Builds 4 logo designs from the garage name
-   (SVG drawn here, no internet needed), Shuffle gives 4 new ones, "Use this logo" turns the
-   chosen design into a PNG and puts it in the logo slot (saved with "Save business details"). */
+/* ===================== FREE LOGO MAKER (v6.5: friendly redesign) =====================
+   Setup → My Business → "✨ Make a free logo". 4 designs from the garage name, drawn here
+   (no internet needed). Soft gradients, rounded shapes, clean lettering, filled workshop icons.
+   🔀 Shuffle gives 4 new ones; "Use this logo" turns the design into a PNG for the logo slot. */
+// [dark text colour, gradient start, gradient end]
 const LM_PALETTES = [
-  ['#1F3864', '#E30613'], ['#111111', '#F5B700'], ['#0B6E4F', '#8BC34A'], ['#0D47A1', '#FF7A00'],
-  ['#7B1E1E', '#D4A017'], ['#00695C', '#FFB300'], ['#4A148C', '#E91E63'], ['#263238', '#FF3D00'],
-  ['#B71C1C', '#212121'], ['#01579B', '#00BCD4'], ['#3E2723', '#FF9800'], ['#1B5E20', '#FDD835']
+  ['#0F4C81', '#1E88E5', '#4FC3F7'], ['#00695C', '#00A693', '#4DD0C1'], ['#B23A0E', '#FF6B35', '#FFB04F'],
+  ['#4A2C82', '#7E57C2', '#B39DDB'], ['#1B5E20', '#43A047', '#AED581'], ['#A61B1B', '#E53935', '#FF8A65'],
+  ['#1F3864', '#2E5AAC', '#6E9BF5'], ['#7A4100', '#F59E0B', '#FCD34D'], ['#0E5A73', '#0891B2', '#67E8F9'],
+  ['#263238', '#455A64', '#90A4AE'], ['#8E1B4A', '#E0457B', '#F8A5C2'], ['#004D40', '#00897B', '#80CBC4']
 ];
 const LM_STOP = new Set(['LTD', 'LTD.', 'LIMITED', 'NIG', 'NIG.', 'NIGERIA', 'ENT', 'ENT.', 'ENTERPRISE', 'ENTERPRISES', 'AND', '&', 'THE', 'CO', 'CO.', 'COMPANY', 'PLC', 'INC', 'LLC']);
+// filled icons in a 100 × 100 box: f = icon colour, k = cut-out colour (the background)
 const LM_ICONS = {
-  wrench:'<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>',
-  car:'<path d="M2.5 16v-3.2l2.2-4.8h12.2l3.4 4.8h1.2V16z"/><path d="M6 8l1.5-3h7.5l2 3"/><circle cx="7" cy="16.5" r="2"/><circle cx="17" cy="16.5" r="2"/>',
-  tyre:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v5M12 16v5M3 12h5M16 12h5"/>',
-  tools:'<path d="M14 3h4l3 3-3 3-2-2h-2z"/><path d="M15 8l-9 9a2 2 0 0 0 3 3l9-9"/><path d="M3 6l3-3 4 4-3 3z"/>',
-  bolt:'<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
-  piston:'<rect x="7" y="3" width="10" height="8" rx="1.5"/><path d="M7 6h10M10 11l-2 10M14 11l2 10M8 21h8"/>'
+  car:(f, k) => `<path d="M27 41 L35 23 Q38 17 45 17 H55 Q62 17 65 23 L73 41 Z" fill="${f}"/><path d="M34 39 L40 26 Q41 23 45 23 H55 Q59 23 60 26 L66 39 Z" fill="${k}" opacity=".9"/>
+    <rect x="12" y="38" width="76" height="30" rx="12" fill="${f}"/><rect x="18" y="62" width="16" height="17" rx="5" fill="${f}"/><rect x="66" y="62" width="16" height="17" rx="5" fill="${f}"/>
+    <circle cx="27" cy="52" r="6.5" fill="${k}"/><circle cx="73" cy="52" r="6.5" fill="${k}"/><rect x="40" y="55" width="20" height="5" rx="2.5" fill="${k}" opacity=".85"/>`,
+  wrench:(f, k) => `<g transform="rotate(45 50 50)"><rect x="43" y="34" width="14" height="60" rx="7" fill="${f}"/><circle cx="50" cy="25" r="20" fill="${f}"/><rect x="44" y="2" width="12" height="22" rx="3" fill="${k}"/><circle cx="50" cy="85" r="3.5" fill="${k}"/></g>`,
+  gear:(f, k) => `<path d="${lmGear(50, 50, 44, 34, 10)}" fill="${f}"/><circle cx="50" cy="50" r="15" fill="${k}"/>`,
+  tyre:(f, k) => `<circle cx="50" cy="50" r="44" fill="${f}"/><circle cx="50" cy="50" r="27" fill="${k}"/><circle cx="50" cy="50" r="19" fill="${f}"/><circle cx="50" cy="50" r="6" fill="${k}"/>
+    ${[0, 72, 144, 216, 288].map(a => `<circle cx="${(50 + 12 * Math.cos(a * Math.PI / 180)).toFixed(1)}" cy="${(50 + 12 * Math.sin(a * Math.PI / 180)).toFixed(1)}" r="3" fill="${k}"/>`).join('')}`,
+  gearwrench:(f, k) => `<path d="${lmGear(42, 42, 36, 28, 9)}" fill="${f}"/><circle cx="42" cy="42" r="12" fill="${k}"/>
+    <g transform="rotate(45 64 64)"><rect x="58" y="52" width="12" height="44" rx="6" fill="${f}" stroke="${k}" stroke-width="4"/></g>`,
+  spark:(f, k) => `<path d="M56 6 L22 56 H46 L40 94 L78 40 H54 Z" fill="${f}" stroke-linejoin="round"/>`
 };
-let lmSeed = 0, lmLast = [];
+
+// realistic spare parts (metal shading) — drawn in a 100 × 100 box; f/k are ignored except as accent
+const LM_METAL = `<linearGradient id="mt" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5b6470"/><stop offset=".28" stop-color="#eef1f4"/><stop offset=".5" stop-color="#c3c9d1"/><stop offset=".78" stop-color="#8b939e"/><stop offset="1" stop-color="#4a525c"/></linearGradient>
+  <linearGradient id="md" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3d444d"/><stop offset=".35" stop-color="#9aa3ad"/><stop offset=".6" stop-color="#6b737d"/><stop offset="1" stop-color="#2f353c"/></linearGradient>
+  <radialGradient id="mr" cx=".38" cy=".35" r=".7"><stop offset="0" stop-color="#f4f6f8"/><stop offset=".55" stop-color="#b9c0c8"/><stop offset="1" stop-color="#5d6570"/></radialGradient>`;
+Object.assign(LM_ICONS, {
+  piston:() => `<defs>${LM_METAL}</defs>
+    <path d="M44 48 H56 L59 76 H41 Z" fill="url(#md)"/><circle cx="50" cy="82" r="14" fill="url(#mt)"/><circle cx="50" cy="82" r="7.5" fill="#1f252b"/>
+    <rect x="35" y="94" width="30" height="4" rx="2" fill="url(#md)"/>
+    <path d="M22 18 Q22 9 31 9 H69 Q78 9 78 18 V50 Q78 56 72 56 H28 Q22 56 22 50 Z" fill="url(#mt)"/>
+    <rect x="22" y="17" width="56" height="3" fill="#2b3138"/><rect x="22" y="23" width="56" height="3" fill="#2b3138"/><rect x="22" y="29" width="56" height="3" fill="#2b3138"/>
+    <circle cx="50" cy="44" r="7" fill="url(#md)"/><circle cx="50" cy="44" r="3.5" fill="#e9edf1"/>
+    <path d="M26 11 Q50 6 74 11" stroke="#fff" stroke-width="2" fill="none" opacity=".7"/>`,
+  valve:() => `<defs>${LM_METAL}</defs>
+    <rect x="46.5" y="4" width="7" height="72" rx="3" fill="url(#mt)"/><rect x="46.5" y="9" width="7" height="2" fill="#2b3138"/><rect x="46.5" y="13" width="7" height="2" fill="#2b3138"/>
+    ${[22, 30, 38, 46, 54].map(y => `<path d="M34 ${y + 4} Q50 ${y - 3} 66 ${y + 4}" stroke="url(#md)" stroke-width="4.5" fill="none" stroke-linecap="round"/>`).join('')}
+    <rect x="35" y="16" width="30" height="5" rx="2" fill="url(#md)"/>
+    <path d="M47 74 Q46 82 24 88 Q20 89 20 92 V94 H80 V92 Q80 89 76 88 Q54 82 53 74 Z" fill="url(#mt)"/><rect x="20" y="92" width="60" height="4" rx="1.5" fill="#4a525c"/>`,
+  sparkplug:() => `<defs>${LM_METAL}</defs>
+    <rect x="45" y="2" width="10" height="9" rx="2" fill="url(#mt)"/><rect x="47.5" y="10" width="5" height="5" fill="url(#md)"/>
+    <path d="M42 15 H58 L60 44 H40 Z" fill="#f7f8fa" stroke="#cfd5dc" stroke-width="1"/>
+    ${[20, 26, 32].map(y => `<rect x="41" y="${y}" width="18" height="2.2" rx="1" fill="#d5dbe2"/>`).join('')}<rect x="45" y="17" width="3" height="25" rx="1.5" fill="#fff" opacity=".9"/>
+    <path d="M31 44 H69 V58 H31 Z" fill="url(#mt)"/><path d="M43 44 V58 M57 44 V58" stroke="#5b6470" stroke-width="1.4"/>
+    <rect x="39" y="58" width="22" height="24" fill="url(#md)"/>${[61, 65, 69, 73, 77].map(y => `<path d="M39 ${y + 3} L61 ${y}" stroke="#2b3138" stroke-width="1.6"/>`).join('')}
+    <rect x="47.5" y="82" width="5" height="8" fill="#6b737d"/><path d="M41 84 V94 H51" stroke="#4a525c" stroke-width="3.5" fill="none" stroke-linecap="round"/>`,
+  brakedisc:(f, k) => `<defs>${LM_METAL}</defs>
+    <circle cx="48" cy="54" r="42" fill="url(#mr)"/><circle cx="48" cy="54" r="42" fill="none" stroke="#5d6570" stroke-width="1.5"/>
+    ${Array.from({length:18}, (_, i) => { const a = i * 20 * Math.PI / 180; return `<circle cx="${(48 + 31 * Math.cos(a)).toFixed(1)}" cy="${(54 + 31 * Math.sin(a)).toFixed(1)}" r="2.3" fill="#4a525c"/>`; }).join('')}
+    <circle cx="48" cy="54" r="20" fill="url(#md)"/><circle cx="48" cy="54" r="8" fill="#1f252b"/>
+    ${Array.from({length:5}, (_, i) => { const a = (i * 72 - 90) * Math.PI / 180; return `<circle cx="${(48 + 14 * Math.cos(a)).toFixed(1)}" cy="${(54 + 14 * Math.sin(a)).toFixed(1)}" r="2.6" fill="#e5e9ed"/>`; }).join('')}
+    <path d="M60 10 Q90 18 94 48 L80 50 Q77 30 58 24 Z" fill="#d62828"/><path d="M63 13 Q86 21 90 44" stroke="#ff8a80" stroke-width="2.5" fill="none" stroke-linecap="round"/>`,
+  shock:() => `<defs>${LM_METAL}</defs>
+    <circle cx="50" cy="8" r="6" fill="none" stroke="url(#md)" stroke-width="4"/><rect x="47" y="13" width="6" height="34" rx="2" fill="url(#mt)"/>
+    <rect x="39" y="44" width="22" height="42" rx="4" fill="url(#md)"/><rect x="42" y="47" width="4" height="36" rx="2" fill="#c3c9d1" opacity=".7"/>
+    <circle cx="50" cy="92" r="6" fill="none" stroke="url(#md)" stroke-width="4"/>
+    <rect x="30" y="17" width="40" height="5" rx="2" fill="url(#md)"/><rect x="30" y="76" width="40" height="5" rx="2" fill="url(#md)"/>
+    ${[26, 35, 44, 53, 62].map(y => `<path d="M32 ${y + 6} Q50 ${y - 2} 68 ${y + 6}" stroke="#e53935" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M34 ${y + 5} Q50 ${y - 1} 64 ${y + 4}" stroke="#ff8a80" stroke-width="1.4" fill="none"/>`).join('')}`,
+  rim:() => `<defs>${LM_METAL}</defs>
+    <circle cx="50" cy="50" r="47" fill="#22272d"/><circle cx="50" cy="50" r="47" fill="none" stroke="#3a4149" stroke-width="5" stroke-dasharray="4 3"/>
+    <circle cx="50" cy="50" r="35" fill="url(#mr)"/><circle cx="50" cy="50" r="31" fill="#3a4149"/>
+    ${Array.from({length:5}, (_, i) => `<path d="M47 22 L53 22 L56 42 L44 42 Z" fill="url(#mt)" transform="rotate(${i * 72} 50 50)"/>`).join('')}
+    <circle cx="50" cy="50" r="11" fill="url(#mr)"/><circle cx="50" cy="50" r="4" fill="#3a4149"/>`,
+  metalgear:() => `<defs>${LM_METAL}</defs><path d="${lmGear(50, 50, 46, 36, 12)}" fill="url(#mr)" stroke="#5d6570" stroke-width="1.2"/>
+    <circle cx="50" cy="50" r="26" fill="url(#md)"/><circle cx="50" cy="50" r="20" fill="url(#mr)"/><circle cx="50" cy="50" r="9" fill="#1f252b"/><rect x="47" y="38" width="6" height="5" fill="#1f252b"/>`
+});
+const LM_PARTS = ['piston', 'valve', 'sparkplug', 'brakedisc', 'shock', 'rim', 'metalgear'];
+const LM_PICTURES = [['mix', 'Mix (abstract & parts)'], ['abstract', 'Abstract shapes'], ['parts', 'Spare parts only'], ['icons', 'Simple icons only'], ['piston', 'Piston'], ['valve', 'Engine valve'], ['sparkplug', 'Spark plug'], ['brakedisc', 'Brake disc & caliper'], ['shock', 'Shock absorber'], ['rim', 'Alloy wheel'], ['metalgear', 'Metal gear'], ['car', 'Car'], ['wrench', 'Wrench'], ['tyre', 'Tyre']];
+let lmLast = [];
 function lmRand(n){ return Math.floor(Math.random() * n); }
 function lmPick(a){ return a[lmRand(a.length)]; }
 function lmWords(name){ return String(name || '').toUpperCase().replace(/[^A-Z0-9&.' -]/g, ' ').split(/\s+/).filter(Boolean); }
+function lmTitle(w){ return w.length <= 2 || (w.length <= 4 && !/[AEIOU]/.test(w)) ? w : w.charAt(0) + w.slice(1).toLowerCase(); }
 function lmParts(name){
   const all = lmWords(name), w = all.filter(x => !LM_STOP.has(x));
   const words = w.length ? w : (all.length ? all : ['MY', 'GARAGE']);
-  const ini = (words.length > 1 ? words[0][0] + words[1][0] + (words[2] && words.length === 3 ? words[2][0] : '') : words[0].slice(0, 2)).replace(/[^A-Z0-9]/g, '') || 'G';
-  return {main:words.join(' '), ini:ini.slice(0, 3), words};
-}
-// keep text inside maxW: shrink the font, then squeeze if still too long
-function lmText(x, y, txt, fs, maxW, attrs, minFs){
-  const est = (t, f) => t.length * f * 0.66;
-  let f = fs; if(est(txt, f) > maxW) f = Math.max(minFs || 14, maxW / (txt.length * 0.66));
-  const squeeze = est(txt, f) > maxW ? ` textLength="${maxW}" lengthAdjust="spacingAndGlyphs"` : '';
-  return `<text x="${x}" y="${y}" font-size="${f.toFixed(1)}"${squeeze} ${attrs || ''}>${esc(txt)}</text>`;
-}
-function lmIcon(name, x, y, size, color, sw){
-  return `<g transform="translate(${x - size / 2},${y - size / 2}) scale(${size / 24})" fill="none" stroke="${color}" stroke-width="${sw || 2}" stroke-linecap="round" stroke-linejoin="round">${LM_ICONS[name] || LM_ICONS.wrench}</g>`;
+  const ini = (words.length > 1 ? words[0][0] + words[1][0] : words[0].slice(0, 2)).replace(/[^A-Z0-9]/g, '') || 'G';
+  return {main:words.map(lmTitle).join(' '), ini, words:words.map(lmTitle)};
 }
 function lmGear(cx, cy, ro, ri, teeth){
   let d = ''; const st = Math.PI * 2 / teeth;
   for(let i = 0; i < teeth; i++){
-    const a = i * st, pts = [[a, ri], [a + st * .12, ro], [a + st * .45, ro], [a + st * .57, ri]];
+    const a = i * st, pts = [[a, ri], [a + st * .1, ro], [a + st * .42, ro], [a + st * .52, ri]];
     pts.forEach(([t, r], j) => { d += (i === 0 && j === 0 ? 'M' : 'L') + (cx + r * Math.cos(t)).toFixed(1) + ' ' + (cy + r * Math.sin(t)).toFixed(1) + ' '; });
   }
   return d + 'Z';
 }
-// name in 1 line, or 2 balanced lines when long (centred on y)
-function lmName(x, y, main, fs, maxW, attrs, minFs){
-  if(main.length <= 16) return lmText(x, y, main, fs, maxW, attrs, minFs);
-  const w = main.split(' '); let best = [main, ''], diff = 1e9;
-  for(let i = 1; i < w.length; i++){ const a = w.slice(0, i).join(' '), b = w.slice(i).join(' '), d = Math.max(a.length, b.length); if(d < diff){ diff = d; best = [a, b]; } }
-  if(!best[1]) return lmText(x, y, main, fs, maxW, attrs, minFs);
-  const f = Math.min(fs * 0.82, maxW / (Math.max(best[0].length, best[1].length) * 0.66)), g = Math.max(minFs || 14, f);
-  return lmText(x, y - g * 0.52, best[0], g, maxW, attrs, minFs) + lmText(x, y + g * 0.52, best[1], g, maxW, attrs, minFs);
+const LM_F1 = `font-family="Poppins,Montserrat,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif" font-weight="800"`;
+const LM_F2 = `font-family="Poppins,Montserrat,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif" font-weight="600"`;
+// text that always fits maxW (shrinks, then squeezes)
+function lmText(x, y, txt, fs, maxW, attrs, minFs, k){
+  const r = k || 0.6, est = f => txt.length * f * r; let f = fs;
+  if(est(f) > maxW) f = Math.max(minFs || 14, maxW / (txt.length * r));
+  const sq = est(f) > maxW ? ` textLength="${maxW}" lengthAdjust="spacingAndGlyphs"` : '';
+  return `<text x="${x}" y="${y}" font-size="${f.toFixed(1)}"${sq} ${attrs || ''}>${esc(txt)}</text>`;
 }
-const LM_FONT = `font-family="'Arial Black','Segoe UI Black',Impact,Arial,Helvetica,sans-serif" font-weight="900"`;
-const LM_FONT2 = `font-family="Arial,Helvetica,sans-serif" font-weight="700"`;
-// each design: (parts, tagline, [primary, accent], icon) → svg (400 × 400)
+// garage name: 1 line, or 2 balanced lines when long; returns {svg, h} (h = height used)
+function lmName(x, y, main, fs, maxW, attrs, minFs, kk){
+  const K = kk || 0.6, one = () => ({svg:lmText(x, y, main, fs, maxW, attrs, minFs, K), h:fs, last:y});
+  if(main.length * fs * K <= maxW * 1.04 || !main.includes(' ')) return one();
+  const w = main.split(' '); let best = null, diff = 1e9;
+  for(let i = 1; i < w.length; i++){ const a = w.slice(0, i).join(' '), b = w.slice(i).join(' '), d = Math.max(a.length, b.length); if(d < diff){ diff = d; best = [a, b]; } }
+  const g = Math.max(minFs || 14, Math.min(fs * 0.86, maxW / (diff * K)));
+  return {svg:lmText(x, y, best[0], g, maxW, attrs, minFs, K) + lmText(x, y + g * 1.15, best[1], g, maxW, attrs, minFs, K), h:g * 2.15, last:y + g * 1.15};
+}
+function lmTag(x, y, tag, color, maxW){ return tag ? lmText(x, y, tag, 19, maxW || 330, `text-anchor="middle" fill="${color}" ${LM_F2} letter-spacing="3"`, 10, 0.78) : ''; }
+function lmGrad(id, c2, c3, dir){ return `<linearGradient id="${id}" x1="0" y1="0" x2="${dir === 'h' ? 1 : 0.7}" y2="${dir === 'h' ? 0 : 1}"><stop offset="0" stop-color="${c2}"/><stop offset="1" stop-color="${c3}"/></linearGradient>`; }
+function lmIcon(name, cx, cy, size, f, k){ if(typeof LM_PARTS !== "undefined" && LM_PARTS.includes(name)) size *= 1.2; const s = size / 100; return `<g transform="translate(${(cx - size / 2).toFixed(1)},${(cy - size / 2).toFixed(1)}) scale(${s.toFixed(3)})">${(LM_ICONS[name] || LM_ICONS.car)(f, k)}</g>`; }
+// name block under a mark: name (dark) + small accent line + tagline (grey); centred, sits from y0
+function lmUnder(p, tag, c1, c2, y0){
+  const n = lmName(200, y0 + 40, p.main, 44, 372, `text-anchor="middle" fill="${c1}" ${LM_F1}`, 18);
+  const ty = n.last;
+  return n.svg + (tag ? `<rect x="182" y="${(ty + 16).toFixed(0)}" width="36" height="4" rx="2" fill="${c2}"/>` + lmTag(200, ty + 48, tag, '#6B7280') : '');
+}
+// each design: (parts, tag, [dark, from, to], icon) → inner svg of a 400 × 400 logo (transparent around it)
 const LM_DESIGNS = {
-  gear:(p, tag, [c1, c2], ic) => `
-    <path d="${lmGear(200, 160, 132, 112, 14)}" fill="${c1}"/><circle cx="200" cy="160" r="92" fill="#fff"/><circle cx="200" cy="160" r="82" fill="${c2}"/>
-    ${lmText(200, 160 + (p.ini.length > 2 ? 21 : 32), p.ini, p.ini.length > 2 ? 60 : 92, 130, `text-anchor="middle" fill="#fff" ${LM_FONT}`)}
-    ${lmName(200, 330, p.main, 44, 380, `text-anchor="middle" fill="${c1}" ${LM_FONT}`, 16)}
-    ${tag ? lmText(200, 374, tag, 22, 330, `text-anchor="middle" fill="${c2}" ${LM_FONT2} letter-spacing="3"`, 11) : ''}`,
-  ring:(p, tag, [c1, c2], ic) => { const rn = p.main.length > 28 ? p.words.slice(0, 3).join(' ') : p.main, f = Math.min(40, 400 / (rn.length * 0.68)), tf = Math.min(24, 380 / (((tag || '').length + 4) * 0.66));
-    return `<circle cx="200" cy="200" r="190" fill="${c1}"/><circle cx="200" cy="200" r="176" fill="none" stroke="#fff" stroke-width="3"/><circle cx="200" cy="200" r="104" fill="#fff"/><circle cx="200" cy="200" r="96" fill="none" stroke="${c2}" stroke-width="6"/>
-    <defs><path id="lmTop" d="M 62 200 A 138 138 0 0 1 338 200"/><path id="lmBot" d="M 50 200 A 150 150 0 0 0 350 200"/></defs>
-    <text fill="#fff" font-size="${f.toFixed(1)}" ${LM_FONT} text-anchor="middle"><textPath href="#lmTop" startOffset="50%">${esc(rn)}</textPath></text>
-    ${tag ? `<text fill="${c2}" font-size="${tf.toFixed(1)}" ${LM_FONT2} letter-spacing="2" text-anchor="middle"><textPath href="#lmBot" startOffset="50%">★ ${esc(tag)} ★</textPath></text>` : ''}
-    ${lmIcon(ic, 200, 172, 74, c1, 2.2)}
-    ${lmText(200, 266, p.ini, 46, 150, `text-anchor="middle" fill="${c2}" ${LM_FONT}`)}`; },
-  shield:(p, tag, [c1, c2], ic) => `
-    <path d="M200 14 L340 56 V160 C340 244 280 296 200 330 C120 296 60 244 60 160 V56 Z" fill="${c1}"/>
-    <path d="M200 36 L320 72 V160 C320 230 270 274 200 306 C130 274 80 230 80 160 V72 Z" fill="none" stroke="${c2}" stroke-width="6"/>
-    ${lmIcon(ic, 200, 104, 70, '#fff', 2.2)}
-    ${lmText(200, 222, p.ini, p.ini.length > 2 ? 72 : 90, 200, `text-anchor="middle" fill="#fff" ${LM_FONT}`)}
-    <path d="M14 296 H386 L366 330 L386 364 H14 L34 330 Z" fill="${c2}"/>
-    ${lmName(200, 340, p.main, 36, 320, `text-anchor="middle" fill="#fff" ${LM_FONT}`, 14)}
-    ${tag ? lmText(200, 392, tag, 20, 340, `text-anchor="middle" fill="${c1}" ${LM_FONT2} letter-spacing="3"`, 11) : ''}`,
-  hex:(p, tag, [c1, c2], ic) => `
-    <path d="M200 12 L332 88 V240 L200 316 L68 240 V88 Z" fill="${c2}"/><path d="M200 34 L313 99 V229 L200 294 L87 229 V99 Z" fill="${c1}"/>
-    ${lmIcon(ic, 200, 128, 96, '#fff', 2)}
-    ${lmText(200, 248, p.ini, 54, 170, `text-anchor="middle" fill="${c2}" ${LM_FONT}`)}
-    ${lmName(200, 352, p.main, 42, 384, `text-anchor="middle" fill="${c1}" ${LM_FONT}`, 15)}
-    ${tag ? lmText(200, 392, tag, 20, 330, `text-anchor="middle" fill="${c2}" ${LM_FONT2} letter-spacing="3"`, 11) : ''}`,
-  tyre:(p, tag, [c1, c2], ic) => { let tread = ''; for(let i = 0; i < 36; i++){ const a = i * 10 * Math.PI / 180; tread += `<rect x="194" y="10" width="12" height="22" rx="2" fill="${c1}" transform="rotate(${i * 10} 200 152)"/>`; }
-    return `${tread}<circle cx="200" cy="152" r="128" fill="${c1}"/><circle cx="200" cy="152" r="96" fill="#fff"/><circle cx="200" cy="152" r="86" fill="${c2}"/>
-    ${lmText(200, 152 + (p.ini.length > 2 ? 20 : 30), p.ini, p.ini.length > 2 ? 56 : 84, 130, `text-anchor="middle" fill="#fff" ${LM_FONT}`)}
-    ${lmName(200, 330, p.main, 44, 380, `text-anchor="middle" fill="${c1}" ${LM_FONT}`, 16)}
-    ${tag ? `<rect x="70" y="352" width="260" height="34" rx="17" fill="${c2}"/>` + lmText(200, 376, tag, 19, 236, `text-anchor="middle" fill="#fff" ${LM_FONT2} letter-spacing="2"`, 10) : ''}`; },
-  block:(p, tag, [c1, c2], ic) => { const w = p.words.length > 1 ? [p.words.slice(0, Math.ceil(p.words.length / 2)).join(' '), p.words.slice(Math.ceil(p.words.length / 2)).join(' ')] : [p.words[0]];
-    return `<rect x="10" y="40" width="380" height="${w.length > 1 ? 250 : 190}" rx="26" fill="${c1}"/>
-    <rect x="10" y="${w.length > 1 ? 262 : 202}" width="380" height="28" fill="${c2}"/>${lmIcon(ic, 352, 82, 46, c2, 2.4)}
-    ${w.map((t, i) => lmText(36, (w.length > 1 ? 150 : 165) + i * 82, t, 74, 320, `fill="#fff" ${LM_FONT}`, 20)).join('')}
-    ${tag ? lmText(200, w.length > 1 ? 346 : 268, tag, 30, 370, `text-anchor="middle" fill="${c1}" ${LM_FONT2} letter-spacing="4"`, 12) : ''}`; },
-  mono:(p, tag, [c1, c2], ic) => `
-    <rect x="80" y="10" width="240" height="240" rx="48" fill="${c1}"/><path d="M80 186 Q200 120 320 186 V202 Q320 250 272 250 H128 Q80 250 80 202 Z" fill="${c2}"/>
-    ${lmText(200, 140 + (p.ini.length > 2 ? 0 : 6), p.ini, p.ini.length > 2 ? 86 : 110, 200, `text-anchor="middle" fill="#fff" ${LM_FONT}`)}
-    ${lmIcon(ic, 200, 214, 40, '#fff', 2.4)}
-    ${lmName(200, 312, p.main, 44, 384, `text-anchor="middle" fill="${c1}" ${LM_FONT}`, 15)}
-    ${tag ? `<rect x="40" y="338" width="320" height="4" fill="${c2}"/>` + lmText(200, 378, tag, 24, 340, `text-anchor="middle" fill="${c2}" ${LM_FONT2} letter-spacing="3"`, 11) : ''}`,
-  emblem:(p, tag, [c1, c2], ic) => `
-    <circle cx="200" cy="130" r="120" fill="${c2}"/><circle cx="200" cy="130" r="106" fill="${c1}"/>
-    ${lmIcon(ic, 200, 104, 92, '#fff', 2)}${lmText(200, 206, p.ini, 40, 140, `text-anchor="middle" fill="${c2}" ${LM_FONT}`)}
-    <rect x="0" y="262" width="400" height="74" rx="12" fill="${c1}"/>
-    ${lmName(200, 308, p.main, 42, 370, `text-anchor="middle" fill="#fff" ${LM_FONT}`, 14)}
-    ${tag ? lmText(200, 380, tag, 24, 360, `text-anchor="middle" fill="${c1}" ${LM_FONT2} letter-spacing="3"`, 11) : ''}`
+  appicon:(p, tag, [c1, c2, c3], ic) => `<defs>${lmGrad('g', c2, c3)}</defs>
+    <rect x="115" y="14" width="170" height="170" rx="44" fill="url(#g)"/><rect x="115" y="14" width="170" height="85" rx="44" fill="#fff" opacity=".08"/>
+    ${lmIcon(ic, 200, 99, 108, '#fff', c2)}${lmUnder(p, tag, c1, c2, 204)}`,
+  circle:(p, tag, [c1, c2, c3], ic) => `<defs>${lmGrad('g', c2, c3)}</defs>
+    <circle cx="200" cy="104" r="92" fill="url(#g)"/><circle cx="200" cy="104" r="80" fill="none" stroke="#fff" stroke-width="3" opacity=".55"/>
+    ${lmIcon(ic, 200, 104, 104, '#fff', c2)}${lmUnder(p, tag, c1, c2, 210)}`,
+  monogram:(p, tag, [c1, c2, c3], ic) => `<defs>${lmGrad('g', c2, c3)}</defs>
+    <circle cx="200" cy="104" r="92" fill="url(#g)"/>
+    ${lmText(200, 104 + 30, p.ini, 88, 130, `text-anchor="middle" fill="#fff" ${LM_F1}`, 40, 0.68)}
+    <circle cx="270" cy="170" r="32" fill="#fff"/><circle cx="270" cy="170" r="27" fill="${c1}"/>${lmIcon(ic, 270, 170, 36, '#fff', c1)}
+    ${lmUnder(p, tag, c1, c2, 210)}`,
+  ring:(p, tag, [c1, c2, c3], ic) => `<defs>${lmGrad('g', c2, c3, 'h')}</defs>
+    <circle cx="200" cy="104" r="88" fill="none" stroke="url(#g)" stroke-width="12"/><circle cx="200" cy="104" r="70" fill="${c2}" opacity=".1"/>
+    ${lmIcon(ic, 200, 104, 100, c1, '#fff')}${lmUnder(p, tag, c1, c2, 210)}`,
+  shield:(p, tag, [c1, c2, c3], ic) => `<defs>${lmGrad('g', c2, c3)}</defs>
+    <path d="M200 12 Q246 30 284 32 Q290 34 290 42 V104 Q290 164 206 196 Q200 198 194 196 Q110 164 110 104 V42 Q110 34 116 32 Q154 30 200 12 Z" fill="url(#g)"/>
+    ${lmIcon(ic, 200, 100, 96, '#fff', c2)}${lmUnder(p, tag, c1, c2, 214)}`,
+  roadmark:(p, tag, [c1, c2, c3], ic) => { const n = lmName(200, 214, p.main, 54, 380, `text-anchor="middle" fill="${c1}" ${LM_F1}`, 20), y = n.last;
+    return `<defs>${lmGrad('g', c2, c3, 'h')}</defs>
+    <circle cx="200" cy="92" r="66" fill="url(#g)"/>${lmIcon(ic, 200, 92, 78, '#fff', c2)}
+    ${n.svg}<path d="M60 ${y + 22} Q200 ${y + 46} 340 ${y + 22}" fill="none" stroke="url(#g)" stroke-width="8" stroke-linecap="round"/>
+    ${lmTag(200, y + 76, tag, '#6B7280')}`; }
 };
-function lmSvg(d){ return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">${LM_DESIGNS[d.design](lmParts(d.name), (d.tag || '').toUpperCase(), d.pal, d.icon)}</svg>`; }
+
+/* ---------- abstract marks (v6.7): modern geometric logos, name in spaced capitals ---------- */
+// [dark, accent, third]
+const LM_APAL = [['#1F2A3A', '#F26B1D', '#2BB3C0'], ['#0F3057', '#00A8CC', '#F9A826'], ['#14532D', '#65A30D', '#FACC15'], ['#7F1D1D', '#DC2626', '#22B8CF'],
+  ['#3B0764', '#9333EA', '#F472B6'], ['#0B3B60', '#1D8FE1', '#94A3B8'], ['#1F2937', '#F59E0B', '#EF4444'], ['#134E4A', '#14B8A6', '#F97316'], ['#1E1B4B', '#4F46E5', '#22D3EE'], ['#27272A', '#E11D48', '#FB923C']];
+const LM_U = `font-family="Montserrat,Poppins,'Segoe UI',Roboto,Arial,sans-serif" font-weight="700"`;
+function lmAbText(p, tag, a, b, y0){
+  const up = p.words.join(' ').toUpperCase(), f1 = 376 / (up.length * 0.84);
+  if(f1 >= 27){ const f = Math.min(40, f1); return lmText(200, y0 + 8, up, f, 376, `text-anchor="middle" fill="${a}" ${LM_U} letter-spacing="5"`, 16, 0.84) + (tag ? lmText(200, y0 + 42, tag, 16, 330, `text-anchor="middle" fill="${b}" ${LM_U} letter-spacing="4"`, 9, 0.9) : ''); }
+  const n = lmName(200, y0, p.words.join(' ').toUpperCase(), 40, 376, `text-anchor="middle" fill="${a}" ${LM_U} letter-spacing="5"`, 16, 0.84);
+  return n.svg + (tag ? lmText(200, n.last + 34, tag, 16, 330, `text-anchor="middle" fill="${b}" ${LM_U} letter-spacing="4"`, 9, 0.9) : '');
+}
+const lmRot = (v, deg) => `transform="rotate(${((v || 0) * (deg || 360)).toFixed(0)} 200 104)"`;
+const LM_ABSTRACT = {
+  ab_split:(p, [a, b, c], v) => `<defs><clipPath id="cc"><circle cx="200" cy="104" r="86"/></clipPath></defs><g clip-path="url(#cc)" ${lmRot(v)}>
+    <rect x="100" y="0" width="200" height="210" fill="${a}"/><path d="M200 10 C 130 70, 270 130, 200 200 L 310 200 L 310 10 Z" fill="${b}"/>
+    <path d="M200 10 C 130 70, 270 130, 200 200" stroke="#fff" stroke-width="9" fill="none"/></g>`,
+  ab_swoosh:(p, [a, b, c], v) => `<text x="200" y="176" font-size="150" text-anchor="middle" fill="${a}" ${LM_F1}>${esc(p.ini[0])}</text>
+    <path d="M70 ${164 - v * 14} Q 190 ${92 - v * 10} 336 ${92 + v * 8} Q 210 ${112 - v * 6} 86 ${176 - v * 14} Z" fill="${b}" stroke="#fff" stroke-width="5" paint-order="stroke"/>`,
+  ab_crescents:(p, [a, b, c], v) => `<g ${lmRot(v, 60)}><path d="M212 61 A 56 56 0 1 0 212 147" stroke="${a}" stroke-width="22" fill="none" stroke-linecap="round"/>
+    <path d="M188 147 A 56 56 0 1 0 188 61" stroke="${b}" stroke-width="22" fill="none" stroke-linecap="round"/></g>`,
+  ab_diamond:(p, [a, b, c], v) => `<rect x="142" y="46" width="116" height="116" rx="10" transform="rotate(45 200 104)" fill="none" stroke="${a}" stroke-width="14"/>
+    ${[[200, 66], [238, 104], [200, 142], [162, 104]].map(([x, y], i) => `<rect x="${x - 15}" y="${y - 15}" width="30" height="30" rx="4" transform="rotate(45 ${x} ${y})" fill="${i % 2 ? b : (v > .5 ? c : b)}"/>`).join('')}
+    <rect x="189" y="93" width="22" height="22" rx="3" transform="rotate(45 200 104)" fill="${a}"/>`,
+  ab_stripes:(p, [a, b, c], v) => `${[0, 1, 2, 3].map(i => `<path d="M${108 + i * 22} 64 L${152 + i * 22} 168" stroke="${a}" stroke-width="12"/>`).join('')}
+    ${[0, 1, 2, 3].map(i => `<path d="M${196 + i * 22} 168 L${252 + i * 22} 30" stroke="${b}" stroke-width="12"/>`).join('')}`,
+  ab_petals:(p, [a, b, c], v) => `<g ${lmRot(v, 120)}>${[0, 120, 240].map((r, i) => `<path d="M200 104 C 196 52, 236 22, 282 24 C 280 72, 246 104, 200 104 Z" fill="${[a, b, c][i]}" transform="rotate(${r} 200 104)"/>`).join('')}
+    <circle cx="200" cy="104" r="9" fill="#fff"/></g>`,
+  ab_triangles:(p, [a, b, c], v) => `<g ${lmRot(v, 90)}>${[0, 90, 180, 270].map((r, i) => `<path d="M214 44 L286 82 L226 108 Z" fill="${[b, a, c, b][i]}" transform="rotate(${r} 200 104)"/>`).join('')}</g>`,
+  ab_rings:(p, [a, b, c], v) => `<circle cx="172" cy="${v > .5 ? 118 : 90}" r="52" fill="none" stroke="${a}" stroke-width="14"/>
+    <rect x="178" y="${v > .5 ? 44 : 70}" width="94" height="94" rx="22" fill="none" stroke="${b}" stroke-width="14"/>`,
+  ab_road:(p, [a, b, c], v) => `<defs>${lmGrad('ga', b, c)}</defs><rect x="116" y="20" width="168" height="168" rx="30" fill="url(#ga)"/>
+    <defs><clipPath id="cr"><rect x="116" y="20" width="168" height="168" rx="30"/></clipPath></defs>
+    <g clip-path="url(#cr)"><path d="M100 ${200 - v * 30} C 170 150, 210 90, 300 ${30 + v * 30}" stroke="#fff" stroke-width="30" fill="none" opacity=".95"/>
+    <path d="M100 ${200 - v * 30} C 170 150, 210 90, 300 ${30 + v * 30}" stroke="${a}" stroke-width="4" stroke-dasharray="14 10" fill="none"/>
+    <path d="M100 ${150 - v * 20} C 160 120, 190 70, 260 20" stroke="#fff" stroke-width="6" fill="none" opacity=".6"/></g>`
+};
+Object.keys(LM_ABSTRACT).forEach(k => { const mark = LM_ABSTRACT[k];
+  LM_DESIGNS[k] = (p, tag, pal, ic, v) => mark(p, pal, v || 0) + lmAbText(p, tag, pal[0], pal[1], 244); });
+function lmSvg(d){ return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">${LM_DESIGNS[d.design](lmParts(d.name), (d.tag || '').toUpperCase(), d.pal, d.icon, d.v)}</svg>`; }
 function lmUrl(svg){ return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); }
-function lmGenerate(name, tag){
-  const ds = Object.keys(LM_DESIGNS).sort(() => Math.random() - .5).slice(0, 4), pals = LM_PALETTES.slice().sort(() => Math.random() - .5), ics = Object.keys(LM_ICONS);
-  return ds.map((design, i) => ({design, name, tag, pal:pals[i], icon:lmPick(ics)}));
+function lmGenerate(name, tag, pic){
+  const flat = Object.keys(LM_ICONS).filter(k => !LM_PARTS.includes(k)), sh = a => a.slice().sort(() => Math.random() - .5);
+  const ab = sh(Object.keys(LM_ABSTRACT)), reg = sh(Object.keys(LM_DESIGNS).filter(k => !LM_ABSTRACT[k])), pals = sh(LM_PALETTES), apals = sh(LM_APAL);
+  const abs = n => ab.slice(0, n).map((design, i) => ({design, name, tag, pal:apals[i], icon:'', v:Math.random()}));
+  if(pic === 'abstract') return abs(4);
+  const pool = pic === 'parts' ? sh(LM_PARTS) : pic === 'icons' ? sh(flat) : LM_ICONS[pic] ? [pic] : sh(LM_PARTS).slice(0, 2);
+  const regs = n => reg.slice(0, n).map((design, i) => ({design, name, tag, pal:pals[i], icon:pool[i % pool.length]}));
+  return pic === 'mix' ? sh(abs(2).concat(regs(2))) : regs(4);
 }
 // SVG → PNG (white background trimmed off by keeping it transparent)
 function lmToPng(svg, px){
@@ -9016,12 +9112,13 @@ function lmDefaults(){
 function lmRender(){
   const box = $('rfLogoMaker'); if(!box) return;
   box.innerHTML = `<div style="border:1px solid #dde3ee;border-radius:10px;padding:10px;margin:8px 0;background:#fafbfd">
-    <b style="color:#1F3864">✨ Free logo maker</b><p class="rf-note" style="margin:4px 0 8px">Pick one of the 4 designs, or tap 🔀 Shuffle for new ones. Change the words first if you like.</p>
+    <b style="color:#1F3864">✨ Free logo maker</b><p class="rf-note" style="margin:4px 0 8px">Pick one of the 4 designs, or tap 🔀 Shuffle for new ones. Change the words first if you like — a short name (e.g. “Tunde Motors”) looks best.</p>
     <div class="grid2"><div class="field"><label for="lmName">Name on logo</label><input id="lmName" value="${esc(box.dataset.name)}"></div><div class="field"><label for="lmTag">Small line (optional)</label><input id="lmTag" value="${esc(box.dataset.tag)}" placeholder="e.g. AUTO REPAIRS"></div></div>
+    <div class="field"><label for="lmPic">Picture</label><select id="lmPic">${LM_PICTURES.map(([k, l]) => `<option value="${k}"${k === (box.dataset.pic || 'mix') ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
     <div class="lm-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">${lmLast.map((d, i) => `<div style="background:#fff;border:2px solid #dde3ee;border-radius:10px;padding:6px;text-align:center"><img src="${lmUrl(lmSvg(d))}" alt="Logo design ${i + 1}" style="width:100%;aspect-ratio:1;display:block"><button type="button" class="rf-btn" data-lmuse="${i}" style="width:100%;margin-top:4px">Use this logo</button></div>`).join('')}</div>
     <div class="rf-tools" style="margin-top:8px"><button type="button" class="rf-btn" id="lmShuffle">🔀 Shuffle</button><button type="button" class="rf-btn grey" id="lmClose">Close</button></div></div>`;
-  const regen = () => { box.dataset.name = $('lmName').value.trim() || 'My Garage'; box.dataset.tag = $('lmTag').value.trim(); lmLast = lmGenerate(box.dataset.name, box.dataset.tag); lmRender(); };
-  $('lmShuffle').onclick = regen;
+  const regen = () => { box.dataset.name = $('lmName').value.trim() || 'My Garage'; box.dataset.tag = $('lmTag').value.trim(); box.dataset.pic = $('lmPic').value; lmLast = lmGenerate(box.dataset.name, box.dataset.tag, box.dataset.pic); lmRender(); };
+  $('lmShuffle').onclick = regen; $('lmPic').onchange = regen;
   let t; ['lmName', 'lmTag'].forEach(id => $(id).addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { const pos = document.activeElement && document.activeElement.id; box.dataset.name = $('lmName').value.trim() || 'My Garage'; box.dataset.tag = $('lmTag').value.trim(); lmLast = lmLast.map(d => Object.assign({}, d, {name:box.dataset.name, tag:box.dataset.tag})); const v = $(pos) ? $(pos).value : null, sel = $(pos) ? $(pos).selectionStart : 0; lmRender(); if(pos && $(pos)){ $(pos).focus(); try{ $(pos).setSelectionRange(sel, sel); }catch(e){} } }, 500); }));
   $('lmClose').onclick = () => { box.innerHTML = ''; };
   box.querySelectorAll('[data-lmuse]').forEach(b => b.onclick = async () => {
@@ -9033,9 +9130,9 @@ function lmRender(){
 }
 function openLogoMaker(){
   const box = $('rfLogoMaker'); if(!box) return; const d = lmDefaults();
-  box.dataset.name = d.name; box.dataset.tag = d.tag; lmLast = lmGenerate(d.name, d.tag); lmRender();
+  box.dataset.name = d.name; box.dataset.tag = d.tag; box.dataset.pic = 'mix'; lmLast = lmGenerate(d.name, d.tag, 'mix'); lmRender();
 }
-Object.assign(window.RF = window.RF || {}, {lmSvg, lmGenerate, lmParts, LM_DESIGNS});
+Object.assign(window.RF = window.RF || {}, {lmSvg, lmGenerate, lmParts, LM_DESIGNS, LM_PALETTES, LM_PARTS, LM_ABSTRACT, LM_APAL});
 
 })();
 </script>
