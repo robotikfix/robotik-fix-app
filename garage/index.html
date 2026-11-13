@@ -2454,6 +2454,7 @@ body.role-technician #paymentPanel,body.role-technician #convertBtn{display:none
 .q-pos.on{background:var(--red);border-color:var(--red);color:#fff;}
 .q-pos[data-qp=LF]{grid-column:1;grid-row:1}.q-pos[data-qp=RF]{grid-column:3;grid-row:1}.q-pos[data-qp=LR]{grid-column:1;grid-row:2}.q-pos[data-qp=RR]{grid-column:3;grid-row:2}
 .q-pos[data-qp=SPARE]{grid-column:1/4;grid-row:3;width:150px;height:32px;border-radius:16px;}
+.q-panels{display:flex;flex-wrap:wrap;gap:6px}.q-pnl{border:2px solid var(--navy);border-radius:16px;background:#fff;color:var(--navy);font-weight:bold;font-size:12.5px;padding:7px 11px}.q-pnl.on{background:var(--red);border-color:var(--red);color:#fff}
 .q-body{grid-column:2;grid-row:1/3;width:84px;height:128px;border:2px solid #9aa3b5;border-radius:26px 26px 14px 14px;color:#9aa3b5;font-size:10px;font-weight:bold;display:flex;justify-content:center;padding-top:8px;}
 #qLines td input{font-size:13px;}
 .q-bar{position:sticky;bottom:0;display:flex;gap:6px;background:#fff;padding:8px;margin:0 -10px;border-top:1px solid var(--border);box-shadow:0 -2px 8px rgba(0,0,0,.08);z-index:20;}
@@ -2576,7 +2577,7 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
    database (Supabase) with staff logins and roles (admin / cashier / technician).
    Without the team database everything still works on this device alone, as before.
 =========================================================================================== */
-const RF_VERSION = '6.1';
+const RF_VERSION = '6.3';
 /* Multi-user team database: built, but switched OFF for now. Set to true to turn it back on. */
 const EDITION = 'global';      // build script switches this to 'partner' for the partner-garage app
 const TEAM_ENABLED = EDITION === 'robotik' && true;
@@ -3023,9 +3024,9 @@ function teamStatusHtml(){
     '<br><b>Status:</b> ' + (Cloud.online ? 'online' : 'offline') + (Cloud.pending ? ' · ' + Cloud.pending + ' change(s) waiting to send' : ' · everything sent') + (Cloud.lastErr ? '<br><span style="color:#c0392b">' + esc(Cloud.lastErr) + '</span>' : '');
 }
 function buildLogin(){
-  const logo = ($('logoImg') || {}).src || '';
+  const logo = bizLogo();
   const d = document.createElement('div'); d.id = 'rfLogin';
-  d.innerHTML = `<div class="inner"><div class="brand"><img src="${esc(logo)}" alt=""><h2 style="margin:8px 0 0;">${esc(brandVals().biz.toUpperCase())}</h2><div class="rf-note">Staff sign in</div></div>
+  d.innerHTML = `<div class="inner"><div class="brand">${logo ? `<img src="${esc(logo)}" alt="">` : ''}<h2 style="margin:8px 0 0;">${esc(brandVals().biz.toUpperCase())}</h2><div class="rf-note">Staff sign in</div></div>
   <div class="card"><h2 id="rfLoginTitle">SIGN IN</h2>
    <div id="rfLoginMsg" class="banner" style="display:none"></div>
    <div id="rfLoginForm">
@@ -4064,7 +4065,8 @@ window.RF = {Store, Cloud, version:RF_VERSION, get mode(){ return mode; }, get m
 
 /* ===================== QUICK SERVICE INVOICES =====================
    One-screen invoices for counter jobs: Lube Service, Tyre & Wheel Service,
-   Brake Disc Resurfacing (outside garages & fleet owners), Wheel Straightening & Welding.
+   Brake Disc Resurfacing (outside garages & fleet owners), Wheel Straightening & Welding,
+   AC Repair, Bodywork (Panel Beating) and Spray Painting.
    Saved as ordinary INVOICE records (same numbering, Records, statements, payments, stock, P&L). */
 const POS5 = ['LF', 'RF', 'LR', 'RR', 'SPARE'];
 const QUICK = {
@@ -4081,8 +4083,37 @@ const QUICK = {
     notes:'Discs below the manufacturer\'s minimum thickness are not resurfaced; they are returned with this report so they can be replaced. Thank you for your business.'},
   wheel: {name:'Wheel Straightening & Welding', title:'WHEEL STRAIGHTENING & WELDING INVOICE', icon:'🔧', blurb:'Alloy & steel rim straightening, crack welding, lip repair — per-rim damage log',
     lines:[['Alloy rim straightening (per rim)', 'labour'], ['Steel rim straightening (per rim)', 'labour'], ['Crack welding – aluminium (per crack)', 'labour'], ['Lip repair / build-up welding', 'labour'], ['Tyre removal & refitting', 'labour'], ['Wheel balancing', 'labour'], ['Valve stem', 'part'], ['Rim polishing / touch-up', 'labour']],
-    notes:'Straightened or welded rims are repaired to the best achievable standard. Check tyre pressure regularly. Robotik Fix is not liable for failure caused by new impact damage or hidden cracks not visible at the time of repair.'}
+    notes:'Straightened or welded rims are repaired to the best achievable standard. Check tyre pressure regularly. Robotik Fix is not liable for failure caused by new impact damage or hidden cracks not visible at the time of repair.'},
+  ac: {name:'AC Repair', title:'AC REPAIR INVOICE', icon:'❄️', blurb:'Gas recharge, leak test, compressor, condenser & fan, vent temperature before/after',
+    detail:'AC READINGS & CHECKS',
+    fields:[['gas', 'Refrigerant gas', 'select', ['R134a', 'R1234yf', 'R12', 'Other']], ['gasQty', 'Gas charged (grams)', 'number', 'e.g. 550'], ['ambient', 'Ambient temp (°C)', 'number', 'e.g. 32'],
+      ['ventBefore', 'Vent temp before (°C)', 'number', 'e.g. 24'], ['ventAfter', 'Vent temp after (°C)', 'number', 'e.g. 6'], ['lowPsi', 'Low-side pressure (psi)', 'text', 'e.g. 35'],
+      ['highPsi', 'High-side pressure (psi)', 'text', 'e.g. 200'], ['leakTest', 'Leak test', 'select', ['Not done', 'UV dye', 'Nitrogen pressure test', 'Electronic sniffer', 'Soap / bubble test']], ['leakAt', 'Leak found at', 'text', 'e.g. condenser, O-ring at drier']],
+    checks:['Compressor clutch engages', 'Condenser fan', 'Blower motor (all speeds)', 'Cabin / AC filter', 'Condenser fins clean', 'Drive belt', 'Hoses & pipes', 'Pressure switch', 'Vents & air flaps', 'Smell from vents'],
+    checkOpts:['', 'OK', 'Needs attention', 'Repaired', 'Replaced', 'Cleaned'],
+    lines:[['AC diagnosis & leak test', 'labour'], ['AC gas recharge (vacuum & refill)', 'labour'], ['AC gas R134a (kg)', 'part'], ['AC gas R1234yf (kg)', 'part'], ['Compressor oil (ml)', 'part'], ['UV leak dye', 'part'],
+      ['Compressor', 'part'], ['Condenser', 'part'], ['Evaporator', 'part'], ['Expansion valve', 'part'], ['Receiver drier', 'part'], ['Cabin / AC filter', 'part'], ['Condenser fan / blower motor', 'part'],
+      ['Leak repair', 'labour'], ['Compressor replacement', 'labour'], ['Evaporator / dashboard removal', 'labour'], ['AC system flush', 'labour'], ['EXTRA CHARGES', 'sep'], ['', 'labour'], ['', 'labour']],
+    notes:'Run the AC for at least 10 minutes every week to keep the seals lubricated, and replace the cabin filter every 12 months. Thank you for choosing Robotik Fix.'},
+  body: {name:'Bodywork (Panel Beating)', title:'BODYWORK / PANEL BEATING INVOICE', icon:'🔨', blurb:'Accident & dent repair — panels damaged, insurance claim, parts replaced',
+    detail:'DAMAGE & CLAIM DETAILS', panels:true, panelsLabel:'PANELS REPAIRED',
+    fields:[['cause', 'Cause of damage', 'select', ['Accident', 'Dent', 'Scratch / scrape', 'Rust', 'Flood', 'Other']], ['incident', 'Date of damage', 'date'], ['ready', 'Expected completion', 'date'],
+      ['insurer', 'Insurance company', 'text', 'leave blank if private'], ['claimNo', 'Claim no.', 'text', ''], ['assessor', 'Assessor / adjuster', 'text', ''], ['damage', 'Damage description', 'text', 'e.g. front-left impact, bumper torn, headlamp broken']],
+    lines:[['Panel beating / dent repair (per panel)', 'labour'], ['Bumper repair', 'labour'], ['Plastic welding', 'labour'], ['Chassis / frame pulling', 'labour'], ['Panel replacement & fitting', 'labour'], ['Panel gap alignment', 'labour'],
+      ['Bumper', 'part'], ['Bonnet', 'part'], ['Fender', 'part'], ['Door shell', 'part'], ['Headlamp', 'part'], ['Tail lamp', 'part'], ['Side mirror', 'part'], ['Clips & fasteners', 'part'], ['Welding consumables', 'part'],
+      ['EXTRA CHARGES', 'sep'], ['', 'labour'], ['', 'labour']],
+    notes:'Bodywork is done to the best achievable standard. Hidden damage found after dismantling will be quoted separately before work continues. Thank you for choosing Robotik Fix.'},
+  paint: {name:'Spray Painting', title:'SPRAY PAINTING INVOICE', icon:'🎨', blurb:'Paint code & colour, panels painted, coats & finish — touch-up to full respray',
+    detail:'PAINT DETAILS', panels:true, panelsLabel:'PANELS PAINTED',
+    fields:[['code', 'Paint code', 'text', 'e.g. 1F7, 040'], ['colour', 'Colour name', 'text', 'e.g. Silver Metallic'], ['ptype', 'Paint type', 'select', ['Solid', 'Metallic', 'Pearl', 'Matte']],
+      ['brand', 'Paint brand', 'text', ''], ['coats', 'Coats (primer / colour / clear)', 'text', 'e.g. 2 / 2 / 2'], ['finish', 'Finish', 'select', ['Gloss', 'Satin', 'Matte']],
+      ['match', 'Colour match', 'select', ['Exact match', 'Blended into next panels', 'Customer approved sample']], ['scope', 'Job', 'select', ['Panel repaint', 'Touch-up / spot repair', 'Full respray', 'Colour change']]],
+    lines:[['Spray painting (per panel)', 'labour'], ['Bumper spray', 'labour'], ['Full body respray', 'labour'], ['Touch-up / spot repair', 'labour'], ['Body filler & sanding', 'labour'], ['Polishing / buffing', 'labour'],
+      ['Paint (litres)', 'part'], ['Primer', 'part'], ['Clear coat / lacquer', 'part'], ['Thinner', 'part'], ['Body filler', 'part'], ['Masking & sandpaper', 'part'],
+      ['EXTRA CHARGES', 'sep'], ['', 'labour'], ['', 'labour']],
+    notes:'New paint needs about 30 days to cure fully: do not polish, wax or wash with detergent during this time. Thank you for choosing Robotik Fix.'}
 };
+const PANELS = ['Front bumper', 'Bonnet', 'LF fender', 'RF fender', 'LF door', 'RF door', 'LR door', 'RR door', 'LR quarter', 'RR quarter', 'Boot / tailgate', 'Rear bumper', 'Roof', 'Sills', 'Full body'];
 const TYRE_POS = ['LF', 'RF', 'LR', 'RR', 'SPARE'];
 const ALIGN_KEYS = [['fCamL', 'Front camber L (°)'], ['fCamR', 'Front camber R (°)'], ['fCasL', 'Caster L (°)'], ['fCasR', 'Caster R (°)'], ['fToe', 'Front total toe (mm)'], ['rCamL', 'Rear camber L (°)'], ['rCamR', 'Rear camber R (°)'], ['rToe', 'Rear total toe (mm)'], ['thrust', 'Thrust angle (°)']];
 // DOT code "WWYY" → age in years
@@ -4211,6 +4242,13 @@ function renderQuick(){
   if(q.tpl === 'wheel'){
     h += `<div class="card"><h2>RIM LOG</h2><div id="qRims">${(q.rims || []).map(rimRow).join('')}</div><button class="addrow" id="qAddRim">＋ Add rim</button></div>`;
   }
+  if(T.fields){
+    const fx = q.fields || {}, fld = ([k, l, t, o]) => `<div class="field"><label>${esc(l)}</label>${t === 'select' ? `<select id="qF_${k}">${qOpts(o, fx[k] || o[0])}</select>` : `<input id="qF_${k}" type="${t}"${t === 'number' ? ' step="any" inputmode="decimal"' : ''} value="${esc(fx[k] || '')}" placeholder="${esc(o || '')}">`}</div>`;
+    h += `<div class="card"><h2>${esc(T.detail)}</h2><div class="grid2">${T.fields.map(fld).join('')}</div>`;
+    if(T.checks) h += `<table class="rf-table" style="margin-top:8px"><tr><th>Check</th><th>Result</th></tr>${T.checks.map((c, i) => `<tr><td>${esc(c)}</td><td><select id="qChk${i}" style="padding:4px;font-size:12px">${qOpts(T.checkOpts || ['', 'OK', 'Needs attention'], (q.checks || {})[c] || '')}</select></td></tr>`).join('')}</table><button class="addrow" id="qAllOk">Mark all unchecked as OK</button>`;
+    h += `</div>`;
+    if(T.panels) h += `<div class="card"><h2>${esc(T.panelsLabel)}</h2><p class="rf-note">Tap every panel worked on.</p><div class="q-panels">${PANELS.map(p => `<button type="button" class="q-pnl${(q.panels || []).includes(p) ? ' on' : ''}" data-qpanel="${esc(p)}">${esc(p)}</button>`).join('')}</div></div>`;
+  }
   // lines
   h += `<div class="card"><h2 class="red">SERVICES & PARTS</h2><p class="rf-note">Enter a quantity on each line used — lines left at 0 are not printed. Type any extra service in a blank row, or tap “＋ Extra service / charge” for more rows. Prices come from your saved defaults.</p>
     <div class="tbl-wrap"><table id="qLines"><thead><tr><th style="width:15%">QTY</th><th>DESCRIPTION</th><th style="width:24%">PRICE (₦)</th><th style="width:22%">TOTAL</th></tr></thead><tbody>${withSep(q).map(lineRow).join('')}</tbody></table></div>
@@ -4236,6 +4274,7 @@ function renderQuick(){
   if($('qAllOk')) $('qAllOk').onclick = () => T.checks.forEach((c, i) => { if(!$('qChk' + i).value) $('qChk' + i).value = 'OK'; });
   if($('qKm') && $('qNextKm')) $('qKm').addEventListener('change', () => { if(!$('qNextKm').value && N($('qKm').value)) $('qNextKm').value = N($('qKm').value) + 5000; });
   bind(v, '[data-qp]', 'click', el => el.classList.toggle('on'));
+  bind(v, '[data-qpanel]', 'click', el => el.classList.toggle('on'));
   if($('qTyreLog')){ const showFlags = () => { const f = readTyreLog().filter(t => t.flags.length); $('qTyreFlags').innerHTML = f.map(t => '⚠ <b>' + esc(t.pos) + '</b>: ' + t.flags.map(esc).join('; ')).join('<br>'); }; $('qTyreLog').addEventListener('input', showFlags); showFlags(); }
   if($('qAddDisc')) $('qAddDisc').onclick = () => $('qDiscs').insertAdjacentHTML('beforeend', discRow({}));
   if($('qDiscs')) $('qDiscs').addEventListener('input', e => { const row = e.target.closest('.q-log'); if(!row || e.target.classList.contains('dk') || e.target.classList.contains('dv')) return;
@@ -4290,7 +4329,9 @@ function collectQuick(){
   if(q.tpl === 'lube') Object.assign(extra, {oil:qVal('qOil'), oilQty:qVal('qOilQty'), nextKm:qVal('qNextKm'), nextDate:qVal('qNextDate')});
   if(q.tpl === 'tyre') Object.assign(extra, {size:qVal('qSize'), brand:qVal('qBrand'), dot:qVal('qDot'), psi:qVal('qPsi'), torque:qVal('qTorque')});
   const tyreLog = q.tpl === 'tyre' && $('qTyreLog') ? readTyreLog() : (q.tyreLog || []), align = q.tpl === 'tyre' && $('qAlign') ? readAlign() : (q.align || null);
-  const checks = {}; if(q.tpl === 'lube') T.checks.forEach((c, i) => { const v = qVal('qChk' + i); if(v) checks[c] = v; });
+  const checks = {}; if(T.checks) T.checks.forEach((c, i) => { const v = qVal('qChk' + i); if(v) checks[c] = v; });
+  const fields = {}; (T.fields || []).forEach(([k]) => { const v = qVal('qF_' + k); if(v) fields[k] = v; });
+  const panels = [...document.querySelectorAll('[data-qpanel].on')].map(b => b.dataset.qpanel);
   const positions = [...document.querySelectorAll('[data-qp].on')].map(b => b.dataset.qp);
   const discs = [...document.querySelectorAll('#qDiscs .q-log')].map(r => { const x = {vehicle:r.querySelector('.dv').value.trim(), pos:r.querySelector('.dp').value, before:r.querySelector('.db').value, after:r.querySelector('.da').value, min:r.querySelector('.dm').value, runBefore:r.querySelector('.drb') ? r.querySelector('.drb').value : '', runAfter:r.querySelector('.dra') ? r.querySelector('.dra').value : '', result:r.querySelector('.dr').value, remark:r.querySelector('.dk').value.trim()}; const v = discVerdict(x); x.result = v.result; x.rejectReason = v.why; x.cut = x.before !== '' && x.after !== '' ? Math.round((N(x.before) - N(x.after)) * 100) / 100 : ''; return x; }).filter(r => r.vehicle || r.before || r.after || r.remark);
   const rims = [...document.querySelectorAll('#qRims .q-log')].map(r => ({pos:r.querySelector('.rp').value, size:r.querySelector('.rs').value.trim(), type:r.querySelector('.rt').value, damage:r.querySelector('.rd').value, work:r.querySelector('.rw').value, remark:r.querySelector('.rk').value.trim()}));
@@ -4315,7 +4356,7 @@ function collectQuick(){
     advancePct:0, advanceAmt:0, balanceDue:t.balance, showNetBalance:'NO', notes:qVal('qNotes'),
     bankName:co.bankName, bankAcctName:co.bankAcctName, bankAcctNo:co.bankAcctNo,
     paymentEntries:pays, paymentsReceived:paid, outstandingBalance:t.balance, savedAt:nowIso(),
-    quick:Object.assign({}, q, {salesPerson:qVal('qSales'), extra, checks, positions, discs, rims, lines, tyreLog, align})
+    quick:Object.assign({}, q, {salesPerson:qVal('qSales'), extra, checks, positions, discs, rims, lines, fields, panels, tyreLog, align})
   });
 }
 async function allocInvoiceNo(dateIso){
@@ -4405,6 +4446,13 @@ function quickHtml(doc){
   }
   if(q.tpl === 'wheel' && (q.rims || []).length){
     h += `<div class="sec">RIM LOG</div><table><tr><th>Position</th><th>Size</th><th>Type</th><th>Damage</th><th>Work done</th><th>Remark</th></tr>${q.rims.map(r => `<tr><td>${esc(r.pos)}</td><td>${esc(r.size)}</td><td>${esc(r.type)}</td><td>${esc(r.damage)}</td><td class="${/not repairable/i.test(r.work) ? 'bad' : ''}">${esc(r.work)}</td><td>${esc(r.remark)}</td></tr>`).join('')}</table>`;
+  }
+  if(T.fields){
+    const fx = q.fields || {}, fl = T.fields.filter(([k]) => fx[k]).map(([k, l, t]) => [l, t === 'date' ? fmtDate(fx[k]) : fx[k]]);
+    if(fl.length) h += `<div class="sec">${esc(T.detail)}</div><table><tr>${fl.map(([l, v], i) => `${i && i % 4 === 0 ? '</tr><tr>' : ''}${cell(l, v, '25%')}`).join('')}</tr></table>`;
+    if(T.panels && (q.panels || []).length) h += `<div class="sec">${esc(T.panelsLabel)}</div><div style="margin-top:4px">${q.panels.map(p => `<span style="display:inline-block;border:1px solid #333;border-radius:3px;padding:2px 7px;margin:2px 4px 2px 0;font-weight:bold">${esc(p)}</span>`).join('')}</div>`;
+    const ch = Object.entries(q.checks || {});
+    if(ch.length) h += `<div class="sec">SYSTEM CHECKS</div><table><tr>${ch.map(([c, v], i) => `${i && i % 3 === 0 ? '</tr><tr>' : ''}<td style="width:33%">${esc(c)}: <b class="${/attention/i.test(v) ? 'bad' : ''}">${esc(v)}</b></td>`).join('')}</tr></table>`;
   }
   const lines = (doc.parts || []).concat(doc.labour || []);
   const order = new Map((q.lines || []).map((l, i) => [l.desc, i])); lines.sort((a, b) => (order.has(a.desc) ? order.get(a.desc) : 999) - (order.has(b.desc) ? order.get(b.desc) : 999));
@@ -4593,7 +4641,8 @@ function myBusinessHtml(){
       ${sigField(i, pendingSig[i] !== undefined ? pendingSig[i] : c.signature)}</div>`; };
   return `<div class="card"><h2 class="red">MY BUSINESS</h2>
     ${GARAGE && !brandSetting() ? '<div class="banner">Welcome! Enter your garage details once — they appear on your job cards, quotations, invoices and receipts.</div>' : ''}
-    <div class="rf-tools"><img src="${esc(logo)}" alt="" style="height:64px;max-width:120px;border:1px solid #ddd;border-radius:6px;background:#fff;${logo ? '' : 'display:none'}" id="rfBLogoPrev"><label class="rf-btn grey" style="cursor:pointer">📷 ${logo ? 'Change' : 'Upload'} logo<input type="file" accept="image/*" id="rfBLogo" style="display:none"></label></div>
+    <div class="rf-tools"><img src="${esc(logo)}" alt="" style="height:64px;max-width:120px;border:1px solid #ddd;border-radius:6px;background:#fff;${logo ? '' : 'display:none'}" id="rfBLogoPrev"><label class="rf-btn grey" style="cursor:pointer">📷 ${logo ? 'Change' : 'Upload'} logo<input type="file" accept="image/*" id="rfBLogo" style="display:none"></label>${GARAGE ? '<button type="button" class="rf-btn" id="rfBLogoMake">✨ Make a free logo</button>' : ''}</div>
+    ${GARAGE ? '<div id="rfLogoMaker"></div>' + (logo ? '' : '<p class="rf-note" style="margin-top:0">No logo yet? Tap <b>✨ Make a free logo</b> — 4 designs from your garage name, pick one.</p>') : ''}
     ${f('rfBShort', 'Short name (used in WhatsApp messages)', b.short || (GARAGE ? '' : 'Robotik Fix'), 'e.g. Mama Tunde Motors')}
     <p class="rf-note">Add a profile for each company you run and for each branch. Every profile has its own address, bank details, signature, <b>currency</b> and <b>tax rate</b>; choose the profile when you start work and documents, money and reports follow it.</p>
     ${bizDraft.map(block).join('')}
@@ -4608,6 +4657,7 @@ function bindMyBusiness(){
     inp.onchange = async e => { const file = e.target.files[0]; if(!file) return; try{ pendingSig[i] = await resizeImage(file, 500, true); const im = $('rfSigPrev' + i); im.src = pendingSig[i]; im.style.display = ''; }catch(err){ toast('Could not read that image.', true); } };
     const rm = $('rfSigDel' + i); if(rm) rm.onclick = () => { pendingSig[i] = ''; $('rfSigPrev' + i).style.display = 'none'; toast('Signature will be removed when you save.'); }; });
   bindFooterLogos();
+  if($('rfBLogoMake')) $('rfBLogoMake').onclick = () => openLogoMaker();
   $('rfBAdd').onclick = () => { readBizForm(); const m = bizDraft[0] || {}; bizDraft.push({name:m.name || '', branch:'', currency:m.currency, taxName:m.taxName || 'VAT', taxRate:m.taxRate, bankName:m.bankName, bankAcctNo:m.bankAcctNo, bankAcctName:m.bankAcctName, tin:m.tin}); renderSetup(); setTimeout(() => { const el = $('rfB' + bizDraft.length + 'Branch'); if(el){ el.scrollIntoView({block:'center'}); el.focus(); } }, 50); };
   if($('rfBDel')) $('rfBDel').onclick = async () => { const k = bizDraft.length - 1;
     if(profileUsed(k)){ toast('This profile is already used on saved documents, so it cannot be removed. You can rename it instead.', true); return; }
@@ -5020,9 +5070,9 @@ function reportCsv(A){
 }
 function printBooks(title, label, body){
   const w = window.open('', '_blank'); if(!w){ toast('Allow pop-ups to print.', true); return; }
-  const co = bkCo === 'all' ? COMPANIES[0] : COMPANIES[N(bkCo)] || COMPANIES[0], logo = ($('logoImg') || {}).src || '';
+  const co = bkCo === 'all' ? COMPANIES[0] : COMPANIES[N(bkCo)] || COMPANIES[0], logo = bizLogo();
   w.document.write(`<!doctype html><html><head><title>${esc(title)} ${esc(label)}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>@page{size:A4;margin:12mm}body{font:12px Arial;color:#111;padding:16px}.hd{display:flex;gap:12px;align-items:center;border-bottom:3px solid #E30613;padding-bottom:8px;margin-bottom:10px}.hd img{height:56px}h1{font-size:16px;color:#1F3864;margin:0}h2{font-size:14px;margin:4px 0 0}.rf-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.rf-kpi{border:1px solid #ccc;border-radius:6px;padding:6px}.l{font-size:9px;color:#555;text-transform:uppercase}.v{font-size:14px;font-weight:bold;color:#1F3864}.v.neg{color:#c0392b}.v.pos{color:#1e8449}table{width:100%;border-collapse:collapse;margin:4px 0}th{background:#1F3864;color:#fff;text-align:left;padding:4px;font-size:10px}td{border:1px solid #ccc;padding:4px}.n{text-align:right}.tot td{font-weight:bold;background:#f2f4f8}.rf-note{font-size:10px;color:#555}.rf-badge{font-size:9px;font-weight:bold}.rf-badge.green{color:#1e8449}.rf-badge.red{color:#c0392b}h3{page-break-after:avoid}table,svg{page-break-inside:avoid}@media print{.np{display:none}}</style></head><body>
-    <div class="hd"><img src="${esc(logo)}" alt=""><div><h1>${esc(bkCo === 'all' ? brandVals().bizFull : co.name)}</h1><h2>${esc(title)} — ${esc(label)}</h2><div class="rf-note">${esc(coLabel(bkCo))} · printed ${esc(new Date().toLocaleString('en-NG'))} by ${esc(myName() || 'staff')}</div></div></div>
+    <div class="hd">${logo ? `<img src="${esc(logo)}" alt="">` : ''}<div><h1>${esc(bkCo === 'all' ? brandVals().bizFull : co.name)}</h1><h2>${esc(title)} — ${esc(label)}</h2><div class="rf-note">${esc(coLabel(bkCo))} · printed ${esc(new Date().toLocaleString('en-NG'))} by ${esc(myName() || 'staff')}</div></div></div>
     ${body}<p class="np" style="text-align:center"><button onclick="print()" style="padding:10px 20px">Print / Save as PDF</button></p><script>setTimeout(function(){print()},500)<\/script></body></html>`);
   w.document.close();
 }
@@ -5103,8 +5153,8 @@ function sellFrom(cost, m){ const p = N(cost) * (1 + N(m) / 100); return p >= 10
 function workers(all){ return Store.list('worker').filter(w => all || w.active !== false).sort((a, b) => String(a.name).localeCompare(String(b.name))); }
 function wsPrint(title, body){
   const w = window.open('', '_blank'); if(!w){ toast('Allow pop-ups to print.', true); return; }
-  const logo = ($('logoImg') || {}).src || '';
-  w.document.write(`<!doctype html><html><head><title>${esc(title)}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>@page{size:A4;margin:12mm}body{font:12px Arial;color:#111;padding:16px}.hd{display:flex;gap:12px;align-items:center;border-bottom:3px solid #E30613;padding-bottom:8px;margin-bottom:10px}.hd img{height:56px}h1{font-size:16px;color:#1F3864;margin:0}h2{font-size:13px;margin:2px 0}h3{font-size:12.5px;color:#1F3864}table{width:100%;border-collapse:collapse;margin:8px 0}th,td{border:1px solid #ccc;padding:5px;text-align:left;vertical-align:top}th{background:#1F3864;color:#fff}.n{text-align:right}.tot td{font-weight:bold;background:#f3f5f9}.rf-note{color:#666;font-size:11px}@media print{.np{display:none}}</style></head><body><div class="hd">${logo ? `<img src="${esc(logo)}" alt="">` : ''}<div><h1>${esc(brandVals().bizFull)}</h1><h2>${esc(title)}</h2><div class="rf-note">Printed ${esc(new Date().toLocaleString('en-NG'))} by ${esc(myName() || 'staff')}</div></div></div>${body}<p class="np" style="text-align:center"><button onclick="print()" style="padding:10px 20px">Print / Save as PDF</button></p></body></html>`);
+  const logo = bizLogo();
+  w.document.write(`<!doctype html><html><head><title>${esc(title)}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>@page{size:A4;margin:12mm}body{font:12px Arial;color:#111;padding:16px}.hd{display:flex;gap:12px;align-items:center;border-bottom:3px solid #E30613;padding-bottom:8px;margin-bottom:10px}.hd img{height:56px}h1{font-size:16px;color:#1F3864;margin:0}h2{font-size:13px;margin:2px 0}h3{font-size:12.5px;color:#1F3864}table{width:100%;border-collapse:collapse;margin:8px 0}th,td{border:1px solid #ccc;padding:5px;text-align:left;vertical-align:top}th{background:#1F3864;color:#fff}.n{text-align:right}.tot td{font-weight:bold;background:#f3f5f9}.rf-note{color:#666;font-size:11px}@media print{.np{display:none}}</style></head><body><div class="hd">${logo ? `${logo ? `<img src="${esc(logo)}" alt="">` : ''}` : ''}<div><h1>${esc(brandVals().bizFull)}</h1><h2>${esc(title)}</h2><div class="rf-note">Printed ${esc(new Date().toLocaleString('en-NG'))} by ${esc(myName() || 'staff')}</div></div></div>${body}<p class="np" style="text-align:center"><button onclick="print()" style="padding:10px 20px">Print / Save as PDF</button></p></body></html>`);
   w.document.close();
 }
 function wsLists(){
@@ -5680,6 +5730,9 @@ const IC = {
   tyre:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M12 3v5.5M12 15.5V21M3 12h5.5M15.5 12H21"/>',
   brake:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/><path d="M12 5.5a6.5 6.5 0 0 1 6.5 6.5"/><path d="M7.5 9h.01M7.5 15h.01M16.5 15h.01"/>',
   wheel:'<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>',
+  ac:'<path d="M12 2v20M4.9 7l14.2 10M4.9 17L19.1 7"/><path d="M9.5 3.5L12 6l2.5-2.5M9.5 20.5L12 18l2.5 2.5"/>',
+  body:'<path d="M3 16v-3l2-5h11l3 5h2v3z"/><circle cx="7" cy="16.5" r="2"/><circle cx="17" cy="16.5" r="2"/><path d="M14 4l-2 3 3 1-2 3"/>',
+  paint:'<rect x="3" y="3" width="13" height="6" rx="1"/><path d="M16 6h3v5h-8v3"/><rect x="9.5" y="14" width="3" height="7" rx="1"/>',
   letter:'<path d="M6 2h9l5 5v15H6z"/><path d="M15 2v5h5M9 12h8M9 16h8M9 8h3"/>',
   crm:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>',
   pipe:'<path d="M3 4h18l-7 8v6l-4 2v-8z"/>',
@@ -5790,6 +5843,9 @@ function homeTiles(){
     t('work', 'Tyre & Wheel', 'tyre', 'slate', 'quick', () => newQuick('tyre')),
     t('work', 'Brake Disc Resurfacing', 'brake', 'orange', 'quick', () => newQuick('brake')),
     t('work', 'Wheel Straightening & Welding', 'wheel', 'teal', 'quick', () => newQuick('wheel')),
+    t('work', 'AC Repair', 'ac', 'cyan', 'quick', () => newQuick('ac')),
+    t('work', 'Bodywork (Panel Beating)', 'body', 'slate', 'quick', () => newQuick('body')),
+    t('work', 'Spray Painting', 'paint', 'pink', 'quick', () => newQuick('paint')),
     t('work', 'Send to Robotik Fix', 'send', 'red', 'send', goSeg('send')),
     t('work', 'Appointments', 'book', 'purple', 'book', goSeg('book', 'book', 'day')),
     t('work', 'Towing', 'tow', 'orange', 'workshop', goSeg('workshop', 'workshop', 'tow')),
@@ -5842,7 +5898,7 @@ function homeStats(){
 }
 function renderHome(){
   const v = $('view-home'); if(!v) return;
-  const co = COMPANIES[curCoIdx()] || {}, logo = ($('logoImg') || {}).src || '';
+  const co = COMPANIES[curCoIdx()] || {}, logo = bizLogo();
   if(!can('cashier') && homeGroup === 'money') homeGroup = 'all';
   const tiles = homeTiles(), st = homeStats();
   const tileHtml = x => { const [bg, fg] = TONES[x.tone] || TONES.navy; return `<button class="rf-tile ${x.cls}" data-ht="${tiles.indexOf(x)}"><span class="ic" style="background:${bg};color:${fg}">${svgI(x.icon)}</span><span class="lb">${esc(x.label)}</span>${x.badge ? `<span class="bd">${x.badge}</span>` : ''}</button>`; };
@@ -6314,7 +6370,7 @@ const randToken = n => { const b = new Uint8Array(n || 24); crypto.getRandomValu
 function approveBase(){ return new URL(GARAGE ? '../approve.html' : 'approve.html', location.href).href.split('#')[0].split('?')[0]; }
 function approvalSnapshot(){
   const d = collectDoc($('docNo').dataset.savedId || 'x'), co = COMPANIES[N(d.companyIdx)] || COMPANIES[0] || {}, bv = brandVals();
-  let logo = ($('logoImg') || {}).src || '';
+  let logo = bizLogo();
   if(/^data:/.test(logo)){ if(logo.length > 120000) logo = ''; } else if(logo) logo = new URL(logo, location.href).href;
   const ln = a => (a || []).filter(l => l.desc).map(l => ({desc:l.desc, qty:N(l.qty) || 1, price:N(l.price)}));
   return {biz:co.name || bv.bizFull, bizAddr:co.address || bv.bizAddr, bizPhone:co.tel || bv.bizPhone, logo, docType:d.type, docNo:d.docNo, date:d.date,
@@ -6397,7 +6453,7 @@ listeners.push(kinds => { if(kinds && kinds.includes('*')) setTimeout(pollApprov
 window.addEventListener('load', () => setTimeout(pollApprovals, 5000));
 
 /* ---------- 2. AUTOMATIC SERVICE REMINDERS ---------- */
-const REM_RULES = [['quick_lube', 'Lube Service quick invoice', 'Lube service', 90], ['quick_tyre', 'Tyre & Wheel quick invoice', 'Tyre rotation & pressure check', 180], ['quick_brake', 'Brake Disc quick invoice (fleet / garage)', 'Brake check', 180],
+const REM_RULES = [['quick_lube', 'Lube Service quick invoice', 'Lube service', 90], ['quick_tyre', 'Tyre & Wheel quick invoice', 'Tyre rotation & pressure check', 180], ['quick_brake', 'Brake Disc quick invoice (fleet / garage)', 'Brake check', 180], ['quick_ac', 'AC Repair quick invoice', 'AC service & gas check', 365],
   ['cat_Brakes', 'Any invoice with Brakes labour', 'Brake check', 180], ['cat_Tyres', 'Any invoice with Tyres labour', 'Tyre rotation & pressure check', 180], ['cat_Alignment & balancing', 'Any invoice with alignment / balancing', 'Wheel alignment check', 180],
   ['inspection', 'Inspection report saved', 'Annual vehicle inspection', 365]];
 function remRules(){ const s = Store.setting().remRules || {}; const o = {}; REM_RULES.forEach(([k, , , d]) => o[k] = s[k] == null ? d : N(s[k])); return o; }
@@ -8809,6 +8865,152 @@ renderSetup = function(){
   bindDocumentStyle();
 };
 Object.assign(window.RF = window.RF || {}, {docHeaderHtml, docStyle, headerPrep});
+/* ===================== FREE LOGO MAKER (v6.3) =====================
+   Setup → My Business → "✨ Make a free logo". Builds 4 logo designs from the garage name
+   (SVG drawn here, no internet needed), Shuffle gives 4 new ones, "Use this logo" turns the
+   chosen design into a PNG and puts it in the logo slot (saved with "Save business details"). */
+const LM_PALETTES = [
+  ['#1F3864', '#E30613'], ['#111111', '#F5B700'], ['#0B6E4F', '#8BC34A'], ['#0D47A1', '#FF7A00'],
+  ['#7B1E1E', '#D4A017'], ['#00695C', '#FFB300'], ['#4A148C', '#E91E63'], ['#263238', '#FF3D00'],
+  ['#B71C1C', '#212121'], ['#01579B', '#00BCD4'], ['#3E2723', '#FF9800'], ['#1B5E20', '#FDD835']
+];
+const LM_STOP = new Set(['LTD', 'LTD.', 'LIMITED', 'NIG', 'NIG.', 'NIGERIA', 'ENT', 'ENT.', 'ENTERPRISE', 'ENTERPRISES', 'AND', '&', 'THE', 'CO', 'CO.', 'COMPANY', 'PLC', 'INC', 'LLC']);
+const LM_ICONS = {
+  wrench:'<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>',
+  car:'<path d="M2.5 16v-3.2l2.2-4.8h12.2l3.4 4.8h1.2V16z"/><path d="M6 8l1.5-3h7.5l2 3"/><circle cx="7" cy="16.5" r="2"/><circle cx="17" cy="16.5" r="2"/>',
+  tyre:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v5M12 16v5M3 12h5M16 12h5"/>',
+  tools:'<path d="M14 3h4l3 3-3 3-2-2h-2z"/><path d="M15 8l-9 9a2 2 0 0 0 3 3l9-9"/><path d="M3 6l3-3 4 4-3 3z"/>',
+  bolt:'<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+  piston:'<rect x="7" y="3" width="10" height="8" rx="1.5"/><path d="M7 6h10M10 11l-2 10M14 11l2 10M8 21h8"/>'
+};
+let lmSeed = 0, lmLast = [];
+function lmRand(n){ return Math.floor(Math.random() * n); }
+function lmPick(a){ return a[lmRand(a.length)]; }
+function lmWords(name){ return String(name || '').toUpperCase().replace(/[^A-Z0-9&.' -]/g, ' ').split(/\s+/).filter(Boolean); }
+function lmParts(name){
+  const all = lmWords(name), w = all.filter(x => !LM_STOP.has(x));
+  const words = w.length ? w : (all.length ? all : ['MY', 'GARAGE']);
+  const ini = (words.length > 1 ? words[0][0] + words[1][0] + (words[2] && words.length === 3 ? words[2][0] : '') : words[0].slice(0, 2)).replace(/[^A-Z0-9]/g, '') || 'G';
+  return {main:words.join(' '), ini:ini.slice(0, 3), words};
+}
+// keep text inside maxW: shrink the font, then squeeze if still too long
+function lmText(x, y, txt, fs, maxW, attrs, minFs){
+  const est = (t, f) => t.length * f * 0.66;
+  let f = fs; if(est(txt, f) > maxW) f = Math.max(minFs || 14, maxW / (txt.length * 0.66));
+  const squeeze = est(txt, f) > maxW ? ` textLength="${maxW}" lengthAdjust="spacingAndGlyphs"` : '';
+  return `<text x="${x}" y="${y}" font-size="${f.toFixed(1)}"${squeeze} ${attrs || ''}>${esc(txt)}</text>`;
+}
+function lmIcon(name, x, y, size, color, sw){
+  return `<g transform="translate(${x - size / 2},${y - size / 2}) scale(${size / 24})" fill="none" stroke="${color}" stroke-width="${sw || 2}" stroke-linecap="round" stroke-linejoin="round">${LM_ICONS[name] || LM_ICONS.wrench}</g>`;
+}
+function lmGear(cx, cy, ro, ri, teeth){
+  let d = ''; const st = Math.PI * 2 / teeth;
+  for(let i = 0; i < teeth; i++){
+    const a = i * st, pts = [[a, ri], [a + st * .12, ro], [a + st * .45, ro], [a + st * .57, ri]];
+    pts.forEach(([t, r], j) => { d += (i === 0 && j === 0 ? 'M' : 'L') + (cx + r * Math.cos(t)).toFixed(1) + ' ' + (cy + r * Math.sin(t)).toFixed(1) + ' '; });
+  }
+  return d + 'Z';
+}
+// name in 1 line, or 2 balanced lines when long (centred on y)
+function lmName(x, y, main, fs, maxW, attrs, minFs){
+  if(main.length <= 16) return lmText(x, y, main, fs, maxW, attrs, minFs);
+  const w = main.split(' '); let best = [main, ''], diff = 1e9;
+  for(let i = 1; i < w.length; i++){ const a = w.slice(0, i).join(' '), b = w.slice(i).join(' '), d = Math.max(a.length, b.length); if(d < diff){ diff = d; best = [a, b]; } }
+  if(!best[1]) return lmText(x, y, main, fs, maxW, attrs, minFs);
+  const f = Math.min(fs * 0.82, maxW / (Math.max(best[0].length, best[1].length) * 0.66)), g = Math.max(minFs || 14, f);
+  return lmText(x, y - g * 0.52, best[0], g, maxW, attrs, minFs) + lmText(x, y + g * 0.52, best[1], g, maxW, attrs, minFs);
+}
+const LM_FONT = `font-family="'Arial Black','Segoe UI Black',Impact,Arial,Helvetica,sans-serif" font-weight="900"`;
+const LM_FONT2 = `font-family="Arial,Helvetica,sans-serif" font-weight="700"`;
+// each design: (parts, tagline, [primary, accent], icon) → svg (400 × 400)
+const LM_DESIGNS = {
+  gear:(p, tag, [c1, c2], ic) => `
+    <path d="${lmGear(200, 160, 132, 112, 14)}" fill="${c1}"/><circle cx="200" cy="160" r="92" fill="#fff"/><circle cx="200" cy="160" r="82" fill="${c2}"/>
+    ${lmText(200, 160 + (p.ini.length > 2 ? 21 : 32), p.ini, p.ini.length > 2 ? 60 : 92, 130, `text-anchor="middle" fill="#fff" ${LM_FONT}`)}
+    ${lmName(200, 330, p.main, 44, 380, `text-anchor="middle" fill="${c1}" ${LM_FONT}`, 16)}
+    ${tag ? lmText(200, 374, tag, 22, 330, `text-anchor="middle" fill="${c2}" ${LM_FONT2} letter-spacing="3"`, 11) : ''}`,
+  ring:(p, tag, [c1, c2], ic) => { const rn = p.main.length > 28 ? p.words.slice(0, 3).join(' ') : p.main, f = Math.min(40, 400 / (rn.length * 0.68)), tf = Math.min(24, 380 / (((tag || '').length + 4) * 0.66));
+    return `<circle cx="200" cy="200" r="190" fill="${c1}"/><circle cx="200" cy="200" r="176" fill="none" stroke="#fff" stroke-width="3"/><circle cx="200" cy="200" r="104" fill="#fff"/><circle cx="200" cy="200" r="96" fill="none" stroke="${c2}" stroke-width="6"/>
+    <defs><path id="lmTop" d="M 62 200 A 138 138 0 0 1 338 200"/><path id="lmBot" d="M 50 200 A 150 150 0 0 0 350 200"/></defs>
+    <text fill="#fff" font-size="${f.toFixed(1)}" ${LM_FONT} text-anchor="middle"><textPath href="#lmTop" startOffset="50%">${esc(rn)}</textPath></text>
+    ${tag ? `<text fill="${c2}" font-size="${tf.toFixed(1)}" ${LM_FONT2} letter-spacing="2" text-anchor="middle"><textPath href="#lmBot" startOffset="50%">★ ${esc(tag)} ★</textPath></text>` : ''}
+    ${lmIcon(ic, 200, 172, 74, c1, 2.2)}
+    ${lmText(200, 266, p.ini, 46, 150, `text-anchor="middle" fill="${c2}" ${LM_FONT}`)}`; },
+  shield:(p, tag, [c1, c2], ic) => `
+    <path d="M200 14 L340 56 V160 C340 244 280 296 200 330 C120 296 60 244 60 160 V56 Z" fill="${c1}"/>
+    <path d="M200 36 L320 72 V160 C320 230 270 274 200 306 C130 274 80 230 80 160 V72 Z" fill="none" stroke="${c2}" stroke-width="6"/>
+    ${lmIcon(ic, 200, 104, 70, '#fff', 2.2)}
+    ${lmText(200, 222, p.ini, p.ini.length > 2 ? 72 : 90, 200, `text-anchor="middle" fill="#fff" ${LM_FONT}`)}
+    <path d="M14 296 H386 L366 330 L386 364 H14 L34 330 Z" fill="${c2}"/>
+    ${lmName(200, 340, p.main, 36, 320, `text-anchor="middle" fill="#fff" ${LM_FONT}`, 14)}
+    ${tag ? lmText(200, 392, tag, 20, 340, `text-anchor="middle" fill="${c1}" ${LM_FONT2} letter-spacing="3"`, 11) : ''}`,
+  hex:(p, tag, [c1, c2], ic) => `
+    <path d="M200 12 L332 88 V240 L200 316 L68 240 V88 Z" fill="${c2}"/><path d="M200 34 L313 99 V229 L200 294 L87 229 V99 Z" fill="${c1}"/>
+    ${lmIcon(ic, 200, 128, 96, '#fff', 2)}
+    ${lmText(200, 248, p.ini, 54, 170, `text-anchor="middle" fill="${c2}" ${LM_FONT}`)}
+    ${lmName(200, 352, p.main, 42, 384, `text-anchor="middle" fill="${c1}" ${LM_FONT}`, 15)}
+    ${tag ? lmText(200, 392, tag, 20, 330, `text-anchor="middle" fill="${c2}" ${LM_FONT2} letter-spacing="3"`, 11) : ''}`,
+  tyre:(p, tag, [c1, c2], ic) => { let tread = ''; for(let i = 0; i < 36; i++){ const a = i * 10 * Math.PI / 180; tread += `<rect x="194" y="10" width="12" height="22" rx="2" fill="${c1}" transform="rotate(${i * 10} 200 152)"/>`; }
+    return `${tread}<circle cx="200" cy="152" r="128" fill="${c1}"/><circle cx="200" cy="152" r="96" fill="#fff"/><circle cx="200" cy="152" r="86" fill="${c2}"/>
+    ${lmText(200, 152 + (p.ini.length > 2 ? 20 : 30), p.ini, p.ini.length > 2 ? 56 : 84, 130, `text-anchor="middle" fill="#fff" ${LM_FONT}`)}
+    ${lmName(200, 330, p.main, 44, 380, `text-anchor="middle" fill="${c1}" ${LM_FONT}`, 16)}
+    ${tag ? `<rect x="70" y="352" width="260" height="34" rx="17" fill="${c2}"/>` + lmText(200, 376, tag, 19, 236, `text-anchor="middle" fill="#fff" ${LM_FONT2} letter-spacing="2"`, 10) : ''}`; },
+  block:(p, tag, [c1, c2], ic) => { const w = p.words.length > 1 ? [p.words.slice(0, Math.ceil(p.words.length / 2)).join(' '), p.words.slice(Math.ceil(p.words.length / 2)).join(' ')] : [p.words[0]];
+    return `<rect x="10" y="40" width="380" height="${w.length > 1 ? 250 : 190}" rx="26" fill="${c1}"/>
+    <rect x="10" y="${w.length > 1 ? 262 : 202}" width="380" height="28" fill="${c2}"/>${lmIcon(ic, 352, 82, 46, c2, 2.4)}
+    ${w.map((t, i) => lmText(36, (w.length > 1 ? 150 : 165) + i * 82, t, 74, 320, `fill="#fff" ${LM_FONT}`, 20)).join('')}
+    ${tag ? lmText(200, w.length > 1 ? 346 : 268, tag, 30, 370, `text-anchor="middle" fill="${c1}" ${LM_FONT2} letter-spacing="4"`, 12) : ''}`; },
+  mono:(p, tag, [c1, c2], ic) => `
+    <rect x="80" y="10" width="240" height="240" rx="48" fill="${c1}"/><path d="M80 186 Q200 120 320 186 V202 Q320 250 272 250 H128 Q80 250 80 202 Z" fill="${c2}"/>
+    ${lmText(200, 140 + (p.ini.length > 2 ? 0 : 6), p.ini, p.ini.length > 2 ? 86 : 110, 200, `text-anchor="middle" fill="#fff" ${LM_FONT}`)}
+    ${lmIcon(ic, 200, 214, 40, '#fff', 2.4)}
+    ${lmName(200, 312, p.main, 44, 384, `text-anchor="middle" fill="${c1}" ${LM_FONT}`, 15)}
+    ${tag ? `<rect x="40" y="338" width="320" height="4" fill="${c2}"/>` + lmText(200, 378, tag, 24, 340, `text-anchor="middle" fill="${c2}" ${LM_FONT2} letter-spacing="3"`, 11) : ''}`,
+  emblem:(p, tag, [c1, c2], ic) => `
+    <circle cx="200" cy="130" r="120" fill="${c2}"/><circle cx="200" cy="130" r="106" fill="${c1}"/>
+    ${lmIcon(ic, 200, 104, 92, '#fff', 2)}${lmText(200, 206, p.ini, 40, 140, `text-anchor="middle" fill="${c2}" ${LM_FONT}`)}
+    <rect x="0" y="262" width="400" height="74" rx="12" fill="${c1}"/>
+    ${lmName(200, 308, p.main, 42, 370, `text-anchor="middle" fill="#fff" ${LM_FONT}`, 14)}
+    ${tag ? lmText(200, 380, tag, 24, 360, `text-anchor="middle" fill="${c1}" ${LM_FONT2} letter-spacing="3"`, 11) : ''}`
+};
+function lmSvg(d){ return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">${LM_DESIGNS[d.design](lmParts(d.name), (d.tag || '').toUpperCase(), d.pal, d.icon)}</svg>`; }
+function lmUrl(svg){ return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); }
+function lmGenerate(name, tag){
+  const ds = Object.keys(LM_DESIGNS).sort(() => Math.random() - .5).slice(0, 4), pals = LM_PALETTES.slice().sort(() => Math.random() - .5), ics = Object.keys(LM_ICONS);
+  return ds.map((design, i) => ({design, name, tag, pal:pals[i], icon:lmPick(ics)}));
+}
+// SVG → PNG (white background trimmed off by keeping it transparent)
+function lmToPng(svg, px){
+  return new Promise((ok, bad) => { const img = new Image(); img.onload = () => { try{ const c = document.createElement('canvas'); c.width = c.height = px || 600; c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); ok(c.toDataURL('image/png')); }catch(e){ bad(e); } }; img.onerror = () => bad(new Error('draw failed')); img.src = lmUrl(svg); });
+}
+function lmDefaults(){
+  const n = (($('rfB1Name') || {}).value || '').trim() || (($('rfBShort') || {}).value || '').trim() || ((brandSetting() || {}).short) || 'My Garage';
+  const ws = lmWords(n), trade = ws.find(w => /^(MOTORS?|GARAGE|AUTOS?|AUTOMOBILES?|AUTOMOTIVE|MECHANICS?|WORKSHOP|TYRES?|SERVICES)$/.test(w));
+  return {name:n, tag:trade ? 'AUTO REPAIRS · SERVICES' : 'AUTO REPAIRS'};
+}
+function lmRender(){
+  const box = $('rfLogoMaker'); if(!box) return;
+  box.innerHTML = `<div style="border:1px solid #dde3ee;border-radius:10px;padding:10px;margin:8px 0;background:#fafbfd">
+    <b style="color:#1F3864">✨ Free logo maker</b><p class="rf-note" style="margin:4px 0 8px">Pick one of the 4 designs, or tap 🔀 Shuffle for new ones. Change the words first if you like.</p>
+    <div class="grid2"><div class="field"><label for="lmName">Name on logo</label><input id="lmName" value="${esc(box.dataset.name)}"></div><div class="field"><label for="lmTag">Small line (optional)</label><input id="lmTag" value="${esc(box.dataset.tag)}" placeholder="e.g. AUTO REPAIRS"></div></div>
+    <div class="lm-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">${lmLast.map((d, i) => `<div style="background:#fff;border:2px solid #dde3ee;border-radius:10px;padding:6px;text-align:center"><img src="${lmUrl(lmSvg(d))}" alt="Logo design ${i + 1}" style="width:100%;aspect-ratio:1;display:block"><button type="button" class="rf-btn" data-lmuse="${i}" style="width:100%;margin-top:4px">Use this logo</button></div>`).join('')}</div>
+    <div class="rf-tools" style="margin-top:8px"><button type="button" class="rf-btn" id="lmShuffle">🔀 Shuffle</button><button type="button" class="rf-btn grey" id="lmClose">Close</button></div></div>`;
+  const regen = () => { box.dataset.name = $('lmName').value.trim() || 'My Garage'; box.dataset.tag = $('lmTag').value.trim(); lmLast = lmGenerate(box.dataset.name, box.dataset.tag); lmRender(); };
+  $('lmShuffle').onclick = regen;
+  let t; ['lmName', 'lmTag'].forEach(id => $(id).addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { const pos = document.activeElement && document.activeElement.id; box.dataset.name = $('lmName').value.trim() || 'My Garage'; box.dataset.tag = $('lmTag').value.trim(); lmLast = lmLast.map(d => Object.assign({}, d, {name:box.dataset.name, tag:box.dataset.tag})); const v = $(pos) ? $(pos).value : null, sel = $(pos) ? $(pos).selectionStart : 0; lmRender(); if(pos && $(pos)){ $(pos).focus(); try{ $(pos).setSelectionRange(sel, sel); }catch(e){} } }, 500); }));
+  $('lmClose').onclick = () => { box.innerHTML = ''; };
+  box.querySelectorAll('[data-lmuse]').forEach(b => b.onclick = async () => {
+    try{ pendingLogo = await lmToPng(lmSvg(lmLast[N(b.dataset.lmuse)]), 600); }catch(e){ toast('Could not make the logo image on this phone.', true); return; }
+    const pv = $('rfBLogoPrev'); if(pv){ pv.src = pendingLogo; pv.style.display = ''; }
+    box.innerHTML = ''; toast('Logo chosen — tap “Save business details” to keep it.');
+    const s = $('rfBSave'); if(s) s.scrollIntoView({block:'center', behavior:'smooth'});
+  });
+}
+function openLogoMaker(){
+  const box = $('rfLogoMaker'); if(!box) return; const d = lmDefaults();
+  box.dataset.name = d.name; box.dataset.tag = d.tag; lmLast = lmGenerate(d.name, d.tag); lmRender();
+}
+Object.assign(window.RF = window.RF || {}, {lmSvg, lmGenerate, lmParts, LM_DESIGNS});
 
 })();
 </script>
