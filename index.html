@@ -2575,7 +2575,7 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
    database (Supabase) with staff logins and roles (admin / cashier / technician).
    Without the team database everything still works on this device alone, as before.
 =========================================================================================== */
-const RF_VERSION = '6.7';
+const RF_VERSION = '6.8';
 /* Multi-user team database: built, but switched OFF for now. Set to true to turn it back on. */
 const EDITION = 'robotik';      // build script switches this to 'partner' for the partner-garage app
 const TEAM_ENABLED = EDITION === 'robotik' && true;
@@ -2640,7 +2640,7 @@ const bucket = k => mem[k] || (mem[k] = new Map());
 const listeners = [];
 let emitTimer = null;
 function emit(kinds){ clearTimeout(emitTimer); emitTimer = setTimeout(() => listeners.forEach(fn => { try{ fn(kinds); }catch(e){ console.error(e); } }), 60); }
-const LOCAL_KINDS = ['jobupdate', 'letter', 'receipt', 'customer', 'crmtask', 'crmnote', 'deal', 'consent', 'porder', 'income', 'transfer', 'item','stockmove','labour','bundle','po','expense','appt','reminder','truck','tyreevent','timelog','payconfirm','setting','counter','joblink','jobpart','comeback','tow','supplier','supbill','suppay','worker','staffpay','tool','toolmove','corp','jobtrack','assetlog','msglog','diag','vehspec'];
+const LOCAL_KINDS = ['sale', 'jobupdate', 'letter', 'receipt', 'customer', 'crmtask', 'crmnote', 'deal', 'consent', 'porder', 'income', 'transfer', 'item','stockmove','labour','bundle','po','expense','appt','reminder','truck','tyreevent','timelog','payconfirm','setting','counter','joblink','jobpart','comeback','tow','supplier','supbill','suppay','worker','staffpay','tool','toolmove','corp','jobtrack','assetlog','msglog','diag','vehspec'];
 function loadLocal(){
   LOCAL_KINDS.forEach(k => {
     const b = bucket(k); b.clear();
@@ -3378,7 +3378,7 @@ const TABS = GLOBAL
   ? [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['stock', 'Stock'], ['workshop', 'Workshop'], ['money', 'Money'], ['send', '📦 Send to Robotik Fix'], ['sync', 'Setup']]
   : [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['crm', 'Customers', 'need-cashier'], ['stock', 'Stock'], ['book', 'Bookings'], ['workshop', 'Workshop'],
      ['money', 'Money', 'need-cashier'], ['partners', 'Partners', 'need-cashier'], ['fleet', 'Fleet'], ['team', 'Team'], ['sync', 'Setup']];
-const NEW_VIEWS = GLOBAL ? ['home', 'crm', 'letters', 'quick', 'system', 'assets', 'tech', 'stock', 'book', 'workshop', 'money', 'fleet'] : EDITION === 'partner' ? ['home', 'crm', 'letters', 'quick', 'send', 'system', 'assets', 'tech', 'stock', 'workshop', 'money'] : ['home', 'crm', 'letters', 'system', 'plugins', 'assets', 'tech', 'quick', 'stock', 'book', 'workshop', 'money', 'partners', 'fleet', 'team'];
+const NEW_VIEWS = GLOBAL ? ['home', 'crm', 'letters', 'sales', 'quick', 'system', 'assets', 'tech', 'stock', 'book', 'workshop', 'money', 'fleet'] : EDITION === 'partner' ? ['home', 'crm', 'letters', 'sales', 'quick', 'send', 'system', 'assets', 'tech', 'stock', 'workshop', 'money'] : ['home', 'crm', 'letters', 'sales', 'system', 'plugins', 'assets', 'tech', 'quick', 'stock', 'book', 'workshop', 'money', 'partners', 'fleet', 'team'];
 let curTab = 'doc';
 const segState = {partners:'orders', stock:'items', book:'day', money:'reports', fleet:'trucks', team:'clock', workshop:'jobs'};
 function buildNav(){
@@ -3411,7 +3411,7 @@ window.showTab = function(tab){
 function renderView(v){
   ensureLists();
   try{
-    if(v === 'home') renderHome(); else if(v === 'letters') renderLetters(); else if(v === 'crm') renderCrm(); else if(v === 'system') renderSystem(); else if(v === 'plugins') renderPlugins(); else if(v === 'assets') renderAssetsView(); else if(v === 'tech') renderTech(); else if(v === 'quick') renderQuick(); else if(v === 'send') renderSend(); else if(v === 'partners') renderPartners(); else if(v === 'stock') renderStock(); else if(v === 'book') renderBook(); else if(v === 'money') renderMoney();
+    if(v === 'home') renderHome(); else if(v === 'letters') renderLetters(); else if(v === 'sales') renderSales(); else if(v === 'crm') renderCrm(); else if(v === 'system') renderSystem(); else if(v === 'plugins') renderPlugins(); else if(v === 'assets') renderAssetsView(); else if(v === 'tech') renderTech(); else if(v === 'quick') renderQuick(); else if(v === 'send') renderSend(); else if(v === 'partners') renderPartners(); else if(v === 'stock') renderStock(); else if(v === 'book') renderBook(); else if(v === 'money') renderMoney();
     else if(v === 'fleet') renderFleet(); else if(v === 'workshop') renderWorkshop(); else if(v === 'team') renderTeam();
   }catch(e){ console.error(e); const el = $('view-' + v); if(el) el.innerHTML = '<div class="card"><p>Something went wrong showing this screen: ' + esc(e.message) + '</p></div>'; }
 }
@@ -3794,7 +3794,7 @@ function renderMoney(){
   if(s === 'exp'){ $('rfAddExp').onclick = () => editExp(); bind(v, '[data-ee]', 'click', el => editExp(el.dataset.ee)); $('rfExpCsv').onclick = () => { const [f, t] = periodRange(); downloadCsv('robotik_expenses_' + f + '_' + t + '.csv', [['Date', 'Category', 'Description', 'Payee', 'Amount', 'Method', 'Reference', 'Recorded by']].concat(Store.list('expense').filter(e => e.date >= f && e.date <= t).map(e => [e.date, e.cat, e.desc, e.payee, e.amount, e.method, e.ref, e.by]))); }; }
   if(s === 'confirm'){ bind(v, '[data-pc]', 'click', el => { const p = payments().find(x => x.id === el.dataset.pc); Store.put('payconfirm', {id:'pc_' + p.id, paymentId:p.id, docId:p.docId, docNo:p.docNo, amount:p.amount, confirmedBy:myName(), confirmedAt:nowIso()}); toast('Marked as received in the bank.'); });
     bind(v, '[data-pu]', 'click', el => { Store.remove('payconfirm', 'pc_' + el.dataset.pu); }); }
-  if(s === 'owed') bind(v, '[data-ow]', 'click', el => { const d = Store.get('doc', el.dataset.ow); const bal = Math.max(0, N(d.grand) - (d.paymentEntries || []).reduce((x, p) => x + N(p.amount), 0)); const st = Store.setting();
+  if(s === 'owed') bind(v, '[data-ow]', 'click', el => { const d = Store.get('doc', el.dataset.ow) || (typeof saleAsDoc === 'function' ? saleAsDoc(Store.get('sale', el.dataset.ow)) : null); if(!d) return; const bal = Math.max(0, N(d.grand) - (d.paymentEntries || []).reduce((x, p) => x + N(p.amount), 0)); const st = Store.setting();
     openWhatsApp(d.custPhone, fillTemplate(st.payMsg, {name:d.custName || 'Customer', docNo:d.docNo, total:money(d.grand), paid:money(N(d.grand) - bal), balance:money(bal), bank:d.bankName, acctNo:d.bankAcctNo, acctName:d.bankAcctName, link:st.payLink ? '\nOr pay online (card / transfer / USSD): ' + st.payLink : ''})); });
 }
 function periodPicker(){
@@ -5742,6 +5742,7 @@ const IC = {
   ac:'<path d="M12 2v20M4.9 7l14.2 10M4.9 17L19.1 7"/><path d="M9.5 3.5L12 6l2.5-2.5M9.5 20.5L12 18l2.5 2.5"/>',
   body:'<path d="M3 16v-3l2-5h11l3 5h2v3z"/><circle cx="7" cy="16.5" r="2"/><circle cx="17" cy="16.5" r="2"/><path d="M14 4l-2 3 3 1-2 3"/>',
   paint:'<rect x="3" y="3" width="13" height="6" rx="1"/><path d="M16 6h3v5h-8v3"/><rect x="9.5" y="14" width="3" height="7" rx="1"/>',
+  sales:'<circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.6 12.2a2 2 0 0 0 2 1.6h8.2a2 2 0 0 0 2-1.5L21.5 8H6.2"/>',
   elec:'<path d="M13 2L5 13h6l-1 9 8-12h-6z"/>',
   manual:'<path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v17H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20v5H6.5"/><path d="M9 7h7M9 11h5"/>',
   wiring:'<path d="M3 6h5a3 3 0 0 1 3 3v6a3 3 0 0 0 3 3h7"/><path d="M3 18h4M17 6h4"/><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="18" r="1.5"/><rect x="12" y="4" width="5" height="4" rx="1"/>',
@@ -5852,6 +5853,7 @@ function homeTiles(){
     t('work', 'Repair Manuals', 'manual', 'green', 'home', () => openLink('https://lemon-manuals.la/', 'Opening LEMON Manuals: free repair & workshop manuals (about 10,000 models, 1960–2025).')),
     t('work', 'Wiring Diagrams (Carmin)', 'wiring', 'orange', 'home', () => openLink(/iphone|ipad|ipod/i.test(navigator.userAgent) ? 'https://apps.apple.com/app/id1527982107' : 'https://play.google.com/store/apps/details?id=com.min.car', 'Opening Carmin (wiring diagrams app). Install it once, then open it from your phone.')),
     t('work', 'Letters & Letterhead', 'letter', 'navy', 'letters', () => { segState.letters = 'list'; showTab('letters'); window.scrollTo({top:0}); }, 'need-cashier'),
+    t('work', 'Sales & Supplies', 'sales', 'green', 'sales', () => { segState.sales = 'list'; showTab('sales'); window.scrollTo({top:0}); }, 'need-cashier'),
     t('work', 'Current Document', 'edit', 'slate', 'doc', () => showTab('doc')),
     t('svc', 'Lube Service', 'lube', 'yellow', 'quick', () => newQuick('lube')),
     t('svc', 'Tyre & Wheel', 'tyre', 'slate', 'quick', () => newQuick('tyre')),
@@ -9131,6 +9133,309 @@ function openLogoMaker(){
   box.dataset.name = d.name; box.dataset.tag = d.tag; box.dataset.pic = 'mix'; lmLast = lmGenerate(d.name, d.tag, 'mix'); lmRender();
 }
 Object.assign(window.RF = window.RF || {}, {lmSvg, lmGenerate, lmParts, LM_DESIGNS, LM_PALETTES, LM_PARTS, LM_ABSTRACT, LM_APAL});
+/* ===================== SALES & SUPPLIES (v6.8) =====================
+   Quotation, invoice and delivery note for spare parts, tools and equipment sold to customers
+   (no vehicle needed). Kind 'sale' {type, no, date, companyIdx, cust{…}, items[{desc, partNo, qty, unit, price, itemId}],
+   discountPct, vat, photos[{src, cap, path}], terms…, payments[{id, date, amount, method, ref, by}], status, fromId, fromNo}.
+   Quotations carry up to 4 product photos. Print directly or share as PDF.
+   Invoice payments feed Money (cash book, P&L, owed to us, transfer checks); invoiced stock items leave Inventory. */
+const SAL_TYPES = {
+  'QUOTATION':{prefix:'SQ', key:'saleq', short:'Quotation', icon:'📝', status:['Draft', 'Sent', 'Accepted', 'Declined', 'Expired']},
+  'INVOICE':{prefix:'SI', key:'salei', short:'Invoice', icon:'🧾', status:['Unpaid', 'Part paid', 'Paid', 'Cancelled']},
+  'DELIVERY NOTE':{prefix:'DN', key:'saled', short:'Delivery note', icon:'🚚', status:['Pending', 'Delivered']}
+};
+const SAL_UNITS = ['pcs', 'set', 'pair', 'unit', 'box', 'carton', 'litre', 'kg', 'metre', 'roll', 'drum', 'pack'];
+const SAL_PHOTOS = 4;
+let salSeg = 'list', salDoc = null, salQ = '', salF = '', salBusy = false;
+function salCo(s){ return COMPANIES[N((s || {}).companyIdx)] || COMPANIES[0] || {}; }
+function salMoney(n, s){ try{ return fmtCur(n, N((s || {}).companyIdx)); }catch(e){ return money(n); } }
+function salTotals(s){
+  const sub = (s.items || []).reduce((t, i) => t + N(i.qty) * N(i.price), 0);
+  const disc = Math.round(sub * N(s.discountPct)) / 100, net = sub - disc;
+  const rate = s.vat ? vatRate(N(s.companyIdx)) : 0, tax = Math.round(net * rate * 100) / 100;
+  const paid = (s.payments || []).reduce((t, p) => t + N(p.amount), 0), grand = net + tax;
+  return {sub, disc, net, tax, grand, paid, bal:Math.max(0, grand - paid)};
+}
+function salStatus(s){
+  if(s.type !== 'INVOICE') return s.status || SAL_TYPES[s.type].status[0];
+  if(s.status === 'Cancelled') return 'Cancelled';
+  const t = salTotals(s); return t.paid <= 0.004 ? 'Unpaid' : t.bal > 0.5 ? 'Part paid' : 'Paid';
+}
+function salBlank(type){
+  const co = (typeof letCoIdx === 'function' ? letCoIdx() : 0) || 0;
+  return {isNew:true, type, date:today(), companyIdx:co, cust:{name:'', org:'', phone:'', email:'', addr:''}, ref:'', items:[{desc:'', partNo:'', qty:1, unit:'pcs', price:0}], discountPct:0, vat:false, photos:[],
+    validDays:14, delivery:'Ex-stock', warranty:'', payTerms:type === 'INVOICE' ? 'Payment due on receipt' : '100% payment before delivery', notes:'', payments:[], status:SAL_TYPES[type].status[0],
+    showPrices:false, useSig:true, deliveredBy:'', vehicle:'', recvName:'', recvDate:''};
+}
+function newSale(type){ salDoc = salBlank(type); salSeg = 'edit'; renderSales(); window.scrollTo({top:0}); }
+function openSale(id){ const s = Store.get('sale', id); if(!s) return; salDoc = JSON.parse(JSON.stringify(s)); salSeg = 'edit'; if(curTab !== 'sales') showTab('sales'); renderSales(); window.scrollTo({top:0}); }
+function convertSale(src, type){
+  const s = salBlank(type);
+  ['companyIdx', 'cust', 'ref', 'items', 'discountPct', 'vat', 'delivery', 'warranty'].forEach(k => s[k] = JSON.parse(JSON.stringify(src[k] == null ? s[k] : src[k])));
+  s.fromId = src.id; s.fromNo = src.no; s.fromType = src.type;
+  if(type === 'INVOICE' && src.payTerms) s.payTerms = src.payTerms;
+  salDoc = s; salSeg = 'edit'; if(curTab !== 'sales') showTab('sales'); renderSales(); window.scrollTo({top:0});
+  toast(SAL_TYPES[type].short + ' started from ' + (src.no || 'the ' + SAL_TYPES[src.type].short.toLowerCase()) + ' — check it, then Save.');
+}
+function copySale(src){
+  const s = JSON.parse(JSON.stringify(src)); ['id', 'no', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'history', 'fromId', 'fromNo', 'fromType', '_deleted'].forEach(k => delete s[k]);
+  Object.assign(s, {isNew:true, date:today(), payments:[], status:SAL_TYPES[s.type].status[0]}); salDoc = s; salSeg = 'edit'; renderSales(); window.scrollTo({top:0}); toast('Copy made — edit it, then Save.');
+}
+/* ---------- form ---------- */
+function readSaleForm(){
+  const s = salDoc, g = id => ($(id) || {}).value || '';
+  if(!$('slDate')) return s;
+  Object.assign(s, {companyIdx:parseInt(g('slCo'), 10) || 0, date:g('slDate') || today(), ref:g('slRef').trim(), discountPct:N(g('slDisc')), vat:!!($('slVat') || {}).checked, notes:g('slNotes').replace(/\s+$/, ''),
+    useSig:!!($('slSig') || {}).checked});
+  if($('slStatus')) s.status = g('slStatus');
+  s.cust = {name:g('slCuName').trim(), org:g('slCuOrg').trim(), phone:g('slCuPhone').trim(), email:g('slCuEmail').trim(), addr:g('slCuAddr').trim()};
+  s.items = [...document.querySelectorAll('#slItems [data-i]')].map(tr => { const q = c => (tr.querySelector(c) || {}).value || '';
+    return {desc:q('.sd').trim(), partNo:q('.sp').trim(), qty:N(q('.sq')), unit:q('.su') || 'pcs', price:N(q('.sr')), itemId:tr.dataset.item || ''}; });
+  if(s.type === 'QUOTATION'){ s.validDays = N(g('slValid')) || 0; s.photos = (s.photos || []).map((p, i) => Object.assign({}, p, {cap:(($('slCap' + i) || {}).value || '').trim()})); }
+  if(s.type !== 'DELIVERY NOTE'){ s.delivery = g('slDelv').trim(); s.warranty = g('slWarr').trim(); s.payTerms = g('slPayT').trim(); }
+  else { s.showPrices = !!($('slShowP') || {}).checked; s.deliveredBy = g('slDBy').trim(); s.vehicle = g('slVeh').trim(); s.recvName = g('slRName').trim(); s.recvDate = g('slRDate'); }
+  return s;
+}
+async function saveSale(quiet){
+  if(salBusy) return null;
+  readSaleForm();
+  const s = Object.assign({}, salDoc); delete s.isNew;
+  s.items = (s.items || []).filter(i => i.desc || N(i.price) || i.partNo);
+  if(!s.cust.name && !s.cust.org){ toast('Enter the customer name or company first.', true); return null; }
+  if(!s.items.length){ toast('Add at least one item.', true); return null; }
+  salBusy = true;
+  try{
+    const T = SAL_TYPES[s.type], at = nowIso(), who = myName() || 'Staff';
+    if(!s.no){ try{ s.no = await nextNumber(T.key, T.prefix, Store.list('sale').filter(x => x.type === s.type).map(x => x.no)); }catch(e){ toast('Could not get a number: ' + (e.message || e), true); return null; } }
+    if(!s.id) s.id = 'sal_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    if(!s.createdAt){ s.createdAt = at; s.createdBy = who; }
+    s.updatedAt = at; s.updatedBy = who;
+    const t = salTotals(s); s.grand = t.grand; s.status = salStatus(s);
+    const h = (s.history || []).slice(-30); h.push({at, by:who, what:salDoc.isNew ? 'Created' : 'Edited (' + s.status + ')'}); s.history = h;
+    const saved = Store.put('sale', s); salDoc = JSON.parse(JSON.stringify(saved || s));
+    try{ postStockForSale(salDoc); }catch(e){ console.warn(e); }
+    if(s.type === 'DELIVERY NOTE' && s.fromId && s.status === 'Delivered'){ const inv = Store.get('sale', s.fromId); if(inv && !inv.deliveredNo){ Store.put('sale', Object.assign({}, inv, {deliveredNo:s.no})); } }
+    if(!quiet) toast(T.short + ' ' + s.no + ' saved.');
+    return salDoc;
+  } finally { salBusy = false; }
+}
+// invoiced items that came from Inventory leave stock (delivery notes and quotations do not)
+function postStockForSale(s){
+  if(!s || !can('cashier')) return;
+  const active = s.type === 'INVOICE' && s.status !== 'Cancelled' && !s._deleted, want = new Map();
+  if(active) (s.items || []).forEach(i => { const it = (i.itemId && Store.get('item', i.itemId)) || findItemByName(i.desc); if(it) want.set(it.id, (want.get(it.id) || 0) + N(i.qty)); });
+  Store.list('stockmove').filter(m => m.docId === s.id).forEach(m => { if(!want.has(m.itemId) && N(m.qty) !== 0) Store.put('stockmove', Object.assign({}, m, {qty:0, note:'Removed from ' + (s.no || '')})); });
+  want.forEach((q, itemId) => { const id = 'sm_' + s.id + '_' + itemId, cur = bucket('stockmove').get(id);
+    if(!cur || cur._deleted || N(cur.qty) !== -q || cur.ref !== s.no) Store.put('stockmove', {id, itemId, qty:-q, type:'sale', docId:s.id, ref:s.no, date:s.date || today(), note:(s.cust || {}).name || ''}); });
+}
+/* ---------- photos (quotation): resized on the phone; in team mode stored online, else kept in the record ---------- */
+async function salAddPhoto(file, slot){
+  if(!file || !/^image\//.test(file.type)){ toast('Choose a picture (JPG or PNG).', true); return; }
+  readSaleForm(); toast('Adding photo…');
+  let src; try{ src = await resizeImage(file, 900); }catch(e){ toast('Could not read that picture.', true); return; }
+  let ph = {src, cap:(salDoc.photos[slot] || {}).cap || ''};
+  if(mode === 'cloud' && typeof uploadMedia === 'function'){
+    try{ const blob = await (await fetch(src)).blob(); const up = await uploadMedia(blob, 'sales_' + (salDoc.id || 'new'), 'jpg', 'image/jpeg'); ph = {src:up.url, path:up.path, cap:ph.cap}; }catch(e){ /* keep it inside the record */ }
+  }
+  const old = salDoc.photos[slot]; if(old && old.path) deleteMedia([old.path]);
+  salDoc.photos[slot] = ph; salDoc.photos = salDoc.photos.filter(Boolean).slice(0, SAL_PHOTOS); renderSales();
+}
+/* ---------- printout ---------- */
+const SAL_CSS = (A) => `.sl{font-family:Arial,Helvetica,sans-serif;color:#111;font-size:11.5px;line-height:1.4;width:100%;box-sizing:border-box;background:#fff;display:block}
+  .sl *{box-sizing:border-box}.sl .lh-hd{display:flex;gap:14px;align-items:center}.sl .lh-hd img{height:66px}.sl .lh-co{flex:1}.sl .lh-co b{display:block;font-size:18px;color:${A}}.sl .lh-co div{font-size:10.5px;color:#333}
+  .sl .lh-rule{height:4px;background:#E30613;margin-top:8px;border-bottom:2px solid ${A}}
+  .sl-ttl{display:flex;justify-content:space-between;align-items:flex-end;margin-top:12px}.sl-ttl h1{margin:0;font-size:22px;letter-spacing:2px;color:${A}}
+  .sl-meta{border-collapse:collapse;font-size:11px}.sl-meta td{padding:2px 0 2px 10px;text-align:right}.sl-meta td:first-child{color:#555}
+  .sl-par{display:flex;gap:10px;margin-top:10px}.sl-box{flex:1;border:1px solid #cfd6e3;border-radius:6px;padding:7px 9px}.sl-box h4{margin:0 0 3px;font-size:9.5px;letter-spacing:1px;color:${A}}
+  .sl-box div{white-space:pre-line}
+  table.sl-it{width:100%;border-collapse:collapse;margin-top:10px}.sl-it th{background:${A};color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.5px;padding:6px 5px;text-align:left}
+  .sl-it td{border-bottom:1px solid #e3e7ee;padding:6px 5px;vertical-align:top}.sl-it tr{break-inside:avoid;page-break-inside:avoid}.sl-it thead{display:table-header-group}
+  .sl-it .r{text-align:right;white-space:nowrap}.sl-it .c{text-align:center}.sl-it .pn{color:#555;font-size:10px}.sl-it tr:nth-child(even) td{background:#f7f9fc}
+  .sl-tot{margin-left:auto;margin-top:8px;border-collapse:collapse;min-width:46%;break-inside:avoid}.sl-tot td{padding:4px 6px}.sl-tot td:last-child{text-align:right;white-space:nowrap}
+  .sl-tot .g td{background:${A};color:#fff;font-weight:bold;font-size:13px}.sl-tot .b td{font-weight:bold;color:#b91c1c}
+  .sl-sec{margin-top:12px;font-size:10px;letter-spacing:1px;font-weight:bold;color:${A};border-bottom:1px solid ${A};padding-bottom:2px}
+  .sl-ph{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;break-inside:avoid;page-break-inside:avoid}.sl-ph figure{margin:0;border:1px solid #dde3ec;border-radius:6px;padding:5px;text-align:center;break-inside:avoid}
+  .sl-ph img{width:100%;height:165px;object-fit:contain;display:block;background:#fafbfc}.sl-ph figcaption{font-size:10.5px;margin-top:3px;color:#333}
+  .sl-terms{margin-top:6px;font-size:10.5px}.sl-terms div{margin:2px 0}.sl-notes{white-space:pre-line;margin-top:4px;font-size:10.5px}
+  .sl-sign{display:flex;gap:16px;margin-top:16px;break-inside:avoid}.sl-sign>div{flex:1}.sl-sig{height:84px;position:relative;border-bottom:1px solid #333}.sl-sig img{position:absolute;left:0;bottom:3px;height:80px;max-width:240px;object-fit:contain}
+  .sl-sign .l{font-size:10px;color:#555;margin-top:3px}.sl-grow{display:none}.sl-foot{margin-top:18px;break-inside:avoid;border-top:1px solid ${A};padding-top:5px;text-align:center;font-size:9.5px;color:#555}`;
+function saleHtml(s){
+  const co = salCo(s), T = SAL_TYPES[s.type], t = salTotals(s), dn = s.type === 'DELIVERY NOTE', prices = !dn || s.showPrices, M = n => salMoney(n, s);
+  let A = '#1F3864'; try{ A = docStyle().color || A; }catch(e){}
+  const c = s.cust || {}, cust = [c.org && c.name ? c.name + '\n' + c.org : (c.org || c.name), c.addr, c.phone ? 'Tel: ' + c.phone : '', c.email].filter(Boolean).join('\n');
+  const due = s.type === 'QUOTATION' && N(s.validDays) ? addDays(s.date || today(), N(s.validDays)) : '';
+  let h = `<div class="sl"><style>${SAL_CSS(A)}</style>${letterheadTop(co)}
+    <div class="sl-ttl"><h1>${esc(s.type)}</h1><table class="sl-meta"><tr><td>${esc(T.short)} no.</td><td><b>${esc(s.no || '(on save)')}</b></td></tr><tr><td>Date</td><td>${esc(fmtDate(s.date))}</td></tr>
+    ${due ? `<tr><td>Valid until</td><td>${esc(fmtDate(due))}</td></tr>` : ''}${s.ref ? `<tr><td>Your ref / PO</td><td>${esc(s.ref)}</td></tr>` : ''}${s.fromNo ? `<tr><td>Based on</td><td>${esc(s.fromNo)}</td></tr>` : ''}</table></div>
+    <div class="sl-par"><div class="sl-box"><h4>${dn ? 'DELIVER TO' : s.type === 'INVOICE' ? 'BILL TO' : 'PREPARED FOR'}</h4><div>${esc(cust || '—')}</div></div>
+    ${dn ? `<div class="sl-box"><h4>DELIVERY</h4><div>${esc([s.deliveredBy ? 'Delivered by: ' + s.deliveredBy : '', s.vehicle ? 'Vehicle: ' + s.vehicle : '', 'Status: ' + salStatus(s)].filter(Boolean).join('\n'))}</div></div>` : ''}</div>`;
+  h += `<table class="sl-it"><thead><tr><th class="c" style="width:26px">#</th><th>Description</th><th style="width:16%">Part no.</th><th class="r" style="width:48px">Qty</th><th style="width:44px">Unit</th>${prices ? '<th class="r">Unit price</th><th class="r">Amount</th>' : '<th class="c" style="width:70px">Received ✓</th>'}</tr></thead><tbody>`;
+  h += (s.items || []).filter(i => i.desc || i.partNo || N(i.price)).map((i, k) => `<tr><td class="c">${k + 1}</td><td>${esc(i.desc)}</td><td class="pn">${esc(i.partNo || '')}</td><td class="r">${esc(String(+N(i.qty).toFixed(3)))}</td><td>${esc(i.unit || '')}</td>${prices ? `<td class="r">${M(i.price)}</td><td class="r">${M(N(i.qty) * N(i.price))}</td>` : '<td class="c">☐</td>'}</tr>`).join('');
+  h += '</tbody></table>';
+  if(prices){
+    h += `<table class="sl-tot">${t.disc || t.tax ? `<tr><td>Subtotal</td><td>${M(t.sub)}</td></tr>` : ''}${t.disc ? `<tr><td>Discount (${+N(s.discountPct).toFixed(2)}%)</td><td>−${M(t.disc)}</td></tr>` : ''}${t.tax ? `<tr><td>${esc(vatLabel(N(s.companyIdx)))}</td><td>${M(t.tax)}</td></tr>` : ''}
+      <tr class="g"><td>TOTAL</td><td>${M(t.grand)}</td></tr>${s.type === 'INVOICE' && t.paid ? `<tr><td>Paid</td><td>${M(t.paid)}</td></tr><tr class="b"><td>Balance due</td><td>${M(t.bal)}</td></tr>` : ''}</table>`;
+    try{ if(curCode(N(s.companyIdx)) === 'NGN' && typeof nairaWords === 'function') h += `<div class="sl-notes" style="text-align:right;font-style:italic">${esc(nairaWords(t.grand))}</div>`; }catch(e){}
+  }
+  const ph = s.type === 'QUOTATION' ? (s.photos || []).filter(p => p && p.src) : [];
+  if(ph.length) h += `<div class="sl-sec">PRODUCT PHOTOS</div><div class="sl-ph">${ph.map((p, k) => `<figure><img src="${esc(p.src)}" alt="" crossorigin="anonymous"><figcaption>${esc(p.cap || 'Photo ' + (k + 1))}</figcaption></figure>`).join('')}</div>`;
+  const terms = dn ? [] : [[s.type === 'QUOTATION' && due ? 'Validity' : '', due ? N(s.validDays) + ' days (until ' + fmtDate(due) + ')' : ''], ['Delivery', s.delivery], ['Warranty', s.warranty], ['Payment terms', s.payTerms]].filter(x => x[0] && x[1]);
+  if(terms.length || s.notes || (!dn && co.bankAcctNo)){
+    h += `<div class="sl-sec">${dn ? 'NOTES' : 'TERMS & PAYMENT'}</div><div class="sl-terms">${terms.map(([k, v]) => `<div><b>${esc(k)}:</b> ${esc(v)}</div>`).join('')}
+      ${!dn && co.bankAcctNo ? `<div><b>Bank:</b> ${esc(co.bankName || '')} · ${esc(co.bankAcctNo)}${co.bankAcctName ? ' · ' + esc(co.bankAcctName) : ''}</div>` : ''}</div>${s.notes ? `<div class="sl-notes">${esc(s.notes)}</div>` : ''}`;
+  }
+  const sig = s.useSig && co.signature ? `<img src="${esc(co.signature)}" alt="">` : '';
+  h += dn ? `<div class="sl-sign"><div><div class="sl-sig">${sig}</div><div class="l">Issued by — for ${esc(co.name || '')}</div></div><div><div class="sl-sig" style="display:flex;align-items:flex-end;padding:0 0 3px">${esc(s.recvName || '')}</div><div class="l">Received in good condition by (name &amp; signature)</div></div><div style="flex:.6"><div class="sl-sig" style="display:flex;align-items:flex-end;padding:0 0 3px">${s.recvDate ? esc(fmtDate(s.recvDate)) : ''}</div><div class="l">Date received</div></div></div>`
+    : `<div class="sl-sign"><div style="flex:.55"><div class="sl-sig">${sig}</div><div class="l">Authorised signature — for ${esc(co.name || '')}</div></div><div style="flex:.45"></div></div>`;
+  h += `<div class="sl-grow"></div><div class="sl-foot">${esc(co.name || '')} · ${esc(co.address || '')}${co.tel ? ' · Tel: ' + esc(co.tel) : ''}${co.email ? ' · ' + esc(co.email) : ''}${EDITION === 'partner' ? '<br><span style="color:#999">Powered by Robotik Fix</span>' : ''}</div></div>`;
+  return h;
+}
+function saleText(s){
+  const t = salTotals(s), co = salCo(s), M = n => salMoney(n, s);
+  let x = `${co.name || ''}\n${s.type} ${s.no || ''} · ${fmtDate(s.date)}\nFor: ${[s.cust.name, s.cust.org].filter(Boolean).join(', ')}\n\n`;
+  x += (s.items || []).filter(i => i.desc).map((i, k) => `${k + 1}. ${i.desc}${i.partNo ? ' (' + i.partNo + ')' : ''} — ${+N(i.qty).toFixed(3)} ${i.unit || ''}${s.type !== 'DELIVERY NOTE' || s.showPrices ? ' × ' + M(i.price) + ' = ' + M(N(i.qty) * N(i.price)) : ''}`).join('\n');
+  if(s.type !== 'DELIVERY NOTE' || s.showPrices) x += `\n\nTOTAL: ${M(t.grand)}${s.type === 'INVOICE' && t.paid ? '\nPaid: ' + M(t.paid) + '\nBalance: ' + M(t.bal) : ''}`;
+  if(s.type !== 'DELIVERY NOTE' && co.bankAcctNo) x += `\n\nBank: ${co.bankName || ''} ${co.bankAcctNo}${co.bankAcctName ? ' (' + co.bankAcctName + ')' : ''}`;
+  return x + `\n\nThank you — ${co.name || ''}${co.tel ? ', ' + co.tel : ''}`;
+}
+function printSale(s){ printHtmlDoc(saleHtml(s), (s.no || s.type) + ' ' + ((s.cust || {}).name || '')); }
+function shareSale(s){
+  const fn = String((s.no || s.type) + '_' + ((s.cust || {}).org || (s.cust || {}).name || '')).replace(/[^A-Za-z0-9_-]+/g, '_').replace(/_+$/, '') + '.pdf';
+  return shareHtmlPdf(saleHtml(s), fn, s.type + ' ' + (s.no || '') + ' — ' + salCo(s).name, () => printSale(s));
+}
+function waSale(s){
+  const ph = String((s.cust || {}).phone || '').replace(/\D/g, '').replace(/^0/, '234');
+  window.open('https://wa.me/' + ph + '?text=' + encodeURIComponent(saleText(s)), '_blank');
+}
+/* ---------- screens ---------- */
+function renderSales(){
+  const v = $('view-sales'); if(!v) return;
+  if(mode === 'cloud' && myRole() === 'technician'){ v.innerHTML = wrap('SALES & SUPPLIES', '<p class="rf-note">Sales documents are kept for the owner, manager and cashier.</p>', true); return; }
+  if(segState.sales){ salSeg = segState.sales; delete segState.sales; }
+  let h = seg('sales', [['list', 'Saved'], ['edit', salDoc ? (salDoc.no ? 'Editing ' + esc(salDoc.no) : 'New ' + esc(SAL_TYPES[salDoc.type].short.toLowerCase())) : 'New document']], salSeg);
+  if(salSeg === 'edit' && salDoc) h += saleEditorHtml(); else if(salSeg === 'edit') h += saleStartHtml(); else h += saleListHtml();
+  v.innerHTML = h; bindSales(v);
+}
+function saleStartHtml(){
+  return wrap('SALES & SUPPLIES', `<p class="rf-note">For spare parts, tools and equipment you sell to customers — no vehicle needed. Pick what to make:</p>
+    <div class="rf-tools" style="flex-wrap:wrap">${Object.entries(SAL_TYPES).map(([k, T]) => `<button class="rf-btn ${k === 'QUOTATION' ? 'green' : 'grey'} big" data-slnew="${esc(k)}">${T.icon} New ${esc(T.short.toLowerCase())}</button>`).join('')}</div>
+    <p class="rf-note">Tip: start with a quotation (add up to ${SAL_PHOTOS} product photos), then turn it into an invoice and a delivery note with one tap.</p>`, true);
+}
+function saleEditorHtml(){
+  const s = salDoc, T = SAL_TYPES[s.type], dn = s.type === 'DELIVERY NOTE', cos = landingCompanies(), t = salTotals(s), M = n => salMoney(n, s);
+  const inp = (id, label, val, ph, type, extra) => `<div class="field"><label for="${id}">${label}</label><input id="${id}" type="${type || 'text'}" value="${esc(val == null ? '' : val)}" placeholder="${esc(ph || '')}"${extra || ''}></div>`;
+  const custs = [...new Set(Store.list('sale').map(x => (x.cust || {}).name).concat(Store.list('customer').map(c => c.name)).filter(Boolean))].sort();
+  const items = Store.list('item').slice().sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  let h = `<div class="card"><h2 class="red">${T.icon} ${esc(s.type)} ${s.no ? '— ' + esc(s.no) : '<span class="rf-note" style="font-weight:normal">(number is given on save)</span>'}</h2>
+    ${s.fromNo ? `<p class="rf-note" style="margin-top:0">Made from ${esc(s.fromNo)}.</p>` : ''}
+    <div class="grid2"><div class="field"><label for="slCo">Company</label><select id="slCo">${(cos.length ? cos : COMPANIES.map((c, i) => ({c, i}))).map(x => `<option value="${x.i}"${N(s.companyIdx) === x.i ? ' selected' : ''}>${esc(x.c.name)}</option>`).join('')}</select></div>${inp('slDate', 'Date', s.date, '', 'date')}</div>
+    <div class="grid2">${inp('slRef', 'Customer ref / PO no. (optional)', s.ref, 'e.g. PO-4471')}${s.type === 'INVOICE' ? `<div class="field"><label>Status</label><div style="padding:9px 0"><span class="rf-badge ${salStatus(s) === 'Paid' ? 'green' : salStatus(s) === 'Cancelled' ? '' : 'amber'}">${esc(salStatus(s))}</span> <label style="display:inline-flex;gap:6px;margin-left:8px"><input type="checkbox" id="slCancel"${s.status === 'Cancelled' ? ' checked' : ''}> Cancelled</label></div></div>` : `<div class="field"><label for="slStatus">Status</label><select id="slStatus">${T.status.map(x => `<option${s.status === x ? ' selected' : ''}>${x}</option>`).join('')}</select></div>`}</div></div>`;
+  h += `<div class="card"><h2>CUSTOMER</h2><div class="grid2"><div class="field"><label for="slCuName">Contact name</label><input id="slCuName" list="slCuList" value="${esc(s.cust.name)}" placeholder="e.g. Mr. Bayo Adeyemi"><datalist id="slCuList">${custs.map(n => `<option value="${esc(n)}">`).join('')}</datalist></div>${inp('slCuOrg', 'Company (optional)', s.cust.org, 'e.g. Bayo Transport Ltd')}</div>
+    <div class="grid2">${inp('slCuPhone', 'Phone / WhatsApp', s.cust.phone, '080…', 'tel')}${inp('slCuEmail', 'Email (optional)', s.cust.email, '', 'email')}</div>
+    <div class="field"><label for="slCuAddr">${dn ? 'Delivery address' : 'Address'}</label><textarea id="slCuAddr" rows="2">${esc(s.cust.addr)}</textarea></div></div>`;
+  h += `<div class="card"><h2>ITEMS — SPARE PARTS, TOOLS &amp; EQUIPMENT</h2><p class="rf-note" style="margin-top:0">Type a name, or pick from your Inventory list to fill in the part number and price.</p>
+    <datalist id="slItList">${items.map(i => `<option value="${esc(i.name)}">${esc([i.partNo, money(i.sellPrice)].filter(Boolean).join(' · '))}</option>`).join('')}</datalist>
+    <div id="slItems">${(s.items || []).map((i, k) => `<div class="sl-item" data-i="${k}" data-item="${esc(i.itemId || '')}" style="border:1px solid #dde3ee;border-radius:10px;padding:8px;margin-bottom:8px;background:#fbfcfe">
+      <div style="display:flex;gap:6px;align-items:center"><b style="color:#1F3864;min-width:18px">${k + 1}.</b><input class="sd" list="slItList" value="${esc(i.desc)}" placeholder="Item description" style="flex:1;min-width:0"><button class="rf-btn red" type="button" data-slrm="${k}" title="Remove item">✕</button></div>
+      <div style="display:grid;grid-template-columns:1.3fr .8fr 1fr;gap:6px;margin-top:6px"><label class="rf-note" style="margin:0">Part no.<input class="sp" value="${esc(i.partNo || '')}" style="width:100%"></label>
+        <label class="rf-note" style="margin:0">Qty<input class="sq" type="number" step="any" inputmode="decimal" value="${esc(String(i.qty))}" style="width:100%"></label>
+        <label class="rf-note" style="margin:0">Unit<select class="su" style="width:100%">${(SAL_UNITS.includes(i.unit) ? SAL_UNITS : SAL_UNITS.concat([i.unit])).map(u => `<option${u === i.unit ? ' selected' : ''}>${esc(u)}</option>`).join('')}</select></label></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;align-items:end"><label class="rf-note" style="margin:0">Unit price<input class="sr" type="number" step="any" inputmode="decimal" value="${esc(String(i.price))}" style="width:100%"></label>
+        <div style="text-align:right;padding-bottom:8px"><span class="rf-note">Amount</span><br><b class="sa" style="color:#1F3864">${M(N(i.qty) * N(i.price))}</b></div></div></div>`).join('')}</div>
+    <button class="addrow" id="slAdd" type="button">＋ Add item</button>
+    <div class="grid2" style="margin-top:8px">${inp('slDisc', 'Discount %', s.discountPct || 0, '0', 'number', ' step="any" inputmode="decimal"')}<div></div></div><label style="display:flex;gap:8px;align-items:center;margin:2px 0 6px"><input type="checkbox" id="slVat"${s.vat ? ' checked' : ''} style="width:20px;height:20px"> Add ${esc(vatLabel(N(s.companyIdx)))}</label>
+    <div id="slTot" class="rf-note" style="text-align:right;font-size:14px"></div></div>`;
+  if(s.type === 'QUOTATION'){
+    const ph = s.photos || [];
+    h += `<div class="card"><h2>PRODUCT PHOTOS <span class="rf-note" style="font-weight:normal">(up to ${SAL_PHOTOS})</span></h2><p class="rf-note" style="margin-top:0">Pictures of the tools, equipment or parts. They print on the quotation under the price list.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${Array.from({length:SAL_PHOTOS}, (_, i) => { const p = ph[i];
+        return `<div style="border:1px dashed #b8c2d6;border-radius:8px;padding:6px;text-align:center;background:#fafbfd">${p ? `<img src="${esc(p.src)}" alt="" style="width:100%;height:120px;object-fit:contain;background:#fff;border-radius:6px">
+          <input id="slCap${i}" value="${esc(p.cap || '')}" placeholder="Caption, e.g. 3-tonne trolley jack" style="width:100%;margin-top:4px"><div class="rf-tools" style="justify-content:center;margin-top:4px"><label class="rf-btn grey" style="cursor:pointer">Change<input type="file" accept="image/*" data-slph="${i}" style="display:none"></label><button class="rf-btn red" type="button" data-slphrm="${i}">Remove</button></div>`
+          : (i <= ph.length ? `<label style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:150px;cursor:pointer;color:#1F3864;font-weight:bold">📷<span style="margin-top:6px">Add photo ${i + 1}</span><input type="file" accept="image/*" data-slph="${i}" style="display:none"></label>` : `<div style="height:150px;display:flex;align-items:center;justify-content:center;color:#aab">Photo ${i + 1}</div>`)}</div>`; }).join('')}</div></div>`;
+  }
+  h += `<div class="card"><h2>${dn ? 'DELIVERY DETAILS' : 'TERMS'}</h2>`;
+  if(s.type === 'QUOTATION') h += `<div class="grid2">${inp('slValid', 'Valid for (days)', s.validDays, '14', 'number')}${inp('slDelv', 'Delivery', s.delivery, 'e.g. Ex-stock / 7 working days')}</div>`;
+  else if(!dn) h += inp('slDelv', 'Delivery', s.delivery, 'e.g. Delivered to your site');
+  if(!dn) h += `<div class="grid2">${inp('slWarr', 'Warranty', s.warranty, 'e.g. 6 months manufacturer warranty')}${inp('slPayT', 'Payment terms', s.payTerms, '')}</div>`;
+  else h += `<div class="grid2">${inp('slDBy', 'Delivered by', s.deliveredBy, 'driver / staff name')}${inp('slVeh', 'Vehicle (optional)', s.vehicle, 'e.g. LND 123 AB')}</div>
+    <div class="grid2">${inp('slRName', 'Received by (name)', s.recvName, 'filled at delivery')}${inp('slRDate', 'Date received', s.recvDate, '', 'date')}</div>
+    <label style="display:flex;gap:8px;align-items:center;margin:4px 0"><input type="checkbox" id="slShowP"${s.showPrices ? ' checked' : ''}> Show prices on the delivery note</label>`;
+  h += `<div class="field"><label for="slNotes">Notes (printed)</label><textarea id="slNotes" rows="3" placeholder="Anything else the customer should know">${esc(s.notes || '')}</textarea></div>
+    <label style="display:flex;gap:8px;align-items:center;margin:4px 0"><input type="checkbox" id="slSig"${s.useSig ? ' checked' : ''}> Print the saved signature for this company</label></div>`;
+  if(s.type === 'INVOICE'){
+    h += `<div class="card"><h2>PAYMENTS</h2>${(s.payments || []).map((p, k) => `<div class="rf-row"><div class="t"><span>${esc(fmtDate(p.date))} · ${esc(p.method)}${p.ref ? ' · ' + esc(p.ref) : ''}</span><span>${M(p.amount)}</span></div><div class="m">Recorded by ${esc(p.by || '')}</div>${can('admin') ? `<div class="acts"><button class="rf-btn red" type="button" data-slprm="${k}">Remove</button></div>` : ''}</div>`).join('') || '<p class="rf-note">No payment recorded yet.</p>'}
+      <div class="grid2" style="margin-top:6px">${inp('slPAmt', 'Amount received', t.bal ? +t.bal.toFixed(2) : '', '', 'number', ' step="any" inputmode="decimal"')}<div class="field"><label for="slPMeth">Method</label><select id="slPMeth">${(typeof RCT_METHODS !== 'undefined' ? RCT_METHODS : ['Cash', 'Bank transfer', 'Card payment (POS)']).map(m => `<option>${esc(m)}</option>`).join('')}</select></div></div>
+      <div class="grid2">${inp('slPDate', 'Date', today(), '', 'date')}${inp('slPRef', 'Reference (optional)', '', 'e.g. transfer ref')}</div><button class="rf-btn green" type="button" id="slPAdd">＋ Record payment</button></div>`;
+  }
+  h += `<div class="card"><h2>PREVIEW</h2><div id="slPrev" class="lt-prev" style="border:1px solid #ddd;border-radius:8px;padding:14px;background:#fff;overflow:auto"></div></div>`;
+  const conv = s.type === 'QUOTATION' ? [['INVOICE', '→ Invoice'], ['DELIVERY NOTE', '→ Delivery note']] : s.type === 'INVOICE' ? [['DELIVERY NOTE', '→ Delivery note']] : [];
+  h += `<div class="q-bar rf-noprint"><button class="btn-save" id="slSave">Save</button><button class="btn-pdf" id="slPrint">🖨 Print</button><button class="btn-share" id="slShare">📤 Share PDF</button>
+    <button class="rf-btn wa" id="slWa" style="flex:1">💬 WhatsApp</button>${conv.map(([k, l]) => `<button class="rf-btn" data-slconv="${esc(k)}" style="flex:1">${esc(l)}</button>`).join('')}<button class="rf-btn grey" id="slDup" style="flex:1">⧉ Copy</button></div>`;
+  if((s.history || []).length) h += wrap('HISTORY', s.history.slice().reverse().map(x => `<div class="rf-note" style="margin:2px 0">${esc(fmtDate(String(x.at).slice(0, 10)))} ${esc(String(x.at).slice(11, 16))} · ${esc(x.by)} — ${esc(x.what)}</div>`).join(''));
+  return h;
+}
+function saleListHtml(){
+  let rows = Store.list('sale').slice().sort((a, b) => String(b.date + b.updatedAt).localeCompare(String(a.date + a.updatedAt)));
+  const all = rows.length;
+  if(salF) rows = rows.filter(r => r.type === salF);
+  if(salQ) rows = rows.filter(r => lc([r.no, (r.cust || {}).name, (r.cust || {}).org, (r.cust || {}).phone, r.ref, (r.items || []).map(i => i.desc + ' ' + i.partNo).join(' '), salStatus(r)].join(' ')).includes(lc(salQ)));
+  const owed = Store.list('sale').filter(r => r.type === 'INVOICE' && r.status !== 'Cancelled').reduce((t, r) => t + salTotals(r).bal, 0);
+  let h = `<div class="card"><h2 class="red">SALES &amp; SUPPLIES</h2><div class="rf-tools" style="flex-wrap:wrap">${Object.entries(SAL_TYPES).map(([k, T]) => `<button class="rf-btn ${k === 'QUOTATION' ? 'green' : ''}" data-slnew="${esc(k)}">＋ ${esc(T.short)}</button>`).join('')}</div>
+    <div class="rf-tools" style="margin-top:6px"><select id="slF"><option value="">All documents</option>${Object.entries(SAL_TYPES).map(([k, T]) => `<option value="${esc(k)}"${salF === k ? ' selected' : ''}>${esc(T.short)}s</option>`).join('')}</select><input id="slQ" placeholder="Search number, customer, item…" value="${esc(salQ)}" style="flex:1;min-width:150px"></div>
+    <p class="rf-note">${all} sales document${all === 1 ? '' : 's'}${owed > 0.5 ? ' · <b style="color:#b91c1c">' + money(owed) + ' owed on sales invoices</b>' : ''}. Invoice payments show in Money.</p>`;
+  h += rows.map(r => { const st = salStatus(r), t = salTotals(r), T = SAL_TYPES[r.type] || SAL_TYPES.QUOTATION;
+    return `<div class="rf-row"><div class="t"><span>${T.icon} ${esc(r.no || '')} · ${esc((r.cust || {}).org || (r.cust || {}).name || '')}</span><span>${r.type === 'DELIVERY NOTE' ? '' : salMoney(t.grand, r)}</span></div>
+    <div class="m">${esc(fmtDate(r.date))} · ${esc(T.short)} · <span class="rf-badge ${/Paid$|Accepted|Delivered/.test(st) && st !== 'Part paid' ? 'green' : /Cancelled|Declined|Expired/.test(st) ? '' : 'amber'}">${esc(st)}</span>${r.type === 'INVOICE' && t.bal > 0.5 && st !== 'Cancelled' ? ' · balance ' + salMoney(t.bal, r) : ''} · ${(r.items || []).length} item${(r.items || []).length === 1 ? '' : 's'}${(r.photos || []).length ? ' · 📷 ' + r.photos.length : ''}</div>
+    <div class="acts"><button class="rf-btn" data-slopen="${esc(r.id)}">Open</button><button class="rf-btn grey" data-slprint="${esc(r.id)}">🖨 Print</button><button class="rf-btn grey" data-slpdf="${esc(r.id)}">📤 PDF</button>${myRole() === 'admin' ? `<button class="rf-btn red" data-sldel="${esc(r.id)}">Delete</button>` : ''}</div></div>`; }).join('')
+    || `<div class="rf-empty">${salQ || salF ? 'Nothing matches.' : 'No sales documents yet. Start with “＋ Quotation”.'}</div>`;
+  return h + '</div>';
+}
+function bindSales(v){
+  bind(v, '[data-slnew]', 'click', el => newSale(el.dataset.slnew));
+  if($('slQ')){ let t; $('slQ').oninput = e => { clearTimeout(t); t = setTimeout(() => { salQ = e.target.value; renderSales(); const q = $('slQ'); if(q){ q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }, 300); }; }
+  if($('slF')) $('slF').onchange = e => { salF = e.target.value; renderSales(); };
+  bind(v, '[data-slopen]', 'click', el => openSale(el.dataset.slopen));
+  bind(v, '[data-slprint]', 'click', el => { const s = Store.get('sale', el.dataset.slprint); if(s) printSale(s); });
+  bind(v, '[data-slpdf]', 'click', el => { const s = Store.get('sale', el.dataset.slpdf); if(s) shareSale(s); });
+  bind(v, '[data-sldel]', 'click', async el => { const s = Store.get('sale', el.dataset.sldel); if(!s) return; if(!(await askConfirm('Delete ' + SAL_TYPES[s.type].short.toLowerCase() + ' ' + (s.no || '') + '? This cannot be undone.'))) return;
+    Store.remove('sale', s.id); try{ postStockForSale(Object.assign({}, s, {_deleted:true})); }catch(e){} if(mode === 'cloud') deleteMedia((s.photos || []).map(p => p.path).filter(Boolean)); if(salDoc && salDoc.id === s.id) salDoc = null; toast('Deleted.'); renderSales(); });
+  if(!$('slPrev')) return;
+  const s = salDoc;
+  const upd = () => { readSaleForm(); const t = salTotals(s), M = n => salMoney(n, s);
+    document.querySelectorAll('#slItems [data-i]').forEach((tr, k) => { const i = s.items[k]; if(i) tr.querySelector('.sa').textContent = M(N(i.qty) * N(i.price)); });
+    $('slTot').innerHTML = `Subtotal ${M(t.sub)}${t.disc ? ' · discount −' + M(t.disc) : ''}${t.tax ? ' · tax ' + M(t.tax) : ''} · <b style="color:#1F3864">TOTAL ${M(t.grand)}</b>${s.type === 'INVOICE' && t.paid ? ' · <b style="color:#b91c1c">balance ' + M(t.bal) + '</b>' : ''}`;
+    $('slPrev').innerHTML = saleHtml(s); };
+  let tm; const later = () => { clearTimeout(tm); tm = setTimeout(upd, 250); };
+  v.querySelectorAll('input:not([type=file]),select,textarea').forEach(el => { if(/^slP(Amt|Meth|Date|Ref)$/.test(el.id)) return; el.addEventListener(el.type === 'checkbox' || el.tagName === 'SELECT' ? 'change' : 'input', later); });
+  // picking an Inventory item fills part no., price and links it for stock
+  v.querySelectorAll('#slItems .sd').forEach(inp => inp.addEventListener('change', () => { const it = findItemByName(inp.value), tr = inp.closest('[data-i]'); if(!it){ tr.dataset.item = ''; return; }
+    tr.dataset.item = it.id; const pn = tr.querySelector('.sp'), pr = tr.querySelector('.sr'); if(pn && !pn.value) pn.value = it.partNo || ''; if(pr && !N(pr.value)) pr.value = N(it.sellPrice) || ''; upd(); }));
+  if($('slCuName')) $('slCuName').addEventListener('change', () => { const n = lc($('slCuName').value), prev = Store.list('sale').filter(x => lc((x.cust || {}).name) === n).sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
+    if(prev) [['slCuOrg', 'org'], ['slCuPhone', 'phone'], ['slCuEmail', 'email'], ['slCuAddr', 'addr']].forEach(([id, k]) => { if($(id) && !$(id).value) $(id).value = prev.cust[k] || ''; }); upd(); });
+  $('slAdd').onclick = () => { readSaleForm(); s.items.push({desc:'', partNo:'', qty:1, unit:'pcs', price:0}); renderSales(); const r = document.querySelectorAll('#slItems .sd'); if(r.length) r[r.length - 1].focus(); };
+  bind(v, '[data-slrm]', 'click', el => { readSaleForm(); s.items.splice(N(el.dataset.slrm), 1); if(!s.items.length) s.items.push({desc:'', partNo:'', qty:1, unit:'pcs', price:0}); renderSales(); });
+  if($('slCancel')) $('slCancel').onchange = e => { s.status = e.target.checked ? 'Cancelled' : 'Unpaid'; upd(); };
+  bind(v, '[data-slph]', 'change', el => { const f = el.files && el.files[0]; if(f) salAddPhoto(f, N(el.dataset.slph)); });
+  bind(v, '[data-slphrm]', 'click', el => { readSaleForm(); const k = N(el.dataset.slphrm), p = s.photos[k]; if(p && p.path) deleteMedia([p.path]); s.photos.splice(k, 1); renderSales(); });
+  if($('slPAdd')) $('slPAdd').onclick = async () => { readSaleForm(); const a = N($('slPAmt').value); if(!(a > 0)){ toast('Enter the amount received.', true); return; }
+    s.payments = (s.payments || []).concat([{id:'sp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), date:$('slPDate').value || today(), amount:a, method:$('slPMeth').value, reference:$('slPRef').value.trim(), ref:$('slPRef').value.trim(), by:myName() || 'Staff', receivedBy:myName() || 'Staff'}]);
+    const r = await saveSale(true); if(r){ toast('Payment of ' + salMoney(a, r) + ' recorded on ' + r.no + '.'); renderSales(); } };
+  bind(v, '[data-slprm]', 'click', async el => { readSaleForm(); if(!(await askConfirm('Remove this payment?'))) return; s.payments.splice(N(el.dataset.slprm), 1); const r = await saveSale(true); if(r) renderSales(); });
+  $('slSave').onclick = async () => { if(await saveSale()) renderSales(); };
+  $('slPrint').onclick = async () => { const r = await saveSale(true); if(r){ renderSales(); printSale(r); } };
+  $('slShare').onclick = async () => { const r = await saveSale(true); if(r){ renderSales(); shareSale(r); } };
+  $('slWa').onclick = async () => { const r = await saveSale(true); if(r){ renderSales(); waSale(r); } };
+  $('slDup').onclick = async () => { const r = await saveSale(true); if(r) copySale(r); };
+  bind(v, '[data-slconv]', 'click', async el => { const r = await saveSale(true); if(r) convertSale(r, el.dataset.slconv); });
+  upd();
+}
+/* ---------- Money: sales-invoice payments count as income and balances as "owed to us" ---------- */
+function saleAsDoc(s){ return s && {id:s.id, docNo:s.no, custName:(s.cust || {}).org || (s.cust || {}).name || '', custPhone:(s.cust || {}).phone || '', grand:salTotals(s).grand, date:s.date, companyIdx:s.companyIdx, paymentEntries:s.payments || [], vehReg:'Sales', type:'INVOICE', status:s.status, _sale:true}; }
+payments = (orig => function(){ const out = orig(); Store.list('sale').forEach(s => { if(s.type !== 'INVOICE' || s.status === 'Cancelled') return; const d = saleAsDoc(s); (s.payments || []).forEach(p => out.push(Object.assign({}, p, {docId:s.id, docNo:s.no, custName:d.custName, custPhone:d.custPhone}))); }); return out; })(payments);
+receivables = (orig => function(){ const out = orig(); Store.list('sale').forEach(s => { if(s.type !== 'INVOICE' || s.status === 'Cancelled') return; const bal = salTotals(s).bal; if(bal > 0.5) out.push({d:saleAsDoc(s), bal}); }); return out.sort((a, b) => b.bal - a.bal); })(receivables);
+if(typeof window.loadDoc === 'function'){ const _ld = window.loadDoc; window.loadDoc = function(id){ if(/^sal_/.test(String(id))) return openSale(id); return _ld.apply(this, arguments); }; }
+listeners.push(kinds => { if(curTab === 'sales' && salSeg === 'list' && (kinds.includes('*') || kinds.includes('sale'))) renderSales(); });
+Object.assign(window.RF = window.RF || {}, {saleHtml, saveSale, newSale, openSale, salTotals, salStatus, convertSale});
 
 })();
 </script>
