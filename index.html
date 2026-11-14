@@ -2575,7 +2575,7 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
    database (Supabase) with staff logins and roles (admin / cashier / technician).
    Without the team database everything still works on this device alone, as before.
 =========================================================================================== */
-const RF_VERSION = '6.8';
+const RF_VERSION = '6.9';
 /* Multi-user team database: built, but switched OFF for now. Set to true to turn it back on. */
 const EDITION = 'robotik';      // build script switches this to 'partner' for the partner-garage app
 const TEAM_ENABLED = EDITION === 'robotik' && true;
@@ -8158,6 +8158,7 @@ function renderLetters(){
   if(segState.letters){ letSeg = segState.letters; delete segState.letters; }
   if(mode === 'cloud' && myRole() === 'technician'){ v.innerHTML = wrap('LETTERS', '<p class="rf-note">Letters are kept for the owner, manager and cashier.</p>', true); return; }
   let h = seg('letters', [['list', 'Saved letters'], ['edit', letDoc ? (letDoc.ref ? 'Editing ' + esc(letDoc.ref) : 'New letter') : 'Write a letter'], ['head', 'Blank letterhead']], letSeg);
+  h += `<div class="rf-tools" style="flex-wrap:wrap;margin:-2px 0 10px"><span class="rf-note" style="margin:0;align-self:center">Sales &amp; Supplies:</span><button class="rf-btn green" data-ltsale="QUOTATION">📝 Quotation</button><button class="rf-btn" data-ltsale="INVOICE">🧾 Invoice</button><button class="rf-btn" data-ltsale="DELIVERY NOTE">🚚 Delivery note</button><button class="rf-btn grey" data-ltsale="">Saved sales</button></div>`;
   if(letSeg === 'edit' && !letDoc){ letDoc = null; h += letStartHtml(); }
   else if(letSeg === 'edit') h += letEditorHtml();
   else if(letSeg === 'head') h += letHeadHtml();
@@ -8211,6 +8212,7 @@ function letListHtml(){
   return h + '</div>';
 }
 function bindLetters(v){
+  bind(v, '[data-ltsale]', 'click', el => { showTab('sales'); if(el.dataset.ltsale) newSale(el.dataset.ltsale); else { salSeg = 'list'; renderSales(); } window.scrollTo({top:0}); });
   bind(v, '[data-ltnew]', 'click', el => newLetter(el.dataset.ltnew));
   if($('ltNew')) $('ltNew').onclick = () => { letDoc = null; letSeg = 'edit'; renderLetters(); };
   if($('ltQ')){ let t; $('ltQ').oninput = e => { clearTimeout(t); t = setTimeout(() => { letQ = e.target.value; renderLetters(); const q = $('ltQ'); if(q){ q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }, 300); }; }
@@ -9313,6 +9315,7 @@ function renderSales(){
   if(mode === 'cloud' && myRole() === 'technician'){ v.innerHTML = wrap('SALES & SUPPLIES', '<p class="rf-note">Sales documents are kept for the owner, manager and cashier.</p>', true); return; }
   if(segState.sales){ salSeg = segState.sales; delete segState.sales; }
   let h = seg('sales', [['list', 'Saved'], ['edit', salDoc ? (salDoc.no ? 'Editing ' + esc(salDoc.no) : 'New ' + esc(SAL_TYPES[salDoc.type].short.toLowerCase())) : 'New document']], salSeg);
+  h += `<div class="rf-tools" style="margin:-2px 0 10px"><button class="rf-btn grey" id="slToLetters">✉️ Letters &amp; Letterhead</button></div>`;
   if(salSeg === 'edit' && salDoc) h += saleEditorHtml(); else if(salSeg === 'edit') h += saleStartHtml(); else h += saleListHtml();
   v.innerHTML = h; bindSales(v);
 }
@@ -9391,6 +9394,7 @@ function saleListHtml(){
   return h + '</div>';
 }
 function bindSales(v){
+  if($('slToLetters')) $('slToLetters').onclick = () => { showTab('letters'); window.scrollTo({top:0}); };
   bind(v, '[data-slnew]', 'click', el => newSale(el.dataset.slnew));
   if($('slQ')){ let t; $('slQ').oninput = e => { clearTimeout(t); t = setTimeout(() => { salQ = e.target.value; renderSales(); const q = $('slQ'); if(q){ q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }, 300); }; }
   if($('slF')) $('slF').onchange = e => { salF = e.target.value; renderSales(); };
