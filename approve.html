@@ -30,11 +30,16 @@
 <script>
 (function(){
   'use strict';
-  var HQ_URL = 'https://pispfmbqjxewonqswcmr.supabase.co', HQ_KEY = 'sb_publishable_20-hdWEag4Y2LjGDO7dwyw_UNXAoODo';
+  var HQ_URL = 'https://pispfmbqjxewonqswcmr.supabase.co', HQ_KEY = 'sb_publishable_20-hdWEag4Y2LjGDO7dwyw_UNXAoODo', CUR = '\u20a6';
+  (function(){ // global edition page: each garage's link names its own database (project ref + publishable key) and currency
+    var q = new URLSearchParams(location.search), p = q.get('p') || '', k = q.get('k') || '', c = q.get('c') || '';
+    if(!/^https:/.test(HQ_URL) && /^[a-z0-9]{8,40}$/.test(p) && /^(sb_publishable_|eyJ)[A-Za-z0-9._-]{10,}$/.test(k)){ HQ_URL = 'https://' + p + '.supabase.co'; HQ_KEY = k; }
+    if(c && c.length <= 5) CUR = c;
+  })();
   var $ = function(id){ return document.getElementById(id); };
   var esc = function(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
   var N = function(v){ var n = parseFloat(String(v == null ? '' : v).replace(/[^\d.-]/g, '')); return isFinite(n) ? n : 0; };
-  var money = function(v){ return '₦' + N(v).toLocaleString('en-NG', {minimumFractionDigits:2, maximumFractionDigits:2}); };
+  var money = function(v){ return CUR + N(v).toLocaleString('en-NG', {minimumFractionDigits:2, maximumFractionDigits:2}); };
   var fmt = function(iso){ try{ return new Date(String(iso).length <= 10 ? iso + 'T12:00' : iso).toLocaleDateString('en-NG', {day:'numeric', month:'short', year:'numeric'}); }catch(e){ return iso; } };
   var app = $('app'), qs = new URLSearchParams(location.search), token = qs.get('t'), hash = location.hash.slice(1), D = null, state = {};
   function rpc(fn, body){

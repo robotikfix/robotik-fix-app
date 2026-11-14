@@ -2,7 +2,7 @@
 
 <html lang="en">
 <head>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' data: blob: https://*.supabase.co https://script.google.com https://script.googleusercontent.com http://localhost:* http://127.0.0.1:*; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'"/>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co; media-src 'self' data: blob: https://*.supabase.co; font-src 'self' data:; connect-src 'self' data: blob: https://*.supabase.co https://script.google.com https://script.googleusercontent.com http://localhost:* http://127.0.0.1:*; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'"/>
 <meta name="referrer" content="no-referrer"/>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0" name="viewport"/>
@@ -2575,10 +2575,10 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
    database (Supabase) with staff logins and roles (admin / cashier / technician).
    Without the team database everything still works on this device alone, as before.
 =========================================================================================== */
-const RF_VERSION = '6.9';
+const RF_VERSION = '7.0';
 /* Multi-user team database: built, but switched OFF for now. Set to true to turn it back on. */
 const EDITION = 'robotik';      // build script switches this to 'partner' for the partner-garage app
-const TEAM_ENABLED = EDITION === 'robotik' && true;
+const TEAM_ENABLED = EDITION !== 'partner'; // Robotik Fix and the global edition (each garage connects its own database)
 const GARAGE = EDITION !== 'robotik';   // partner + global editions: the garage's own app, own branding
 const GLOBAL = EDITION === 'global';
 /* Robotik Fix's own database: partner garages send orders here (insert-only) and read the trade price list. */
@@ -3373,12 +3373,12 @@ function decorateDocScreen(){
 
 /* ===================== Navigation ===================== */
 const TABS = GLOBAL
-  ? [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['crm', 'Customers'], ['stock', 'Stock'], ['book', 'Bookings'], ['workshop', 'Workshop'], ['money', 'Money'], ['fleet', 'Fleet'], ['sync', 'Setup']]
+  ? [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['crm', 'Customers', 'need-cashier'], ['stock', 'Stock'], ['book', 'Bookings'], ['workshop', 'Workshop'], ['money', 'Money', 'need-cashier'], ['fleet', 'Fleet'], ['team', 'Team'], ['sync', 'Setup']]
   : EDITION === 'partner'
   ? [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['stock', 'Stock'], ['workshop', 'Workshop'], ['money', 'Money'], ['send', '📦 Send to Robotik Fix'], ['sync', 'Setup']]
   : [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['crm', 'Customers', 'need-cashier'], ['stock', 'Stock'], ['book', 'Bookings'], ['workshop', 'Workshop'],
      ['money', 'Money', 'need-cashier'], ['partners', 'Partners', 'need-cashier'], ['fleet', 'Fleet'], ['team', 'Team'], ['sync', 'Setup']];
-const NEW_VIEWS = GLOBAL ? ['home', 'crm', 'letters', 'sales', 'quick', 'system', 'assets', 'tech', 'stock', 'book', 'workshop', 'money', 'fleet'] : EDITION === 'partner' ? ['home', 'crm', 'letters', 'sales', 'quick', 'send', 'system', 'assets', 'tech', 'stock', 'workshop', 'money'] : ['home', 'crm', 'letters', 'sales', 'system', 'plugins', 'assets', 'tech', 'quick', 'stock', 'book', 'workshop', 'money', 'partners', 'fleet', 'team'];
+const NEW_VIEWS = GLOBAL ? ['home', 'crm', 'letters', 'sales', 'quick', 'system', 'assets', 'tech', 'stock', 'book', 'workshop', 'money', 'fleet', 'team'] : EDITION === 'partner' ? ['home', 'crm', 'letters', 'sales', 'quick', 'send', 'system', 'assets', 'tech', 'stock', 'workshop', 'money'] : ['home', 'crm', 'letters', 'sales', 'system', 'plugins', 'assets', 'tech', 'quick', 'stock', 'book', 'workshop', 'money', 'partners', 'fleet', 'team'];
 let curTab = 'doc';
 const segState = {partners:'orders', stock:'items', book:'day', money:'reports', fleet:'trucks', team:'clock', workshop:'jobs'};
 function buildNav(){
@@ -6409,7 +6409,8 @@ async function callFn(name, body){
 const randToken = n => { const b = new Uint8Array(n || 24); crypto.getRandomValues(b); return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
 
 /* ---------- 1. CUSTOMER APPROVAL LINKS ---------- */
-function approveBase(){ return new URL(GARAGE ? '../approve.html' : 'approve.html', location.href).href.split('#')[0].split('?')[0]; }
+function approveBase(){ return new URL(GARAGE && !GLOBAL ? '../approve.html' : 'approve.html', location.href).href.split('#')[0].split('?')[0]; }
+function approveExtra(){ if(!GLOBAL) return ''; let x = ''; try{ const m = /^https:\/\/([a-z0-9]+)\.supabase\.co/.exec((Cloud.cfg || {}).url || ''); if(m) x += '&p=' + m[1] + '&k=' + encodeURIComponent(Cloud.cfg.key); x += '&c=' + encodeURIComponent(curSym()); }catch(e){} return x; }
 function approvalSnapshot(){
   const d = collectDoc($('docNo').dataset.savedId || 'x'), co = COMPANIES[N(d.companyIdx)] || COMPANIES[0] || {}, bv = brandVals();
   let logo = bizLogo();
@@ -6437,10 +6438,10 @@ async function sendApprovalLink(){
     token = randToken(24);
     try{ await Cloud.rest('POST', 'rf_approvals', {token, doc_id:id, doc_no:snap.docNo, data:snap, created_name:myName()}, 'return=minimal'); }
     catch(e){ toast('Could not create the link: ' + e.message, true); return; }
-    link = approveBase() + '?t=' + token;
+    link = approveBase() + '?t=' + token + approveExtra();
   } else {
     const s = Object.assign({}, snap); if(/^data:/.test(s.logo)) s.logo = '';
-    link = approveBase() + '#d=' + btoa(unescape(encodeURIComponent(JSON.stringify(s)))).replace(/\+/g, '-').replace(/\//g, '_');
+    link = approveBase() + (GLOBAL ? '?c=' + encodeURIComponent(curSym()) : '') + '#d=' + btoa(unescape(encodeURIComponent(JSON.stringify(s)))).replace(/\+/g, '-').replace(/\//g, '_');
   }
   const root = jobRoot(id), t = trackOf(root) || {stage:'Received'};
   saveTrack(root, {approval:'Pending', approvalToken:token, approvalLinkAt:nowIso(), stage:JOB_STAGES.indexOf(t.stage) < 2 ? 'Waiting approval' : t.stage}, 'Approval link sent' + (server ? '' : ' (WhatsApp reply)'));
