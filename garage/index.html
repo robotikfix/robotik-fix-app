@@ -1624,10 +1624,12 @@ async function generatePdfBlob(){
     html2canvas: { scale: 2, useCORS: true, scrollX: 0, scrollY: 0 },
     jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
   };
-  let blob;
+  let blob, unfit = null;
   try{
+    if(window.rfFitImages) unfit = await window.rfFitImages(element);
     blob = await html2pdf().set(opt).from(element).outputPdf('blob');
   } finally {
+    if(unfit) unfit();
     svgReplacements.forEach(({svgEl, img}) => { img.remove(); svgEl.style.display = ''; });
     pageFixes.forEach(f => { f.el.style[f.prop] = f.old; });
     document.body.classList.remove('pdf-mode');
@@ -2566,6 +2568,9 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
 .rf-ad-bubble span{position:absolute;top:-4px;right:-4px;background:#1F3864;color:#fff;font-size:11px;border-radius:10px;padding:1px 6px}
 @keyframes rfAdIn{from{transform:translateY(20px);opacity:0}to{transform:none;opacity:1}}
 @media print{#rfAd{display:none!important}}
+.rf-prof-hide{display:none!important}
+#rfModal #rlTabs label,#rfModal #rlTiles label,#rfModal .rl-all{display:flex!important;gap:8px;align-items:center;justify-content:flex-start;text-align:left;font-weight:normal;margin:0;padding:3px 0}
+#rfModal #rlTabs input[type=checkbox],#rfModal #rlTiles input[type=checkbox],#rfModal .rl-all input[type=checkbox]{width:20px!important;height:20px!important;min-width:20px;flex:0 0 20px;margin:0;padding:0}
 </style>
 <script>
 (function(){
@@ -2577,10 +2582,10 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
    database (Supabase) with staff logins and roles (admin / cashier / technician).
    Without the team database everything still works on this device alone, as before.
 =========================================================================================== */
-const RF_VERSION = '7.0';
+const RF_VERSION = '7.3';
 /* Multi-user team database: built, but switched OFF for now. Set to true to turn it back on. */
 const EDITION = 'global';      // build script switches this to 'partner' for the partner-garage app
-const TEAM_ENABLED = EDITION !== 'partner'; // Robotik Fix and the global edition (each garage connects its own database)
+const TEAM_ENABLED = true; // every edition: each business connects its own team database (partners keep their separate link to Robotik HQ)
 const GARAGE = EDITION !== 'robotik';   // partner + global editions: the garage's own app, own branding
 const GLOBAL = EDITION === 'global';
 /* Robotik Fix's own database: partner garages send orders here (insert-only) and read the trade price list. */
@@ -2642,7 +2647,32 @@ const bucket = k => mem[k] || (mem[k] = new Map());
 const listeners = [];
 let emitTimer = null;
 function emit(kinds){ clearTimeout(emitTimer); emitTimer = setTimeout(() => listeners.forEach(fn => { try{ fn(kinds); }catch(e){ console.error(e); } }), 60); }
-const LOCAL_KINDS = ['sale', 'jobupdate', 'letter', 'receipt', 'customer', 'crmtask', 'crmnote', 'deal', 'consent', 'porder', 'income', 'transfer', 'item','stockmove','labour','bundle','po','expense','appt','reminder','truck','tyreevent','timelog','payconfirm','setting','counter','joblink','jobpart','comeback','tow','supplier','supbill','suppay','worker','staffpay','tool','toolmove','corp','jobtrack','assetlog','msglog','diag','vehspec'];
+
+/* PDF pictures keep their true shape (v7.1). The PDF maker (html2canvas) ignores CSS object-fit and stretches a
+   picture to fill its box. Before a PDF is made, every picture that should "fit inside" its box is given padding so
+   its inner box has the picture's real proportions, centred in the same space; the page layout does not move.
+   Returns a function that puts the original styles back. */
+window.rfFitImages = async function(root){
+  const imgs = [...(root || document).querySelectorAll('img')], undo = [];
+  await Promise.all(imgs.map(i => (i.complete && i.naturalWidth) ? null : new Promise(ok => { i.addEventListener('load', ok, {once:true}); i.addEventListener('error', ok, {once:true}); setTimeout(ok, 5000); })));
+  imgs.forEach(img => {
+    const nw = img.naturalWidth, nh = img.naturalHeight; if(!nw || !nh) return;
+    const cs = getComputedStyle(img); if(cs.display === 'none' || cs.visibility === 'hidden') return;
+    const fit = cs.objectFit || 'fill'; if(!/contain|scale-down/.test(fit)) return;
+    const bw = img.clientWidth, bh = img.clientHeight; if(!bw || !bh) return;
+    const r = nw / nh; let w = bw, h = bw / r; if(h > bh){ h = bh; w = bh * r; }
+    if(fit === 'scale-down' && nw < w){ w = nw; h = nh; }
+    if(Math.abs(w - bw) < 0.5 && Math.abs(h - bh) < 0.5) return;
+    const old = img.getAttribute('style'); undo.push(() => old == null ? img.removeAttribute('style') : img.setAttribute('style', old));
+    const px = (bw - w) / 2, py = (bh - h) / 2;
+    img.style.setProperty('box-sizing', 'content-box', 'important');
+    img.style.setProperty('width', w.toFixed(2) + 'px', 'important'); img.style.setProperty('height', h.toFixed(2) + 'px', 'important');
+    img.style.setProperty('max-width', 'none', 'important'); img.style.setProperty('max-height', 'none', 'important'); img.style.setProperty('min-width', '0', 'important');
+    img.style.setProperty('padding', `${py.toFixed(2)}px ${px.toFixed(2)}px`, 'important'); img.style.setProperty('object-fit', 'fill', 'important');
+  });
+  return () => undo.reverse().forEach(f => f());
+};
+const LOCAL_KINDS = ['pcredit', 'sale', 'jobupdate', 'letter', 'receipt', 'customer', 'crmtask', 'crmnote', 'deal', 'consent', 'porder', 'income', 'transfer', 'item','stockmove','labour','bundle','po','expense','appt','reminder','truck','tyreevent','timelog','payconfirm','setting','counter','joblink','jobpart','comeback','tow','supplier','supbill','suppay','worker','staffpay','tool','toolmove','corp','jobtrack','assetlog','msglog','diag','vehspec'];
 function loadLocal(){
   LOCAL_KINDS.forEach(k => {
     const b = bucket(k); b.clear();
@@ -3377,10 +3407,10 @@ function decorateDocScreen(){
 const TABS = GLOBAL
   ? [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['crm', 'Customers', 'need-cashier'], ['stock', 'Stock'], ['book', 'Bookings'], ['workshop', 'Workshop'], ['money', 'Money', 'need-cashier'], ['fleet', 'Fleet'], ['team', 'Team'], ['sync', 'Setup']]
   : EDITION === 'partner'
-  ? [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['stock', 'Stock'], ['workshop', 'Workshop'], ['money', 'Money'], ['send', '📦 Send to Robotik Fix'], ['sync', 'Setup']]
+  ? [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['stock', 'Stock'], ['workshop', 'Workshop'], ['money', 'Money', 'need-cashier'], ['send', '📦 Send to Robotik Fix'], ['team', 'Team'], ['sync', 'Setup']]
   : [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['crm', 'Customers', 'need-cashier'], ['stock', 'Stock'], ['book', 'Bookings'], ['workshop', 'Workshop'],
      ['money', 'Money', 'need-cashier'], ['partners', 'Partners', 'need-cashier'], ['fleet', 'Fleet'], ['team', 'Team'], ['sync', 'Setup']];
-const NEW_VIEWS = GLOBAL ? ['home', 'crm', 'letters', 'sales', 'quick', 'system', 'assets', 'tech', 'stock', 'book', 'workshop', 'money', 'fleet', 'team'] : EDITION === 'partner' ? ['home', 'crm', 'letters', 'sales', 'quick', 'send', 'system', 'assets', 'tech', 'stock', 'workshop', 'money'] : ['home', 'crm', 'letters', 'sales', 'system', 'plugins', 'assets', 'tech', 'quick', 'stock', 'book', 'workshop', 'money', 'partners', 'fleet', 'team'];
+const NEW_VIEWS = GLOBAL ? ['home', 'crm', 'letters', 'sales', 'quick', 'system', 'assets', 'tech', 'stock', 'book', 'workshop', 'money', 'fleet', 'team'] : EDITION === 'partner' ? ['home', 'crm', 'letters', 'sales', 'quick', 'send', 'system', 'assets', 'tech', 'stock', 'workshop', 'money', 'team'] : ['home', 'crm', 'letters', 'sales', 'system', 'plugins', 'assets', 'tech', 'quick', 'stock', 'book', 'workshop', 'money', 'partners', 'fleet', 'team'];
 let curTab = 'doc';
 const segState = {partners:'orders', stock:'items', book:'day', money:'reports', fleet:'trucks', team:'clock', workshop:'jobs'};
 function buildNav(){
@@ -4013,7 +4043,7 @@ function renderSetup(){
   const s = Store.setting(), cfg = mode === 'cloud' ? Cloud.cfg : null;
   let h = installCardHtml() + myBusinessHtml();
   if(EDITION === 'partner') h += partnerSetupNote();
-  else h += !TEAM_ENABLED ? '<div class="card"><h2>TEAM DATABASE (MULTI-USER)</h2><p class="rf-note">Switched off for now — each phone saves its own records (or shares documents through Google Sheets below), exactly as before. Separate staff logins can be turned on later.</p></div>' : `<div class="card"><h2 class="red">TEAM DATABASE (MULTI-USER)</h2><div id="rfTeamStatus" class="rf-note">${teamStatusHtml()}</div>`;
+  h += !TEAM_ENABLED ? '<div class="card"><h2>TEAM DATABASE (MULTI-USER)</h2><p class="rf-note">Switched off for now — each phone saves its own records (or shares documents through Google Sheets below), exactly as before. Separate staff logins can be turned on later.</p></div>' : `<div class="card"><h2 class="red">TEAM DATABASE (MULTI-USER)</h2><div id="rfTeamStatus" class="rf-note">${teamStatusHtml()}</div>`;
   if(!TEAM_ENABLED){} else if(mode === 'cloud') h += `<div class="rf-tools"><button class="rf-btn" id="rfSyncNow">🔄 Sync now</button><button class="rf-btn grey" id="rfSignOut">Sign out</button>${can('admin') ? '<button class="rf-btn grey" id="rfUpload">⬆ Copy this phone\'s earlier records up</button>' : ''}<button class="rf-btn red" id="rfDisc">Disconnect device</button></div>`;
   else h += `<p class="rf-note">Connect a free Supabase database so every phone and the office laptop share the same documents, stock, bookings and money records — each person with their own login and role, working offline when the network drops. Follow the setup guide (supabase-setup.sql + SETUP-TEAM-DATABASE.md).</p>
     <div class="field"><label>Project URL</label><input id="rfCfgUrl" placeholder="https://xxxxxxxx.supabase.co" value="${esc(cfg ? cfg.url : '')}"></div>
@@ -4080,7 +4110,7 @@ const QUICK = {
       ['EXTRA CHARGES', 'sep'], ['Heating of rusted tie rods', 'labour'], ['Bad bushings', 'labour'], ['', 'labour'], ['', 'labour'], ['', 'labour']],
     notes:'Check tyre pressures every two weeks and re-torque wheel nuts after the first 50–100 km. Thank you for choosing Robotik Fix.'},
   brake: {name:'Brake Disc Resurfacing', title:'BRAKE DISC RESURFACING INVOICE', icon:'⚙️', blurb:'For outside garages & fleet owners — disc log, thickness before/after, pickup & delivery',
-    lines:[['Disc resurfacing (per pair)', 'labour', 7000], ['Disc resurfacing (single disc)', 'labour'], ['Drum resurfacing (per drum)', 'labour'], ['Flywheel resurfacing', 'labour'], ['Pickup & delivery (dispatch)', 'labour', 2000]],
+    lines:[['Disc resurfacing (per pair)', 'labour', 7000], ['Disc resurfacing (single disc)', 'labour'], ['Drum resurfacing (per pair)', 'labour'], ['Flywheel resurfacing', 'labour'], ['Pickup & delivery (dispatch)', 'labour', 2000]],
     notes:'Discs below the manufacturer\'s minimum thickness are not resurfaced; they are returned with this report so they can be replaced. Thank you for your business.'},
   wheel: {name:'Wheel Straightening & Welding', title:'WHEEL STRAIGHTENING & WELDING INVOICE', icon:'🔧', blurb:'Alloy & steel rim straightening, crack welding, lip repair — per-rim damage log',
     lines:[['Alloy rim straightening (per rim)', 'labour'], ['Steel rim straightening (per rim)', 'labour'], ['Crack welding – aluminium (per crack)', 'labour'], ['Lip repair / build-up welding', 'labour'], ['Tyre removal & refitting', 'labour'], ['Wheel balancing', 'labour'], ['Valve stem', 'part'], ['Rim polishing / touch-up', 'labour']],
@@ -4143,7 +4173,7 @@ function tyreReadingsForm(q){
 }
 function readTyreLog(){ return [...document.querySelectorAll('#qTyreLog tr[data-tp]')].map(tr => ({pos:tr.dataset.tp, size:tr.querySelector('.ts').value.trim(), dot:tr.querySelector('.td').value.trim(), tread:tr.querySelector('.tt').value, psiIn:tr.querySelector('.tpi').value, psiOut:tr.querySelector('.tpo').value})).filter(t => t.size || t.dot || t.tread !== '' || t.psiIn || t.psiOut).map(t => Object.assign(t, {flags:tyreFlags(t)})); }
 function readAlign(){ const a = {before:{}, after:{}, spec:{}}; let any = false; document.querySelectorAll('#qAlign tr[data-ak]').forEach(tr => { const k = tr.dataset.ak; [['ab', 'before'], ['aa', 'after'], ['as', 'spec']].forEach(([c, w]) => { const v = tr.querySelector('.' + c).value.trim(); if(v){ a[w][k] = v; any = true; } }); }); return any ? a : null; }
-const DISC_POS = ['Front pair', 'Rear pair', 'FL', 'FR', 'RL', 'RR', 'Flywheel', 'Drum'];
+const DISC_POS = ['Front pair', 'Rear pair', 'FL', 'FR', 'RL', 'RR', 'Flywheel', 'Drum pair'];
 const DISC_RESULT = ['Resurfaced — OK', 'Below minimum — replace', 'Cracked / heat-damaged — replace', 'Not done'];
 const RIM_DAMAGE = ['Bent', 'Buckled', 'Cracked', 'Lip damage', 'Kerbed / scratched', 'Bent + cracked'];
 const RIM_WORK = ['Straightened', 'Welded', 'Straightened + welded', 'Polished', 'Not repairable'];
@@ -4490,6 +4520,7 @@ async function shareQuick(doc){
   const filename = String(doc.docNo).replace(/[^A-Za-z0-9_-]/g, '_') + '.pdf';
   try{
     await Promise.all([...holder.querySelectorAll('img')].map(i => i.decode ? i.decode().catch(() => {}) : null));
+    await window.rfFitImages(holder);
     const y = window.scrollY; window.scrollTo(0, 0);
     let blob;
     try{ blob = await html2pdf().set({margin:0.3, filename, image:{type:'jpeg', quality:0.95}, html2canvas:{scale:2, useCORS:true, scrollX:0, scrollY:0}, jsPDF:{unit:'in', format:'a4', orientation:'portrait'}, pagebreak:{mode:['css', 'legacy']}}).from(holder.firstElementChild).outputPdf('blob'); }
@@ -4689,12 +4720,23 @@ listeners.push(kinds => { if(!kinds || kinds.includes('setting') || kinds.includ
 /* ===================== PARTNER EDITION: Send to Robotik Fix ===================== */
 const PARTNER_SERVICES = [
   ['brake', 'Brake disc resurfacing (we pick up & return)', 'Number of pairs'],
+  ['drum', 'Brake drum resurfacing (we pick up & return)', 'Number of pairs'],
   ['wheel', 'Wheel / rim straightening or welding', 'Number of rims'],
-  ['align', 'Wheel alignment — refer a customer', 'Vehicles'],
-  ['balance', 'Wheel balancing — refer a customer', 'Wheels'],
+  ['mount', 'Tyre de-mounting & mounting', 'Number of tyres'],
+  ['rotate', 'Tyre rotation', 'Vehicles'],
+  ['balance', 'Wheel balancing', 'Wheels'],
+  ['align', '3D wheel alignment', 'Vehicles'],
+  ['combo', 'Combo: tyre mounting + balancing + 3D alignment', 'Vehicles'],
   ['tyre', 'Tyres / other tyre service', 'Quantity'],
   ['other', 'Something else', 'Quantity']
 ];
+// tyre & alignment work is priced by vehicle type; armoured vehicles have their own rows (rotation: cars & SUVs only)
+const TYRE_CLASSES = ['Car (saloon / hatchback)', 'SUV / 4x4 / pickup', 'Armoured vehicle'];
+const TYRE_SVC = {mount:['Tyre de-mounting & mounting', 'per tyre', TYRE_CLASSES], rotate:['Tyre rotation', 'per vehicle', TYRE_CLASSES.slice(0, 2)],
+  balance:['Wheel balancing', 'per wheel', TYRE_CLASSES], align:['3D wheel alignment', 'per vehicle', TYRE_CLASSES],
+  combo:['Combo: tyre mounting, balancing & 3D alignment', 'per vehicle (4 tyres)', TYRE_CLASSES]};
+function tradeName(service, vclass){ if(service === 'brake') return 'Brake disc resurfacing — ' + vclass; if(service === 'drum') return 'Drum resurfacing'; const t = TYRE_SVC[service]; return t ? t[0] + ' — ' + vclass : ''; }
+function svcClasses(service){ return service === 'brake' ? VEHICLE_CLASSES : (TYRE_SVC[service] || [])[2] || null; }
 async function hqFetch(path, opts){
   const r = await fetch(HQ.url + '/rest/v1/' + path, Object.assign({}, opts, {headers:Object.assign({apikey:HQ.key, 'Content-Type':'application/json'}, (opts && opts.headers) || {})}));
   if(!r.ok){ let m = 'Server error ' + r.status; try{ const j = await r.json(); m = j.message || m; }catch(e){} const er = new Error(m); er.status = r.status; throw er; }
@@ -4722,14 +4764,14 @@ let sendSvc = 'brake';
 async function renderSend(){
   const v = $('view-send'); if(!v) return;
   const bv = brandVals(), svc = PARTNER_SERVICES.find(s => s[0] === sendSvc) || PARTNER_SERVICES[0];
-  const referral = sendSvc === 'align' || sendSvc === 'balance';
+  const referral = !!TYRE_SVC[sendSvc], classes = svcClasses(sendSvc);
   const mine = Store.list('porder').sort((a, b) => String(b.sentAt).localeCompare(String(a.sentAt)));
   v.innerHTML = wrap('SEND WORK TO ROBOTIK FIX', `<p class="rf-note">Send brake discs, rims or customers to Robotik Fix (142 Lekki-Epe Expressway, Ikate). The order goes straight to their system and opens WhatsApp so you can confirm.</p>
     ${brandSetting() ? '' : '<div class="banner">First enter your garage details in <b>Setup → My Business</b>.</div>'}
     <div class="field"><label>Service</label><select id="sSvc">${PARTNER_SERVICES.map(s => `<option value="${s[0]}"${s[0] === sendSvc ? ' selected' : ''}>${esc(s[1])}</option>`).join('')}</select></div>
     <div class="grid2"><div class="field"><label>${esc(svc[2])}</label><input id="sQty" type="number" min="1" value="1"></div><div class="field"><label>Vehicle(s) & reg. no.</label><input id="sVeh" placeholder="e.g. Camry KJA 123 AB"></div></div>
-    ${sendSvc === 'brake' ? `<div class="field"><label>Vehicle type</label><select id="sClass">${VEHICLE_CLASSES.map(c => `<option>${esc(c)}</option>`).join('')}</select><div class="rf-note">Price depends on the vehicle type (see trade prices below). Different types? Send one order per type.</div></div>` : ''}
-    ${referral ? '<div class="grid2"><div class="field"><label>Customer name</label><input id="sCust"></div><div class="field"><label>Customer phone</label><input id="sCustPh" type="tel"></div></div>' : ''}
+    ${classes ? `<div class="field"><label>Vehicle type</label><select id="sClass">${classes.map(c => `<option>${esc(c)}</option>`).join('')}</select><div class="rf-note">Price depends on the vehicle type (see trade prices below). Different types? Send one order per type.</div></div>` : ''}
+    ${referral ? '<div class="rf-note">The vehicle comes to Robotik Fix (142 Lekki-Epe Expressway, Ikate).</div><div class="grid2"><div class="field"><label>Customer name (if you are referring a customer)</label><input id="sCust"></div><div class="field"><label>Customer phone</label><input id="sCustPh" type="tel"></div></div>' : ''}
     ${referral ? '' : `<div class="field"><label>Pickup?</label><select id="sPick"><option value="1">Yes — please pick up from us</option><option value="0">No — we will bring it</option></select></div><div class="field"><label>Pickup address</label><input id="sAddr" value="${esc(bv.bizAddr)}"></div>`}
     <div class="grid2"><div class="field"><label>Contact person</label><input id="sContact"></div><div class="field"><label>Contact phone</label><input id="sPhone" type="tel" value="${esc(bv.bizPhone)}"></div></div>
     <div class="field"><label>Preferred day / time</label><input id="sWhen" placeholder="e.g. Today before 2pm"></div>
@@ -4742,8 +4784,7 @@ async function renderSend(){
     const g = id => $(id) ? $(id).value.trim() : '';
     if(!brandSetting()){ toast('Enter your garage details in Setup → My Business first.', true); showTab('sync'); return; }
     if(!g('sPhone')){ toast('Enter a contact phone number.', true); return; }
-    if(referral && !g('sCust')){ toast('Enter the customer\'s name.', true); return; }
-    const o = {id:uid('po'), ref:'P' + Date.now().toString(36).toUpperCase().slice(-6), garage:bv.biz, garageFull:bv.bizFull, service:sendSvc, vclass:sendSvc === 'brake' ? g('sClass') : '', qty:N(g('sQty')) || 1, vehicles:g('sVeh'),
+    const o = {id:uid('po'), ref:'P' + Date.now().toString(36).toUpperCase().slice(-6), garage:bv.biz, garageFull:bv.bizFull, service:sendSvc, vclass:classes ? g('sClass') : '', qty:N(g('sQty')) || 1, vehicles:g('sVeh'),
       custName:g('sCust'), custPhone:g('sCustPh'), pickup:!referral && g('sPick') === '1', pickupAddr:g('sAddr'), contact:g('sContact'), contactPhone:g('sPhone'), when:g('sWhen'), notes:g('sNotes'), app:'partner-' + RF_VERSION};
     $('sSend').disabled = true;
     const ok = await sendOrder(o, true);
@@ -4755,7 +4796,7 @@ async function renderSend(){
   if($('sPrices')) $('sPrices').innerHTML = list.filter(p => N(p.price) > 0).length ? '<table class="rf-table"><tr><th>Service</th><th class="n">Trade price</th></tr>' + list.filter(p => N(p.price) > 0).map(p => `<tr><td>${esc(p.name)}${p.unit ? ' <span class="rf-note">(' + esc(p.unit) + ')</span>' : ''}</td><td class="n">${money(p.price)}</td></tr>`).join('') + '</table>' : 'Ask Robotik Fix for current trade prices: 0724 001 3457.';
 }
 function partnerSetupNote(){
-  return '<div class="card"><h2>ABOUT THIS APP</h2><p class="rf-note">Your garage\'s own job cards, quotations, invoices and quick invoices — free from Robotik Fix. Your records stay on this device (or your own Google Sheet below); Robotik Fix cannot see them. Only orders you choose to send reach Robotik Fix.</p></div>';
+  return '<div class="card"><h2>ABOUT THIS APP</h2><p class="rf-note">Your garage\'s own job cards, quotations, invoices and quick invoices — free from Robotik Fix. Your records stay on this device, or in your own team database (set up below) so your staff share them on several phones and computers; Robotik Fix cannot see them. Only orders you choose to send reach Robotik Fix.</p></div>';
 }
 
 /* ===================== ROBOTIK EDITION: Partners tab ===================== */
@@ -4780,20 +4821,65 @@ async function invoiceFromOrder(o){
   const d = o.data || {};
   let trade = []; try{ const rows = await Cloud.rest('GET', 'rf_public?select=value&key=eq.trade_prices'); trade = (rows && rows[0] && rows[0].value) || []; }catch(e){}
   const tp = name => { const t = trade.find(x => lc(x.name) === lc(name)); return t && t.price !== '' && t.price != null ? N(t.price) : null; };
-  const tpl = d.service === 'brake' ? 'brake' : d.service === 'wheel' ? 'wheel' : 'tyre';
+  const tyreSvc = !!TYRE_SVC[d.service], tpl = d.service === 'brake' || d.service === 'drum' ? 'brake' : d.service === 'wheel' ? 'wheel' : 'tyre';
+  // a garage on credit: warn before adding more work when it is over its limit or has overdue invoices
+  const cr = partnerCreditState(o.garage);
+  if(cr.terms && (cr.over || cr.overdue > 0.5)){
+    const why = [cr.over ? 'owes ' + money(cr.owed) + ', above its credit limit of ' + money(cr.terms.limit) : '', cr.overdue > 0.5 ? money(cr.overdue) + ' is overdue (more than ' + cr.terms.days + ' days)' : ''].filter(Boolean).join(' and ');
+    if(!(await askConfirm(o.garage + ' ' + why + '. Make this invoice anyway?'))) return false;
+  }
   newQuick(tpl);
   const q = quickDoc;
-  if(tpl === 'tyre' && (d.service === 'align' || d.service === 'balance')){
-    Object.assign(q, {custName:d.custName || o.garage, custPhone:d.custPhone || d.contactPhone, notes:'Referred by ' + o.garage + '. ' + q.notes});
-    q.quick.lines.forEach(l => { if(d.service === 'align' && l.desc === '3D wheel alignment') l.qty = d.qty || 1; if(d.service === 'balance' && l.desc === 'Wheel balancing') l.qty = d.qty || 4; });
+  const referred = tyreSvc && d.custName;   // a customer the garage referred pays us directly
+  if(referred){
+    Object.assign(q, {custName:d.custName, custPhone:d.custPhone || d.contactPhone, notes:'Referred by ' + o.garage + '. ' + q.notes});
   } else {
     Object.assign(q, {custName:d.garageFull || o.garage, custContact:d.contact, custPhone:d.contactPhone, custAddress:d.pickupAddr, serviceOrderNo:d.ref});
     q.quick.extra = Object.assign(q.quick.extra || {}, {custType:'Garage', pickup:!!d.pickup});
-    if(tpl === 'brake'){ q.quick.discs = [{vehicle:d.vehicles || ''}]; q.quick.lines.forEach(l => { if(l.desc === 'Disc resurfacing (per pair)'){ l.qty = d.qty || 1; if(d.vclass){ l.desc = 'Disc resurfacing (per pair) — ' + d.vclass; const pr = tp('Brake disc resurfacing — ' + d.vclass); if(pr != null) l.price = pr; } } if(l.desc === 'Pickup & delivery (dispatch)' && d.pickup) l.qty = 1; }); }
-    if(tpl === 'wheel'){ q.quick.rims = Array.from({length:Math.min(8, d.qty || 1)}, () => ({})); }
   }
+  if(tpl === 'brake'){ q.quick.discs = [{vehicle:d.vehicles || ''}];
+    q.quick.lines.forEach(l => {
+      if(d.service === 'brake' && l.desc === 'Disc resurfacing (per pair)'){ l.qty = d.qty || 1; if(d.vclass){ l.desc = 'Disc resurfacing (per pair) — ' + d.vclass; const pr = tp('Brake disc resurfacing — ' + d.vclass); if(pr != null) l.price = pr; } }
+      if(d.service === 'brake' && l.desc === 'Disc resurfacing (single disc)') l.qty = '';
+      if(d.service === 'drum' && l.desc === 'Drum resurfacing (per pair)'){ l.qty = d.qty || 1; const pr = tp('Drum resurfacing'); if(pr != null) l.price = pr; }
+      if(d.service === 'drum' && /^Disc resurfacing \(per pair\)/.test(l.desc)) l.qty = '';
+      if(l.desc === 'Pickup & delivery (dispatch)' && d.pickup) l.qty = 1; }); }
+  if(tpl === 'wheel'){ q.quick.rims = Array.from({length:Math.min(8, d.qty || 1)}, () => ({})); }
+  if(tyreSvc){
+    const name = tradeName(d.service, d.vclass || TYRE_CLASSES[0]), pr = tp(name);
+    q.quick.lines.unshift({qty:d.qty || 1, desc:name, kind:'labour', price:pr != null ? pr : ''});
+    if(d.vehicles) q.notes = 'Vehicle(s): ' + d.vehicles + '. ' + q.notes;
+  }
+  if(!referred && cr.terms && cr.terms.days){ q.dueDate = addDays(q.date || today(), N(cr.terms.days)); q.notes = 'Credit terms: payment due within ' + N(cr.terms.days) + ' days, by ' + fmtDate(q.dueDate) + '. ' + q.notes; }
   q.partner = o.garage; q.partnerOrderId = o.id;
   renderQuick();
+  return true;
+}
+/* ---------- credit facility for partner garages (kind 'pcredit', admin sets) ---------- */
+function pcKey(g){ return 'pc_' + lc(String(g || '').trim()).replace(/[^a-z0-9]+/g, '_').slice(0, 60); }
+function partnerTerms(g){ const t = Store.get('pcredit', pcKey(g)); return t && t.on !== false && (N(t.limit) > 0 || N(t.days) > 0) ? t : null; }
+function partnerInvoices(g){ return Store.list('doc').filter(d => (d.type || '').toUpperCase() === 'INVOICE' && d.status !== 'Cancelled' && (lc(d.partner) === lc(g) || lc(d.custName) === lc(g))); }
+function partnerCreditState(g){
+  const terms = partnerTerms(g), t0 = today(); let owed = 0, overdue = 0, oldest = '';
+  partnerInvoices(g).forEach(d => { const bal = Math.max(0, N(d.grand) - (d.paymentEntries || []).reduce((t, p) => t + N(p.amount), 0)); if(bal < 0.5) return; owed += bal;
+    const due = d.dueDate || (terms && N(terms.days) ? addDays(d.date || t0, N(terms.days)) : ''); if(due && due < t0){ overdue += bal; if(!oldest || due < oldest) oldest = due; } });
+  const limit = terms ? N(terms.limit) : 0;
+  return {terms, owed, overdue, oldest, limit, available:limit ? Math.max(0, limit - owed) : null, over:!!(limit && owed > limit)};
+}
+function creditBadge(g){ const c = partnerCreditState(g); if(!c.terms) return '';
+  return c.over ? '<span class="rf-badge red">over credit limit</span>' : c.overdue > 0.5 ? '<span class="rf-badge amber">' + money(c.overdue) + ' overdue</span>' : '<span class="rf-badge green">credit OK</span>'; }
+function editPartnerCredit(g){
+  const t = Store.get('pcredit', pcKey(g)) || {limit:'', days:30, on:true};
+  formModal('Credit facility — ' + g, [
+    {k:'on', label:'Give this garage credit (pay later)', type:'check'},
+    {k:'limit', label:'Credit limit (₦) — most it may owe at any time', type:'number'},
+    {k:'days', label:'Days to pay each invoice', type:'select', opts:[[7, '7 days'], [14, '14 days'], [21, '21 days'], [30, '30 days'], [45, '45 days'], [60, '60 days'], [90, '90 days']]},
+    {k:'note', label:'Note (optional)', ph:'e.g. Agreed with Mr Sunday on 18 Nov'}
+  ], {on:t.on !== false, limit:t.limit, days:t.days || 30, note:t.note || ''}, v => {
+    if(v.on && !(N(v.limit) > 0)) throw new Error('Enter the credit limit, or untick “Give this garage credit”.');
+    Store.put('pcredit', {id:pcKey(g), garage:g, on:!!v.on, limit:N(v.limit), days:N(v.days), note:v.note, setBy:myName(), setAt:nowIso()});
+    toast(v.on ? g + ': credit of ' + money(v.limit) + ', ' + v.days + ' days to pay.' : 'Credit switched off for ' + g + '.'); renderPartners(true);
+  });
 }
 async function setOrderStatus(o, status){
   try{ await Cloud.rest('PATCH', 'rf_partner_orders?id=eq.' + encodeURIComponent(o.id), {status, handled_by:myName(), updated_at:nowIso()}, 'return=minimal'); o.status = status; toast('Marked ' + status + '.'); }
@@ -4811,7 +4897,7 @@ async function renderPartners(noFetch){
     h += wrap('PARTNER ORDERS', `<div class="rf-seg">${[['open', 'Open'], ['new', 'New'], ['done', 'Done'], ['all', 'All']].map(([k, l]) => `<button class="${k === pFilter ? 'on' : ''}" data-pf="${k}">${l}</button>`).join('')}<button data-pr="1">🔄</button></div>` +
       (list.map(o => { const d = o.data || {}, st = PO_STATUSES.find(x => x[0] === o.status) || PO_STATUSES[0]; const svc = (PARTNER_SERVICES.find(x => x[0] === d.service) || [])[1] || d.service;
         const next = {new:'accepted', accepted:'picked up', 'picked up':'done'}[o.status];
-        return `<div class="rf-row"><div class="t"><span>${esc(o.garage)}</span><span class="rf-badge ${st[2]}">${esc(st[1])}</span></div>
+        return `<div class="rf-row"><div class="t"><span>${esc(o.garage)} ${creditBadge(o.garage)}</span><span class="rf-badge ${st[2]}">${esc(st[1])}</span></div>
           <div class="m"><b>${esc(svc)}</b>${d.vclass ? ' · <b>' + esc(d.vclass) + '</b>' : ''} · qty ${esc(d.qty)} ${d.vehicles ? '· ' + esc(d.vehicles) : ''}</div>
           ${d.custName ? `<div class="m">Customer: ${esc(d.custName)} ${esc(d.custPhone || '')}</div>` : ''}
           <div class="m">${d.pickup ? '🚚 Pickup: ' + esc(d.pickupAddr || '') + ' · ' : ''}📞 ${esc(d.contact || '')} ${esc(d.contactPhone || '')}${d.when ? ' · ⏰ ' + esc(d.when) : ''}</div>
@@ -4823,7 +4909,15 @@ async function renderPartners(noFetch){
     pOrders.forEach(o => { const x = g[o.garage] || (g[o.garage] = {orders:0, month:0, last:'', phone:(o.data || {}).contactPhone}); x.orders++; if(o.created_at.slice(0, 10) >= m0) x.month++; if(o.created_at > x.last) x.last = o.created_at; });
     const docs = Store.list('doc').filter(d => (d.type || '').toUpperCase() === 'INVOICE' && d.status !== 'Cancelled');
     Object.keys(g).forEach(k => { const mine = docs.filter(d => d.partner === k || lc(d.custName) === lc(k)); g[k].billed = mine.filter(d => (d.date || '') >= m0).reduce((s, d) => s + N(d.grand), 0); g[k].owed = mine.reduce((s, d) => s + Math.max(0, N(d.grand) - (d.paymentEntries || []).reduce((t, p) => t + N(p.amount), 0)), 0); });
-    h += wrap('PARTNER GARAGES', '<table class="rf-table"><tr><th>Garage</th><th class="n">Orders (month / all)</th><th class="n">Billed this month</th><th class="n">Owes</th></tr>' + Object.entries(g).sort((a, b) => b[1].month - a[1].month || b[1].orders - a[1].orders).map(([k, x]) => `<tr><td>${esc(k)}<div class="rf-note" style="margin:0">last ${esc(fmtDate(x.last))}</div></td><td class="n">${x.month} / ${x.orders}</td><td class="n">${money(x.billed)}</td><td class="n">${money(x.owed)}</td></tr>`).join('') + '</table>' + (Object.keys(g).length ? '' : '<div class="rf-empty">No partner orders yet.</div>') + '<p class="rf-note">Billed and owed amounts count invoices created from partner orders, or invoices whose customer name matches the garage.</p>', true);
+    Store.list('pcredit').forEach(t => { if(t.garage && !g[t.garage]) g[t.garage] = {orders:0, month:0, last:'', billed:0, owed:0}; });
+    h += wrap('PARTNER GARAGES', Object.entries(g).sort((a, b) => b[1].month - a[1].month || b[1].orders - a[1].orders).map(([k, x]) => { const c = partnerCreditState(k), t = c.terms;
+      return `<div class="rf-row"><div class="t"><span>${esc(k)}</span>${creditBadge(k)}</div>
+        <div class="m">Orders ${x.month} this month / ${x.orders} in all${x.last ? ' · last ' + esc(fmtDate(x.last)) : ''} · billed this month ${money(x.billed)}</div>
+        <div class="m">Owes <b>${money(c.owed)}</b>${c.overdue > 0.5 ? ' · <b style="color:#b91c1c">' + money(c.overdue) + ' overdue</b> (since ' + esc(fmtDate(c.oldest)) + ')' : ''}</div>
+        <div class="m">${t ? `Credit: limit <b>${money(t.limit)}</b> · <b>${N(t.days)} days</b> to pay · available <b style="color:${c.over ? '#b91c1c' : '#047857'}">${money(c.available || 0)}</b>` : 'No credit facility — pays on delivery.'}${t && t.note ? ' · ' + esc(t.note) : ''}</div>
+        <div class="acts"><button class="rf-btn need-admin" data-pcr="${esc(k)}">💳 ${t ? 'Change credit' : 'Give credit'}</button></div></div>`; }).join('')
+      + (Object.keys(g).length ? '' : '<div class="rf-empty">No partner orders yet.</div>')
+      + '<p class="rf-note">Owed amounts count invoices made from partner orders, or invoices whose customer name matches the garage. With credit, each invoice made from an order says when it must be paid; the app warns you before invoicing a garage that is over its limit or has overdue invoices.</p>', true);
   } else if(s === 'prices'){
     h += wrap('TRADE PRICES (SHOWN IN PARTNER APPS)', '<p class="rf-note">Partner garages see these prices in their app. Leave a price empty to hide that line.</p><div id="tpBox" class="rf-empty">Loading…</div>', true);
   } else {
@@ -4836,7 +4930,8 @@ async function renderPartners(noFetch){
   bind(v, '[data-pf]', 'click', el => { pFilter = el.dataset.pf; renderPartners(true); });
   bind(v, '[data-pr]', 'click', () => renderPartners());
   bind(v, '[data-pn]', 'click', el => setOrderStatus(pOrders.find(o => o.id === el.dataset.pn), el.dataset.to));
-  bind(v, '[data-pinv]', 'click', async el => { const o = pOrders.find(x => x.id === el.dataset.pinv); if(o.status === 'new') await setOrderStatus(o, 'accepted'); await invoiceFromOrder(o); showTab('quick'); });
+  bind(v, '[data-pinv]', 'click', async el => { const o = pOrders.find(x => x.id === el.dataset.pinv); if(o.status === 'new') await setOrderStatus(o, 'accepted'); if(await invoiceFromOrder(o) !== false) showTab('quick'); });
+  bind(v, '[data-pcr]', 'click', el => editPartnerCredit(el.dataset.pcr));
   bind(v, '[data-pwa]', 'click', el => { const o = pOrders.find(x => x.id === el.dataset.pwa), d = o.data || {}; openWhatsApp(d.contactPhone, `Hello ${d.contact || o.garage}, this is Robotik Fix about your order ${d.ref || ''} (${(PARTNER_SERVICES.find(x => x[0] === d.service) || [])[1] || d.service}, qty ${d.qty}). `); });
   if($('pInvWa')) $('pInvWa').onclick = () => openWhatsApp('', $('pInvMsg').value);
   if($('pInvCopy')) $('pInvCopy').onclick = () => navigator.clipboard && navigator.clipboard.writeText(partnerAppLink()).then(() => toast('Link copied.'));
@@ -4845,15 +4940,33 @@ async function renderPartners(noFetch){
 const VEHICLE_CLASSES = ['Car (saloon / hatchback)', 'Mini SUV / crossover', 'Big SUV / 4x4 / pickup', 'Sports & luxury car'];
 const STD_TRADE = [].concat(
   VEHICLE_CLASSES.map((c, i) => ({name:'Brake disc resurfacing — ' + c, unit:'per pair', price:i === 0 ? 7000 : ''})),
-  [{name:'Drum resurfacing', unit:'per drum', price:''}, {name:'Pickup & delivery (dispatch)', unit:'per trip', price:2000},
-   {name:'Tyre de-mounting & mounting', unit:'per tyre', price:''}, {name:'Tyre rotation', unit:'per vehicle', price:''},
-   {name:'Alloy rim straightening', unit:'per rim', price:''}, {name:'Aluminium rim crack welding', unit:'per crack', price:''},
-   {name:'3D wheel alignment (referred customer)', unit:'per vehicle', price:''}, {name:'Wheel balancing (referred customer)', unit:'per wheel', price:''}]);
+  [{name:'Drum resurfacing', unit:'per pair', price:''}, {name:'Pickup & delivery (dispatch)', unit:'per trip', price:2000}],
+  ...Object.values(TYRE_SVC).map(([n, unit, cls]) => cls.map(c => ({name:n + ' — ' + c, unit, price:''}))),
+  [{name:'Alloy rim straightening', unit:'per rim', price:''}, {name:'Aluminium rim crack welding', unit:'per crack', price:''}]);
+// price lists saved before v7.3 had one row per service; move their prices to the new rows (car row) and drop the old ones
+const OLD_TRADE = {'tyre de-mounting & mounting':'Tyre de-mounting & mounting — ' + TYRE_CLASSES[0], 'tyre rotation':'Tyre rotation — ' + TYRE_CLASSES[0],
+  '3d wheel alignment (referred customer)':'3D wheel alignment — ' + TYRE_CLASSES[0], 'wheel balancing (referred customer)':'Wheel balancing — ' + TYRE_CLASSES[0]};
+function upgradeTradeList(list){
+  let changed = false; const out = list.map(x => Object.assign({}, x));
+  out.forEach(p => { if(lc(p.name) === 'drum resurfacing' && /drum/i.test(p.unit || '')){ p.unit = 'per pair'; p.check = true; changed = true; } });
+  Object.entries(OLD_TRADE).forEach(([old, nw]) => { const i = out.findIndex(p => lc(p.name) === old); if(i < 0) return; const pr = out[i].price; out.splice(i, 1); changed = true;
+    let t = out.find(p => lc(p.name) === lc(nw)); if(!t){ const std = STD_TRADE.find(x => lc(x.name) === lc(nw)); t = Object.assign({}, std); out.push(t); } if((t.price === '' || t.price == null) && pr !== '' && pr != null) t.price = pr; });
+  STD_TRADE.forEach(x => { if(!out.some(p => lc(p.name) === lc(x.name)) && changed){ out.push(Object.assign({}, x)); } });
+  // keep the standard order, extra rows of your own at the end
+  const pos = n => { const i = STD_TRADE.findIndex(x => lc(x.name) === lc(n)); return i < 0 ? 999 : i; };
+  out.sort((a, b) => pos(a.name) - pos(b.name));
+  return {list:out, changed};
+}
 async function loadPriceEditor(){
   let list = [];
   try{ const rows = await Cloud.rest('GET', 'rf_public?select=value&key=eq.trade_prices'); list = (rows && rows[0] && rows[0].value) || []; }catch(e){}
   if(!list.length) list = STD_TRADE.map(x => Object.assign({}, x));
-  const draw = () => { $('tpBox').className = ''; $('tpBox').innerHTML = '<table class="rf-table"><tr><th>Service</th><th>Unit</th><th class="n">₦</th><th></th></tr>' + list.map((p, i) => `<tr><td><input data-tn="${i}" value="${esc(p.name)}"></td><td><input data-tu="${i}" value="${esc(p.unit || '')}" style="width:80px"></td><td><input data-tp="${i}" type="number" value="${esc(p.price)}" style="width:90px"></td><td><button class="rf-btn red" data-tx="${i}">✕</button></td></tr>`).join('') + '</table><div class="rf-tools"><button class="rf-btn grey" id="tpAdd">＋ Line</button><button class="rf-btn grey" id="tpStd">＋ Add missing standard lines</button><button class="rf-btn big" id="tpSave">Save & publish to partners</button></div>';
+  else { const up = upgradeTradeList(list); if(up.changed){ list = up.list; setTimeout(() => toast('Price list updated to the new rows (car, SUV, armoured, combo; drums per pair). Fill in the empty prices, check drum prices, then tap Save & publish.'), 300); } }
+  const draw = () => { $('tpBox').className = ''; $('tpBox').innerHTML = list.map((p, i) => `<div style="border:1px solid #dde3ee;border-radius:10px;padding:8px;margin-bottom:6px;background:${p.price === '' || p.price == null ? '#fffbeb' : '#fbfcfe'}">
+      <input data-tn="${i}" value="${esc(p.name)}" placeholder="Service" style="width:100%;font-weight:bold">
+      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;margin-top:6px;align-items:end"><label class="rf-note" style="margin:0">Unit<input data-tu="${i}" value="${esc(p.unit || '')}" style="width:100%${p.check ? ';background:#fff3cd' : ''}"></label>
+      <label class="rf-note" style="margin:0">Price (₦)<input data-tp="${i}" type="number" inputmode="decimal" value="${esc(p.price)}" placeholder="empty = hidden" style="width:100%"></label><button class="rf-btn red" data-tx="${i}" title="Remove line">✕</button></div>
+      ${p.check ? '<div class="rf-note" style="color:#b45309;margin:4px 0 0">Was priced per drum — check this price is now <b>per pair</b>.</div>' : ''}</div>`).join('') + '<div class="rf-tools"><button class="rf-btn grey" id="tpAdd">＋ Line</button><button class="rf-btn grey" id="tpStd">＋ Add missing standard lines</button><button class="rf-btn big" id="tpSave">Save & publish to partners</button></div>';
     const sync = () => { list = list.map((p, i) => ({name:$('tpBox').querySelector(`[data-tn="${i}"]`).value.trim(), unit:$('tpBox').querySelector(`[data-tu="${i}"]`).value.trim(), price:$('tpBox').querySelector(`[data-tp="${i}"]`).value === '' ? '' : N($('tpBox').querySelector(`[data-tp="${i}"]`).value)})); };
     $('tpBox').querySelectorAll('[data-tx]').forEach(b => b.onclick = () => { sync(); list.splice(+b.dataset.tx, 1); draw(); });
     $('tpAdd').onclick = () => { sync(); list.push({name:'', unit:'', price:''}); draw(); };
@@ -8134,6 +8247,7 @@ async function shareHtmlPdf(inner, filename, text, onNoTool){
   document.body.appendChild(holder);
   try{
     await Promise.all([...holder.querySelectorAll('img')].map(i => i.decode ? i.decode().catch(() => {}) : null));
+    await window.rfFitImages(holder);
     const y = window.scrollY; window.scrollTo(0, 0);
     let blob;
     try{ blob = await html2pdf().set({margin:0.5, filename, image:{type:'jpeg', quality:0.95}, html2canvas:{scale:2, useCORS:true, scrollX:0, scrollY:0}, jsPDF:{unit:'in', format:'a4', orientation:'portrait'}, pagebreak:{mode:['css', 'legacy']}}).from(holder.firstElementChild).outputPdf('blob'); }
@@ -9443,6 +9557,222 @@ receivables = (orig => function(){ const out = orig(); Store.list('sale').forEac
 if(typeof window.loadDoc === 'function'){ const _ld = window.loadDoc; window.loadDoc = function(id){ if(/^sal_/.test(String(id))) return openSale(id); return _ld.apply(this, arguments); }; }
 listeners.push(kinds => { if(curTab === 'sales' && salSeg === 'list' && (kinds.includes('*') || kinds.includes('sale'))) renderSales(); });
 Object.assign(window.RF = window.RF || {}, {saleHtml, saveSale, newSale, openSale, salTotals, salStatus, convertSale});
+/* ===================== USERS, ROLES & SYNC CHECK (v7.2) =====================
+   • Admin creates staff accounts from the app (name, email, password, access level, role) — no self sign-up needed.
+   • Custom roles (kind 'role'): a name, a base access level the SERVER enforces (admin / cashier / technician) and the
+     tabs + Home tiles that people with the role see. Assignment: kind 'staffrole' {id:'sr_'+userId, userId, roleId}.
+     Hiding a tab is a convenience; what someone may read or change is still decided by the server from the base level.
+   • Sync check (every user, Setup): is this phone on the team database, what is waiting to send and why, refused
+     changes, records saved on this phone before it was signed in (copy them up), and a report to send the admin. */
+const ROLE_BASES = [['technician', 'Technician (job cards, workshop, time clock)'], ['cashier', 'Cashier (documents, money, customers)'], ['admin', 'Admin (everything, incl. users & settings)']];
+const ROLE_FIXED_TABS = ['home', 'sync'];          // always available (Home screen and Setup / sign out)
+function roleList(){ return Store.list('role').slice().sort((a, b) => String(a.name).localeCompare(String(b.name))); }
+function staffRoleOf(userId){ const s = userId && Store.get('staffrole', 'sr_' + userId); return (s && s.roleId && Store.get('role', s.roleId)) || null; }
+function myProfile(){ return mode === 'cloud' && me && me.userId ? staffRoleOf(me.userId) : null; }
+// the simple partner app shows Team (staff, roles, time clock) only once it uses its own team database
+function partnerSolo(){ return EDITION === 'partner' && mode !== 'cloud'; }
+function tabAllowed(key){ if(key === 'team' && partnerSolo()) return false; const p = myProfile(); if(!p || ROLE_FIXED_TABS.includes(key)) return true; return (p.tabs || []).includes(key); }
+function tileAllowed(x){ if(x.tab === 'team' && partnerSolo()) return false; const p = myProfile(); if(!p) return true; if(x.tab && x.tab !== 'home' && !ROLE_FIXED_TABS.includes(x.tab) && !tabAllowed(x.tab)) return false; return !p.tiles || p.tiles.includes(x.label); }
+// every tab this edition has (minus the fixed ones), and every Home tile, for the role editor
+function roleTabChoices(){ return TABS.filter(t => !ROLE_FIXED_TABS.includes(t[0])).map(t => [t[0], String(t[1]).replace(/^[^\w]+\s*/, '')]); }
+function roleTileChoices(){ let all = []; const keep = window.__rfNoProfile; window.__rfNoProfile = true; try{ all = homeTiles(); }catch(e){} finally{ window.__rfNoProfile = keep; }
+  const seen = new Set(); return all.filter(x => x && x.label && !seen.has(x.label) && seen.add(x.label)).map(x => ({label:x.label, tab:x.tab, k:x.k})); }
+/* ---- apply the role: tab buttons, Home tiles, and opening a hidden tab ---- */
+function applyProfileUI(){
+  TABS.forEach(([k]) => { const b = $(k === 'doc' ? 'tabDocBtn' : k === 'search' ? 'tabSearchBtn' : k === 'sync' ? 'tabSyncBtn' : 'rfTab_' + k); if(b) b.classList.toggle('rf-prof-hide', !tabAllowed(k)); });
+  if(typeof curTab !== 'undefined' && curTab && !tabAllowed(curTab)) showTab('home');
+}
+homeTiles = (orig => function(){ const all = orig.apply(this, arguments); return window.__rfNoProfile ? all : all.filter(tileAllowed); })(homeTiles);
+showTab = (orig => function(k){ if(!tabAllowed(k)){ toast('That screen is not part of your role. Ask the admin if you need it.', true); return orig.call(this, 'home'); } return orig.apply(this, arguments); })(showTab);
+window.showTab = showTab;
+listeners.push(kinds => { if(kinds.includes('*') || kinds.includes('role') || kinds.includes('staffrole')){ applyProfileUI(); if(curTab === 'home') renderHome(); if(curTab === 'team' && segState.team === 'users') loadUsers(); } });
+if(typeof applyRoleClass === 'function'){ applyRoleClass = (orig => function(){ const r = orig.apply(this, arguments); try{ applyProfileUI(); }catch(e){} return r; })(applyRoleClass); }
+/* ---- Team → Users & roles ---- */
+function usersToolsHtml(){
+  const roles = roleList();
+  return `<div class="card"><h2>STAFF ACCOUNTS</h2><p class="rf-note" style="margin-top:0">Create a login for each person. Give them the email and password you set; they sign in on their phone or the office laptop and change nothing else.</p>
+    <button class="rf-btn green" id="rfNewUser">＋ Create user</button></div>
+    <div class="card"><h2>ROLES</h2><p class="rf-note" style="margin-top:0">A role decides which <b>tabs and Home tiles</b> a person sees. Its <b>access level</b> (Admin, Cashier or Technician) is what the team database enforces for reading and changing records.</p>
+    ${roles.map(r => `<div class="rf-row"><div class="t"><span>${esc(r.name)}</span><span class="rf-badge">${esc((ROLE_BASES.find(b => b[0] === r.base) || [])[0] || r.base)}</span></div>
+      <div class="m">${(r.tabs || []).length} tab${(r.tabs || []).length === 1 ? '' : 's'}${r.tiles ? ' · ' + r.tiles.length + ' Home tiles' : ' · all Home tiles of those tabs'} · ${Store.list('staffrole').filter(s => s.roleId === r.id).length} people</div>
+      <div class="acts"><button class="rf-btn" data-rledit="${esc(r.id)}">Edit</button><button class="rf-btn red" data-rldel="${esc(r.id)}">Delete</button></div></div>`).join('') || '<p class="rf-note">No custom roles yet — everyone sees what their access level allows.</p>'}
+    <div class="rf-tools"><button class="rf-btn" id="rfNewRole">＋ New role</button><button class="rf-btn grey" id="rfRoleSamples">Add sample roles</button></div></div>`;
+}
+function userRoleSelect(u){
+  const cur = staffRoleOf(u.user_id), roles = roleList();
+  return `<select data-urole="${esc(u.user_id)}" title="Role"><option value="">Standard ${esc(u.role)} (no extra limits)</option>${roles.map(r => `<option value="${esc(r.id)}"${cur && cur.id === r.id ? ' selected' : ''}>${esc(r.name)}</option>`).join('')}</select>`;
+}
+async function setUserRole(userId, roleId){
+  const r = roleId && Store.get('role', roleId);
+  if(r){ await Cloud.updateStaff(userId, {role:r.base}); Store.put('staffrole', {id:'sr_' + userId, userId, roleId:r.id}); }
+  else Store.remove('staffrole', 'sr_' + userId);
+}
+function roleEditor(r){
+  r = r || {name:'', base:'cashier', tabs:['doc', 'quick', 'search'], tiles:null};
+  const tabs = roleTabChoices(), tiles = roleTileChoices(), groups = (typeof HOME_GROUPS !== 'undefined' ? HOME_GROUPS.slice(1) : []);
+  const box = modal(`<h2 style="margin-top:0">${r.id ? 'Edit role' : 'New role'}</h2>
+    <div class="field"><label for="rlName">Role name</label><input id="rlName" value="${esc(r.name)}" placeholder="e.g. Front desk, Store keeper, Supervisor"></div>
+    <div class="field"><label for="rlBase">Access level (enforced by the team database)</label><select id="rlBase">${ROLE_BASES.map(([k, l]) => `<option value="${k}"${r.base === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+    <div class="rf-note" style="margin:8px 0 4px"><b>Tabs this role sees</b> (Home and Setup are always there)</div>
+    <div id="rlTabs" style="display:grid;grid-template-columns:1fr 1fr;gap:4px">${tabs.map(([k, l]) => `<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" value="${esc(k)}"${(r.tabs || []).includes(k) ? ' checked' : ''}> ${esc(l)}</label>`).join('')}</div>
+    <div class="rf-note" style="margin:10px 0 2px"><b>Home tiles</b></div><label class="rl-all"><input type="checkbox" id="rlAllTiles"${r.tiles ? '' : ' checked'}> Show all tiles of the ticked tabs (untick to choose tiles one by one)</label>
+    <div id="rlTiles" style="max-height:260px;overflow:auto;border:1px solid #e3e7ee;border-radius:8px;padding:6px;${r.tiles ? '' : 'opacity:.45;pointer-events:none'}">${groups.map(([g, gl]) => { const set = tiles.filter(x => x.k === g); return set.length ? `<div class="rf-note" style="margin:6px 0 2px;font-weight:bold">${gl}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:3px">${set.map(x => `<label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" value="${esc(x.label)}"${!r.tiles || r.tiles.includes(x.label) ? ' checked' : ''}> ${esc(x.label)}</label>`).join('')}</div>` : ''; }).join('')}</div>
+    <div class="rf-tools" style="margin-top:12px"><button class="rf-btn green" id="rlSave">Save role</button><button class="rf-btn grey" id="rlCancel">Cancel</button></div>`);
+  box.querySelector('#rlAllTiles').onchange = e => { const t = box.querySelector('#rlTiles'); t.style.opacity = e.target.checked ? '.45' : '1'; t.style.pointerEvents = e.target.checked ? 'none' : ''; };
+  box.querySelector('#rlCancel').onclick = closeModal;
+  box.querySelector('#rlSave').onclick = () => {
+    const name = box.querySelector('#rlName').value.trim(); if(!name){ toast('Give the role a name.', true); return; }
+    if(roleList().some(x => x.id !== r.id && lc(x.name) === lc(name))){ toast('There is already a role called ' + name + '.', true); return; }
+    const sel = q => [...box.querySelectorAll(q + ' input:checked')].map(i => i.value);
+    const out = Object.assign({}, r, {name, base:box.querySelector('#rlBase').value, tabs:sel('#rlTabs'), tiles:box.querySelector('#rlAllTiles').checked ? null : sel('#rlTiles')});
+    if(!out.tabs.length && !(out.tiles || []).length && box.querySelector('#rlAllTiles').checked){ toast('Tick at least one tab.', true); return; }
+    if(!out.id) out.id = 'role_' + Date.now().toString(36);
+    Store.put('role', out);
+    // people with this role: keep the server access level in step
+    Store.list('staffrole').filter(s => s.roleId === out.id).forEach(s => Cloud.updateStaff(s.userId, {role:out.base}).catch(e => toast(e.message, true)));
+    closeModal(); toast('Role “' + name + '” saved.'); loadUsers();
+  };
+}
+const ROLE_SAMPLES = [
+  {name:'Front desk', base:'cashier', tabs:['doc', 'quick', 'search', 'crm', 'book', 'sales', 'letters']},
+  {name:'Store keeper', base:'cashier', tabs:['stock', 'search', 'sales']},
+  {name:'Workshop technician', base:'technician', tabs:['doc', 'workshop', 'team', 'search']},
+  {name:'Supervisor', base:'cashier', tabs:['doc', 'quick', 'search', 'crm', 'stock', 'book', 'workshop', 'fleet', 'team']}
+];
+function newUserModal(){
+  const roles = roleList();
+  formModal('Create user', [
+    {k:'name', label:'Full name', req:true}, {k:'email', label:'Email (their login)', type:'email', req:true},
+    {k:'pw', label:'Password (at least 8 characters — tell them privately)', req:true},
+    {k:'role', label:'Role', type:'select', opts:[['', '— choose —']].concat(roles.map(r => [r.id, r.name + ' (' + r.base + ')'])).concat([['@cashier', 'Standard cashier'], ['@technician', 'Standard technician'], ['@admin', 'Admin (full access)']]), req:true}
+  ], {pw:genPassword()}, async v => {
+    const email = String(v.email || '').trim().toLowerCase();
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error('Enter a valid email address.');
+    if(String(v.pw).length < 8) throw new Error('Use a password of at least 8 characters.');
+    const r = v.role && v.role[0] !== '@' ? Store.get('role', v.role) : null, base = r ? r.base : String(v.role || '@technician').slice(1);
+    await createStaffAccount(v.name.trim(), email, v.pw, base, r);
+    return false;   // keep the “can now sign in” box (with the password) open
+  });
+}
+function genPassword(){ const c = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'; let s = ''; const a = new Uint32Array(10); crypto.getRandomValues(a); a.forEach(x => s += c[x % c.length]); return s; }
+// signs the new person up WITHOUT touching the admin's own sign-in, then approves them with the chosen level and role
+async function createStaffAccount(name, email, password, base, role){
+  if(mode !== 'cloud' || !can('admin')) throw new Error('Only an admin signed in to the team database can create users.');
+  const before = new Set(((await Cloud.staff()) || []).map(s => s.user_id));
+  let j; try{ j = await Cloud.auth('signup', {email, password, data:{name}}); }
+  catch(e){ if(/registered|exists/i.test(e.message)) throw new Error('That email already has an account. Find it in the list below and change its role instead.'); if(e.status === 429) throw new Error('Too many new accounts in a short time — wait a few minutes and try again.'); throw e; }
+  const u = j.user || j, uid = u && u.id;
+  if(!uid) throw new Error('The team database did not create the account.');
+  if(Array.isArray(u.identities) && !u.identities.length) throw new Error('That email already has an account. Find it in the list below and change its role instead.');
+  let row = null; for(let i = 0; i < 6 && !row; i++){ const rows = await Cloud.staff(); row = (rows || []).find(s => s.user_id === uid); if(!row) await new Promise(ok => setTimeout(ok, 500)); }
+  if(!row && before.size) throw new Error('Account made, but it did not appear in the staff list yet — refresh in a minute.');
+  await Cloud.updateStaff(uid, {name, role:base, active:true});
+  if(role) Store.put('staffrole', {id:'sr_' + uid, userId:uid, roleId:role.id});
+  const confirmNeeded = !j.access_token && !(u.email_confirmed_at || u.confirmed_at);
+  closeModal(); loadUsers();
+  modal(`<h2 style="margin-top:0">✅ ${esc(name)} can now sign in</h2>
+    <div class="rf-row" style="font-size:15px"><div>Email: <b>${esc(email)}</b></div><div>Password: <b style="font-family:monospace">${esc(password)}</b></div><div>Role: <b>${esc(role ? role.name : 'Standard ' + base)}</b></div></div>
+    ${confirmNeeded ? '<p class="rf-note" style="color:#b45309"><b>One more step:</b> your team database asks new people to confirm their email first. They should open the email from Supabase and tap the link — or, to skip this for staff you create yourself, in Supabase go to Authentication → Sign In / Providers → Email and turn off “Confirm email”.</p>' : ''}
+    <p class="rf-note">On their phone or the office computer: open the app → Setup → connect the team database (same Project URL and key as yours) → Sign in with this email and password.</p>
+    <div class="rf-tools"><button class="rf-btn wa" id="nuWa">💬 Send login by WhatsApp</button><button class="rf-btn grey" id="nuOk">Done</button></div>`);
+  $('nuOk').onclick = closeModal;
+  $('nuWa').onclick = () => window.open('https://wa.me/?text=' + encodeURIComponent(`Hello ${name}, your login for ${(COMPANIES[0] || {}).name || 'our garage app'}:\nApp: ${location.href.split('#')[0].split('?')[0]}\nEmail: ${email}\nPassword: ${password}\n\nOpen the app → Setup → connect the team database (I will give you the code) → Sign in.`), '_blank');
+}
+function bindUsersTools(box){
+  if($('rfNewUser')) $('rfNewUser').onclick = newUserModal;
+  if($('rfNewRole')) $('rfNewRole').onclick = () => roleEditor(null);
+  if($('rfRoleSamples')) $('rfRoleSamples').onclick = () => { let n = 0; ROLE_SAMPLES.forEach((s, i) => { if(!roleList().some(r => lc(r.name) === lc(s.name))){ const valid = new Set(roleTabChoices().map(t => t[0])); Store.put('role', Object.assign({id:'role_s' + i + Date.now().toString(36)}, s, {tabs:s.tabs.filter(t => valid.has(t)), tiles:null})); n++; } }); toast(n ? n + ' sample roles added — edit them to suit you.' : 'The sample roles are already there.'); loadUsers(); };
+  bind(box, '[data-rledit]', 'click', el => roleEditor(Store.get('role', el.dataset.rledit)));
+  bind(box, '[data-rldel]', 'click', async el => { const r = Store.get('role', el.dataset.rldel); if(!r) return; const n = Store.list('staffrole').filter(s => s.roleId === r.id);
+    if(!(await askConfirm('Delete the role “' + r.name + '”?' + (n.length ? ' ' + n.length + ' person/people will go back to their standard access.' : '')))) return;
+    n.forEach(s => Store.remove('staffrole', s.id)); Store.remove('role', r.id); toast('Role deleted.'); loadUsers(); });
+  bind(box, '[data-urole]', 'change', async el => { try{ await setUserRole(el.dataset.urole, el.value); toast('Role updated.'); }catch(e){ toast(e.message, true); } loadUsers(); });
+}
+// Team → Users & roles: tools on top, role picker on every person
+loadUsers = (orig => async function(){
+  const box = $('rfUsers'); if(!box) return orig.apply(this, arguments);
+  let tools = $('rfUsersTools'); if(!tools){ tools = document.createElement('div'); tools.id = 'rfUsersTools'; box.parentNode.insertBefore(tools, box); }
+  tools.innerHTML = usersToolsHtml(); bindUsersTools(tools);
+  await orig.apply(this, arguments);
+  let rows = []; try{ rows = await Cloud.staff(); }catch(e){ return; }
+  box.querySelectorAll('[data-ur]').forEach(sel => { const u = rows.find(x => x.user_id === sel.dataset.ur); if(!u || sel.parentNode.querySelector('[data-urole]')) return; sel.insertAdjacentHTML('afterend', ' ' + userRoleSelect(u)); });
+  bind(box, '[data-urole]', 'change', async el => { try{ await setUserRole(el.dataset.urole, el.value); toast('Role updated.'); }catch(e){ toast(e.message, true); } loadUsers(); });
+})(loadUsers);
+/* ---------- SYNC CHECK ---------- */
+async function syncFacts(){
+  const f = {version:RF_VERSION, edition:EDITION, mode, online:navigator.onLine, user:me ? (me.name || me.email) + ' (' + me.role + (myProfile() ? ' · ' + myProfile().name : '') + ')' : '', db:'', waiting:[], refused:0, lastErr:Cloud.lastErr || '', lastPull:'', lastSend:'', earlier:0};
+  try{ const m = /^https:\/\/([a-z0-9]+)\./.exec((Cloud.cfg || {}).url || ''); f.db = m ? m[1] : ((Cloud.cfg || {}).url || ''); }catch(e){}
+  if(mode === 'cloud'){ try{ f.waiting = (await idbAll('outbox')).map(r => ({kind:r.kind, label:(r.data && (r.data.docNo || r.data.no || r.data.ref || r.data.name || r.data.custName || r.data.subject)) || r.kind})); }catch(e){}
+    try{ f.refused = ((await idbGetMeta('rejected')) || []).length; }catch(e){}
+    try{ f.lastPull = (await idbGetMeta('lastpull')) || ''; f.lastSend = (await idbGetMeta('lastsend')) || ''; }catch(e){} }
+  f.earlier = earlierRecords().length;
+  return f;
+}
+// records this phone saved on its own (before it was signed in) that the team database does not have
+function earlierRecords(){
+  if(mode !== 'cloud') return [];
+  const out = [];
+  try{ (getDocsLocal() || []).forEach(d => { if(d && d.id && !bucket('doc').has(d.id)) out.push(['doc', d]); }); }catch(e){}
+  try{ JSON.parse(localStorage.getItem('rf3_migrate_docs') || '[]').forEach(d => { if(d && d.id && !bucket('doc').has(d.id) && !out.some(o => o[1].id === d.id)) out.push(['doc', d]); }); }catch(e){}
+  LOCAL_KINDS.forEach(kind => { let arr = []; try{ arr = JSON.parse(localStorage.getItem(lsKey(kind)) || '[]'); }catch(e){} (Array.isArray(arr) ? arr : []).forEach(d => { if(d && d.id && !d._deleted && !bucket(kind).has(d.id)) out.push([kind, d]); }); });
+  return out;
+}
+function lsKey(kind){ return 'rf3_' + kind; }   // each edition's storage prefix is added by the page itself
+function ago(iso){ if(!iso) return 'never'; const s = Math.round((Date.now() - new Date(iso).getTime()) / 1000); if(s < 60) return 'just now'; if(s < 3600) return Math.round(s / 60) + ' min ago'; if(s < 86400) return Math.round(s / 3600) + ' h ago'; return fmtDate(String(iso).slice(0, 10)); }
+async function syncCheckHtml(){
+  const f = await syncFacts(), bad = [], ok = [];
+  if(mode !== 'cloud'){
+    return `<div class="card" id="rfSyncCheck"><h2 class="red">SYNC CHECK</h2><div class="rf-row" style="border-left:4px solid #dc2626"><b>❌ This device is NOT connected to the team database.</b><div class="m">Everything saved here stays on this device only — it will not appear on other phones or the office laptop. ${TEAM_ENABLED ? 'Connect it below (Project URL + key), then sign in with your own email and password.' : ''}</div></div></div>`;
+  }
+  if(!f.online) bad.push('📴 No internet on this phone right now — changes wait here and send when it is back.');
+  if(f.waiting.length) bad.push(`⏳ <b>${f.waiting.length}</b> change(s) waiting to send: ${f.waiting.slice(0, 6).map(w => esc(w.label)).join(', ')}${f.waiting.length > 6 ? '…' : ''}${f.lastErr ? '<br>Last problem: <b>' + esc(f.lastErr) + '</b>' : ''}`);
+  if(f.refused) bad.push(`⛔ <b>${f.refused}</b> change(s) were refused by the team database (role not allowed). See them under <a href="#" id="scRef">Errors &amp; device</a>.`);
+  if(f.earlier) bad.push(`📱 <b>${f.earlier}</b> record(s) were saved on this phone <b>before</b> it was signed in, so nobody else can see them. <button class="rf-btn green" id="scUp" style="margin-top:6px">⬆ Copy them to the team database</button>`);
+  if(!bad.length) ok.push('✅ Everything on this phone has reached the team database.');
+  ok.push(`Signed in as <b>${esc(f.user || '—')}</b> · database <b>${esc(f.db)}</b> · app version <b>${esc(f.version)}</b>`);
+  ok.push(`Last sent: <b>${esc(ago(f.lastSend))}</b> · last received from others: <b>${esc(ago(f.lastPull))}</b>`);
+  return `<div class="card" id="rfSyncCheck"><h2 class="${bad.length ? 'red' : ''}">SYNC CHECK</h2>
+    ${bad.map(x => `<div class="rf-row" style="border-left:4px solid #f59e0b">${x}</div>`).join('')}${ok.map(x => `<div class="rf-note" style="margin:4px 0">${x}</div>`).join('')}
+    <div class="rf-tools" style="margin-top:6px"><button class="rf-btn" id="scNow">🔄 Send &amp; receive now</button><button class="rf-btn wa" id="scWa">💬 Send this report to the admin</button></div>
+    <p class="rf-note">Every phone and computer must use the <b>same database</b> (${esc(f.db)}) and the <b>newest app version</b>. Compare these two lines on each device.</p></div>`;
+}
+async function renderSyncCheck(){
+  const host = $('rfSetupCards'); if(!host) return;
+  let box = $('rfSyncCheckHost'); if(!box){ box = document.createElement('div'); box.id = 'rfSyncCheckHost'; host.insertBefore(box, host.firstChild ? host.firstChild.nextSibling : null); }
+  box.innerHTML = await syncCheckHtml();
+  if($('scNow')) $('scNow').onclick = async () => { toast('Sending and receiving…'); await Cloud.sync(); renderSyncCheck(); toast(Cloud.lastErr ? 'Problem: ' + Cloud.lastErr : (Cloud.pending ? Cloud.pending + ' change(s) still waiting.' : 'All sent and up to date.'), !!Cloud.lastErr || !!Cloud.pending); };
+  if($('scUp')) $('scUp').onclick = copyEarlierRecords;
+  if($('scRef')) $('scRef').onclick = e => { e.preventDefault(); showTab('system'); };
+  if($('scWa')) $('scWa').onclick = async () => { const f = await syncFacts();
+    const t = `SYNC REPORT — ${f.user || 'not signed in'}\nApp ${f.version} (${f.edition}) · mode ${f.mode} · database ${f.db || '—'}\nInternet: ${f.online ? 'yes' : 'NO'}\nWaiting to send: ${f.waiting.length}${f.waiting.length ? ' (' + f.waiting.slice(0, 8).map(w => w.label).join(', ') + ')' : ''}\nLast problem: ${f.lastErr || 'none'}\nRefused changes: ${f.refused}\nSaved before sign-in (not shared): ${f.earlier}\nLast sent: ${ago(f.lastSend)} · last received: ${ago(f.lastPull)}`;
+    let to = ''; try{ to = String(Store.setting().ownerWa || '').replace(/\D/g, '').replace(/^0/, '234'); }catch(e){}
+    window.open('https://wa.me/' + to + '?text=' + encodeURIComponent(t), '_blank'); };
+}
+async function copyEarlierRecords(){
+  const recs = earlierRecords(); if(!recs.length){ toast('Nothing to copy.'); return; }
+  if(!(await askConfirm('Copy ' + recs.length + ' record(s) saved on this phone before sign-in to the team database, so everyone can see them? Records already in the database are not overwritten.'))) return;
+  let n = 0;
+  for(const [kind, d] of recs){ const x = Object.assign({}, d); bucket(kind).set(x.id, x); await Cloud.queue(kind, x); n++;
+    if(kind === 'doc'){ try{ const ph = await readLocalPhotos(d.id); for(let i = 0; i < ph.length; i++) await Cloud.queue('photo', {id:'ph_' + d.id + '_' + i, docId:d.id, order:i, dataUrl:ph[i].dataUrl, caption:ph[i].caption || '', pid:ph[i].id}); }catch(e){} } }
+  syncDocsCache(); emit(['*']); try{ renderRecords(); }catch(e){}
+  toast(n + ' record(s) queued — they send now (records your role may not change are listed under Errors & device).');
+  setTimeout(renderSyncCheck, 2500);
+}
+// any signed-in cashier/admin may copy their phone's earlier records (the server still checks each one)
+uploadDeviceData = (orig => async function(){ if(mode === 'cloud' && can('cashier')) return copyEarlierRecords(); return orig.apply(this, arguments); })(uploadDeviceData);
+// remember when sending / receiving last worked (shown in the sync check)
+Cloud.flush = (orig => async function(){ const before = this.pending; const r = await orig.apply(this, arguments); try{ if(mode === 'cloud' && before && !this.pending) await idbSetMeta('lastsend', nowIso()); }catch(e){} return r; })(Cloud.flush);
+Cloud.pull = (orig => async function(){ const r = await orig.apply(this, arguments); try{ await idbSetMeta('lastpull', nowIso()); }catch(e){} return r; })(Cloud.pull);
+renderSetup = (orig => function(){ const r = orig.apply(this, arguments); try{ renderSyncCheck(); }catch(e){} return r; })(renderSetup);
+// header: say plainly when changes are stuck
+updateStatusBadge = (orig => function(){ orig.apply(this, arguments); const el = $('syncStatus'); if(!el || mode !== 'cloud') return;
+  if(Cloud.pending && Cloud.lastErr && Cloud.online) el.textContent = '🔴 ' + Cloud.pending + ' change(s) NOT sent — open Setup → Sync check'; })(updateStatusBadge);
+Object.assign(window.RF = window.RF || {}, {tabAllowed, tileAllowed, myProfile, roleList, createStaffAccount, earlierRecords, syncFacts, setUserRole});
+// tabs are drawn during start-up; apply the role (and the partner's simple layout) once they exist
+setTimeout(applyProfileUI, 0); window.addEventListener('load', () => setTimeout(applyProfileUI, 50));
+
+// Home: hide group buttons (Money, Track…) that have no tiles for this person's role
+renderHome = (orig => function(){ const r = orig.apply(this, arguments); try{ if(myProfile()){ const ks = new Set(homeTiles().map(x => x.k)); document.querySelectorAll('#view-home [data-hg]').forEach(b => { if(b.dataset.hg !== 'all') b.style.display = ks.has(b.dataset.hg) ? '' : 'none'; }); } }catch(e){} return r; })(renderHome);
 
 })();
 </script>
