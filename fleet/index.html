@@ -2604,6 +2604,20 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
 .fl-sc{font-weight:800;font-size:18px}.fl-sc.good{color:#047857}.fl-sc.warn{color:#b45309}.fl-sc.bad{color:#b91c1c}
 .fl-flag{border-left:4px solid #b45309;background:#fff7ed;padding:8px;border-radius:6px;margin:8px 0;color:#7c2d12}.fl-flag b{color:#9a3412}
 .bad{color:#b91c1c}.warn{color:#b45309}
+/* v8.0 inspection */
+.fl-prog{display:flex;justify-content:space-between;margin-top:8px;font-size:14px;color:#374151}
+.fl-ci{padding:8px 0;border-bottom:1px solid #eef0f3}.fl-ci .n{font-weight:600;font-size:14px;margin-bottom:5px}
+.fl-ci .b{display:flex;gap:6px}.fl-ci .b button{flex:1;padding:9px 0;border:2px solid #d1d5db;background:#fff;border-radius:8px;font-weight:700;color:#6b7280;font-size:14px}
+.fl-ci .b button.on.p{border-color:#16a34a;background:#f0fdf4;color:#15803d}.fl-ci .b button.on.f{border-color:#dc2626;background:#fef2f2;color:#b91c1c}.fl-ci .b button.on.na{border-color:#6b7280;background:#f3f4f6;color:#374151}
+.fl-cin{width:100%;margin-top:6px;border:2px solid #fca5a5!important}
+#dcSave:disabled{opacity:.45}
+/* v8.2 test drive */
+#flTrial{position:fixed;inset:0;background:#0b1228;z-index:9000;display:none;overflow:auto;padding:16px}#flTrial.on{display:block}
+#flTrial .inner{max-width:460px;margin:20px auto;background:#fff;border-radius:16px;padding:18px}
+.fl-tw-head{text-align:center;font-size:34px}.fl-tw-head h2{font-size:22px;margin:4px 0;color:#0b2a6b}.fl-tw-head div{font-size:15px;color:#374151}
+.fl-tw-list{margin:12px 0;padding-left:20px;font-size:14px;line-height:1.6}
+#flTrialBar{background:#fef3c7;color:#78350f;padding:7px 10px;font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#flTrialBar button{border:1px solid #b45309;background:#fff;color:#92400e;border-radius:6px;padding:3px 8px;font-weight:700;font-size:12px}
 </style>
 <script>
 (function(){
@@ -2615,7 +2629,7 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
    database (Supabase) with staff logins and roles (admin / cashier / technician).
    Without the team database everything still works on this device alone, as before.
 =========================================================================================== */
-const RF_VERSION = '7.9';
+const RF_VERSION = '8.2';
 /* Multi-user team database: built, but switched OFF for now. Set to true to turn it back on. */
 const EDITION = 'fleet';      // build script switches this to 'partner' for the partner-garage app
 const TEAM_ENABLED = true; // every edition: each business connects its own team database (partners keep their separate link to Robotik HQ)
@@ -2885,13 +2899,13 @@ const Cloud = {
         const small = items.filter(r => r.kind !== 'photo').slice(0, 25);
         const batch = small.length ? small : items.slice(0, 1);
         try{
-          const back = await this.rest('POST', 'rf_records?on_conflict=id' + (batch[0].kind === 'photo' ? '' : '&select=id,kind,data,deleted,updated_at,rev'), batch, 'resolution=merge-duplicates,' + (batch[0].kind === 'photo' ? 'return=minimal' : 'return=representation'));
+          const back = await this.rest('POST', 'rf_records?on_conflict=' + (this.cfg && this.cfg.fleetCloud ? 'fleet,id' : 'id') + (batch[0].kind === 'photo' ? '' : '&select=id,kind,data,deleted,updated_at,rev'), batch, 'resolution=merge-duplicates,' + (batch[0].kind === 'photo' ? 'return=minimal' : 'return=representation'));
           await this.afterWrite(batch, back);
         }catch(e){
           if(e.status === 0 || e.status >= 500 || e.status === 401){ this.lastErr = e.message; break; }
           // Rejected (e.g. role not allowed): try one by one so good changes still go through
           for(const r of batch){
-            try{ const back1 = await this.rest('POST', 'rf_records?on_conflict=id' + (r.kind === 'photo' ? '' : '&select=id,kind,data,deleted,updated_at,rev'), [r], 'resolution=merge-duplicates,' + (r.kind === 'photo' ? 'return=minimal' : 'return=representation')); await this.afterWrite([r], back1); continue; }
+            try{ const back1 = await this.rest('POST', 'rf_records?on_conflict=' + (this.cfg && this.cfg.fleetCloud ? 'fleet,id' : 'id') + (r.kind === 'photo' ? '' : '&select=id,kind,data,deleted,updated_at,rev'), [r], 'resolution=merge-duplicates,' + (r.kind === 'photo' ? 'return=minimal' : 'return=representation')); await this.afterWrite([r], back1); continue; }
             catch(e2){ if(e2.status === 0 || e2.status >= 500) throw e2; toast('Not saved to team database (' + (r.data && (r.data.docNo || r.data.name || r.kind)) + '): ' + e2.message + ' — kept under Setup → Sync problems.', true);
               try{ const rej = (await idbGetMeta('rejected')) || []; rej.unshift({row:r, error:e2.message, status:e2.status, at:nowIso(), by:myName()}); await idbSetMeta('rejected', rej.slice(0, 200)); }catch(e3){}
               // show the team database's real copy again, so the screen never pretends the refused change was saved
@@ -8803,7 +8817,7 @@ function portalLink(reg){ const r = String(reg || '').toUpperCase().replace(/[^A
 function portalMsg(d){ return 'Hello ' + (d.custName || '') + ', you can follow the progress of your vehicle ' + (d.vehReg || '') + ' at ' + brandVals().biz + ' here: ' + portalLink(d.vehReg) +
   '\nType your plate number and the name on your job card (' + (d.custName || '') + ') to see photos, videos, the quotation and the expected completion date.'; }
 async function uploadMedia(blob, rootId, ext, type){
-  const path = 'jobs/' + String(rootId).replace(/[^A-Za-z0-9_-]/g, '') + '/' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10) + '.' + ext;
+  const path = (Cloud.cfg && Cloud.cfg.fleetCloud && Cloud.fleetId ? Cloud.fleetId + '/' : '') + 'jobs/' + String(rootId).replace(/[^A-Za-z0-9_-]/g, '') + '/' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10) + '.' + ext;
   const r = await fetch(Cloud.cfg.url + '/storage/v1/object/' + MEDIA_BUCKET + '/' + path, {method:'POST', headers:{apikey:Cloud.cfg.key, Authorization:'Bearer ' + await Cloud.token(), 'Content-Type':type, 'x-upsert':'false', 'cache-control':'31536000'}, body:blob});
   if(!r.ok){ let m = ''; try{ const j = await r.json(); m = j.message || j.error || ''; }catch(e){} throw new Error(/bucket not found|not found/i.test(m) ? 'Photo storage is not set up yet — run the v5.7 database update (PART 1) in Supabase.' : /row-level|policy|unauthor/i.test(m) ? 'Your login is not allowed to upload photos.' : /size|large/i.test(m) ? 'The file is too large (limit 50 MB).' : 'Upload failed: ' + (m || r.status)); }
   return {url:Cloud.cfg.url + '/storage/v1/object/public/' + MEDIA_BUCKET + '/' + path, path, type:/^video/.test(type) ? 'video' : 'image'};
@@ -9707,7 +9721,8 @@ function genPassword(){ const c = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvw
 async function createStaffAccount(name, email, password, base, role){
   if(mode !== 'cloud' || !can('admin')) throw new Error('Only an admin signed in to the team database can create users.');
   const before = new Set(((await Cloud.staff()) || []).map(s => s.user_id));
-  let j; try{ j = await Cloud.auth('signup', {email, password, data:{name}}); }
+  let invite = null; if(Cloud.cfg && Cloud.cfg.fleetCloud){ invite = await Cloud.rest('POST', 'rpc/fc_new_invite', {p_role:base || 'technician'}); }
+  let j; try{ j = await Cloud.auth('signup', {email, password, data:invite ? {name, invite} : {name}}); }
   catch(e){ if(/registered|exists/i.test(e.message)) throw new Error('That email already has an account. Find it in the list below and change its role instead.'); if(e.status === 429) throw new Error('Too many new accounts in a short time — wait a few minutes and try again.'); throw e; }
   const u = j.user || j, uid = u && u.id;
   if(!uid) throw new Error('The team database did not create the account.');
@@ -9721,10 +9736,10 @@ async function createStaffAccount(name, email, password, base, role){
   modal(`<h2 style="margin-top:0">✅ ${esc(name)} can now sign in</h2>
     <div class="rf-row" style="font-size:15px"><div>Email: <b>${esc(email)}</b></div><div>Password: <b style="font-family:monospace">${esc(password)}</b></div><div>Role: <b>${esc(role ? role.name : 'Standard ' + base)}</b></div></div>
     ${confirmNeeded ? '<p class="rf-note" style="color:#b45309"><b>One more step:</b> your team database asks new people to confirm their email first. They should open the email from Supabase and tap the link — or, to skip this for staff you create yourself, in Supabase go to Authentication → Sign In / Providers → Email and turn off “Confirm email”.</p>' : ''}
-    <p class="rf-note">On their phone or the office computer: open the app → Setup → connect the team database (same Project URL and key as yours) → Sign in with this email and password.</p>
+    <p class="rf-note">${Cloud.cfg && Cloud.cfg.fleetCloud ? 'On their phone: open the app link in Chrome → Setup → Robotik Fleet Cloud → Sign in with this email and password.' : 'On their phone or the office computer: open the app → Setup → connect the team database (same Project URL and key as yours) → Sign in with this email and password.'}</p>
     <div class="rf-tools"><button class="rf-btn wa" id="nuWa">💬 Send login by WhatsApp</button><button class="rf-btn grey" id="nuOk">Done</button></div>`);
   $('nuOk').onclick = closeModal;
-  $('nuWa').onclick = () => window.open('https://wa.me/?text=' + encodeURIComponent(`Hello ${name}, your login for ${(COMPANIES[0] || {}).name || 'our garage app'}:\nApp: ${location.href.split('#')[0].split('?')[0]}\nEmail: ${email}\nPassword: ${password}\n\nOpen the app → Setup → connect the team database (I will give you the code) → Sign in.`), '_blank');
+  $('nuWa').onclick = () => window.open('https://wa.me/?text=' + encodeURIComponent(`Hello ${name}, your login for ${(COMPANIES[0] || {}).name || 'our garage app'}:\nApp: ${location.href.split('#')[0].split('?')[0]}\nEmail: ${email}\nPassword: ${password}\n\n${Cloud.cfg && Cloud.cfg.fleetCloud ? 'Open the app link in Chrome → Setup → Robotik Fleet Cloud → Sign in. Install it from Chrome (⋮ → Install app).' : 'Open the app → Setup → connect the team database (I will give you the code) → Sign in.'}`), '_blank');
 }
 function bindUsersTools(box){
   if($('rfNewUser')) $('rfNewUser').onclick = newUserModal;
@@ -10034,7 +10049,7 @@ function editTrip(id, preset){
     {k:'vehicleId', label:'Vehicle', type:'select', opts:vehOpts(), req:true}, {k:'driverId', label:'Driver', type:'select', opts:drvOpts('—'), half:true}, {k:'date', label:'Date', type:'date', half:true},
     {k:'from', label:'From', half:true}, {k:'to', label:'To', half:true}, {k:'startKm', label:'Start km', type:'number', half:true}, {k:'endKm', label:'End km', type:'number', half:true},
     {k:'purpose', label:'Purpose / load', half:true}, {k:'income', label:'Income from this trip (optional)', type:'number', half:true}
-  ], x, v => { if(!v.vehicleId) throw new Error('Choose the vehicle.'); if(N(v.endKm) && N(v.startKm) && N(v.endKm) < N(v.startKm)) throw new Error('End km is lower than start km.');
+  ], x, v => { if(!v.vehicleId) throw new Error('Choose the vehicle.'); if(N(v.endKm) && N(v.startKm) && N(v.endKm) < N(v.startKm)) throw new Error('End km is lower than start km.'); if(checkOdo(v.vehicleId, v.startKm, v.date, x.id) === false || checkOdo(v.vehicleId, v.endKm, v.date, x.id) === false) return false;
     Store.put('ftrip', Object.assign({}, x, v)); const t = fv(v.vehicleId); if(t && N(v.endKm) > N(t.km)) Store.put('truck', Object.assign({}, t, {km:N(v.endKm), kmDate:v.date})); toast('Trip saved.'); },
   id && can('cashier') ? {label:'Delete', fn:async () => { if(!(await askConfirm('Delete this trip?'))) return false; Store.remove('ftrip', x.id); }} : null);
 }
@@ -10177,7 +10192,7 @@ function renderFleetFuel(){
   if(ffSeg === 'fuel'){
     const fills = Store.list('ffuel').sort((a, b) => String(b.date).localeCompare(String(a.date)) || N(b.km) - N(a.km));
     // km per litre between full fills of the same vehicle
-    const eff = {}; fvList(true).forEach(t => { const f = Store.list('ffuel').filter(x => x.vehicleId === t.id && N(x.km)).sort((a, b) => N(a.km) - N(b.km)); for(let i = 1; i < f.length; i++) if(f[i].full !== false && N(f[i].km) > N(f[i - 1].km)) eff[f[i].id] = (N(f[i].km) - N(f[i - 1].km)) / N(f[i].litres); });
+    const eff = {}; fvList(true).forEach(t => fuelIntervals(t.id).forEach(x => { eff[x.fill.id] = x.kmpl; }));
     const p = periodOf('month'), mf = fills.filter(x => fInR(x.date, p.f, p.t));
     h += `<div class="card"><h2 class="red">FUEL</h2><div class="rf-tools"><button class="rf-btn green big" id="ffAdd">＋ Add fuel</button></div>
       ${fleetKpis([['Litres this month', nf(mf.reduce((s, x) => s + N(x.litres), 0), 1)], ['Spent this month', shortMoney(mf.reduce((s, x) => s + N(x.cost), 0))], ['Average price / L', mf.length ? money(mf.reduce((s, x) => s + N(x.cost), 0) / Math.max(1, mf.reduce((s, x) => s + N(x.litres), 0))) : '—']])}
@@ -10290,12 +10305,11 @@ async function renderFleetRobotik(){
   } else if(robSeg === 'invoices'){
     const inv = (f.orders || []).filter(o => o.invoice_no), cr = f.credit || {};
     box.innerHTML = wrap('INVOICES & BALANCE', off + fleetKpis([['Balance owed', money(f.balance || 0), N(f.balance) > 0.5 ? 'neg' : ''], ['Unpaid invoices', f.unpaid || 0], ['Credit limit', N(cr.limit) ? money(cr.limit) : '—'], ['Days to pay', N(cr.days) || '—']])
-      + (inv.map(o => { const bal = N(o.invoice_total) - N(o.invoice_paid), logged = Store.list('fservice').some(x => x.ref === o.invoice_no);
+      + (inv.map(o => { const bal = N(o.invoice_total) - N(o.invoice_paid), logged = invoiceAllocated(o);
         return `<div class="rf-row"><div class="t"><span>🧾 ${esc(o.invoice_no)} · ${esc(o.vehicles || '')}</span><span class="rf-badge ${bal > 0.5 ? 'amber' : 'green'}">${bal > 0.5 ? 'balance ' + money(bal) : 'paid'}</span></div><div class="m">${money(o.invoice_total)} · ${esc((FLEET_SERVICES.find(s => s[0] === o.service) || [])[1] || o.service || '')} · ${esc(fmtDate(String(o.updated_at || o.created_at).slice(0, 10)))}</div>
-          <div class="acts">${logged ? '<span class="rf-note">✓ in vehicle costs</span>' : `<button class="rf-btn" data-rinv="${esc(o.invoice_no)}">＋ Add to vehicle costs</button>`}</div></div>`; }).join('') || '<div class="rf-empty">No invoices yet.</div>')
+          <div class="acts">${logged.done ? '<span class="rf-note">✓ in vehicle costs (' + logged.n + ' vehicle' + (logged.n > 1 ? 's' : '') + ')</span>' : `<button class="rf-btn" data-rinv="${esc(o.invoice_no)}">${logged.sum ? '⚠ ' + money(N(o.invoice_total) - logged.sum) + ' not yet allocated — allocate' : '＋ Allocate to vehicle costs'}</button>`}</div></div>`; }).join('') || '<div class="rf-empty">No invoices yet.</div>')
       + '<p class="rf-note">Pay by transfer using the invoice number as reference; Robotik Fix records the payment and it shows here.</p>', true);
-    bind(box, '[data-rinv]', 'click', el => { const o = inv.find(x => x.invoice_no === el.dataset.rinv), ids = (o.vehicleIds || []).filter(id => fv(id));
-      editService(null, {vehicleId:ids[0] || '', vendor:'Robotik Fix', ref:o.invoice_no, cost:N(o.invoice_total) / Math.max(1, ids.length || 1), type:/mount|rotate|balance|align|combo|tyre|wheel/.test(o.service || '') ? 'Tyres' : /brake|drum/.test(o.service || '') ? 'Brakes' : o.service === 'service' ? 'Routine service' : 'Repair', desc:((FLEET_SERVICES.find(s => s[0] === o.service) || [])[1] || '') + ' — Robotik Fix ' + o.invoice_no}); });
+    bind(box, '[data-rinv]', 'click', el => allocateInvoice(inv.find(x => x.invoice_no === el.dataset.rinv)));
   } else {
     const due = fleetDueList(), on = !!Store.setting().fleetShareDue;
     box.innerHTML = wrap('SERVICE REMINDERS', `<label style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><input type="checkbox" id="rdShare"${on ? ' checked' : ''} style="width:20px;height:20px"> Share my vehicles that are due for service with Robotik Fix, so they can offer to do the work</label>
@@ -10426,7 +10440,7 @@ async function renderFleetsHQ(hqFleetSeg){
   if($('hfqNew')) $('hfqNew').onclick = () => newQuote('');
   bind(box, '[data-hfq]', 'click', el => newQuote(el.dataset.hfq, el.dataset.veh, el.dataset.what));
 }
-function fleetInviteMsg(name, code){ return `Hello ${name}! Robotik Fix is giving you Robotik Fleet Manager FREE — manage all your vehicles on your phone: papers & expiry alerts, drivers, daily checks, fuel & trips, tyres, service reminders, and daily/weekly/monthly/annual reports with charts.\n\nYou can also send us jobs, follow each job, approve our quotes and see your invoices — all in the app.\n\nOpen this link (your fleet code ${code} is built in), then tap Setup → My Business:\n${fleetAppLink(code)}\n\nAdd it to your home screen to use it like an app. — Robotik Fix, 142 Lekki-Epe Expressway, Ikate`; }
+function fleetInviteMsg(name, code){ return `Hello ${name}! Robotik Fix is giving you Robotik Fleet Manager FREE — manage all your vehicles on your phone: papers & expiry alerts, drivers, daily checks, fuel & trips, tyres, service reminders, and daily/weekly/monthly/annual reports with charts.\n\nYou can also send us jobs, follow each job, approve our quotes and see your invoices — all in the app.\n\nOpen this link in Chrome (your fleet code ${code} is built in), enter your company details, then in Setup tap “Create my fleet account” to use it on all your team's phones:\n${fleetAppLink(code)}\n\nAdd it to your home screen to use it like an app. — Robotik Fix, 142 Lekki-Epe Expressway, Ikate`; }
 function fleetQuoteForm(keys, code, veh, what){
   if(!keys.length){ toast('Create a fleet code first.', true); return; }
   const orders = pOrders.filter(o => o.code && !['done', 'cancelled'].includes(o.status));
@@ -10654,9 +10668,19 @@ function backInServiceModal(vid){
     {to:dtLocal()}, v => { if(new Date(v.to) > new Date(Date.now() + 6e4)) throw new Error('That time is in the future.'); returnToService(vid, v.to); toast(fvShort(t) + ' is back in service.'); });
 }
 /* ---------- fuel consumption against the vehicle's own average ---------- */
+// ONE fuel engine for the fuel list, anomalies, exceptions and driver scores (full-tank to full-tank):
+// km between two FULL fills ÷ ALL litres bought after the first full fill up to and including the next one (partial fills included)
 function fuelIntervals(vid){
-  const f = Store.list('ffuel').filter(x => x.vehicleId === vid && N(x.km) && N(x.litres)).sort((a, b) => N(a.km) - N(b.km)), out = [];
-  for(let i = 1; i < f.length; i++) if(f[i].full !== false && f[i - 1].full !== false && N(f[i].km) > N(f[i - 1].km)) out.push({fill:f[i], km:N(f[i].km) - N(f[i - 1].km), kmpl:(N(f[i].km) - N(f[i - 1].km)) / N(f[i].litres)});
+  const f = Store.list('ffuel').filter(x => x.vehicleId === vid && N(x.litres) > 0).sort((a, b) => (N(a.km) || 1e12) - (N(b.km) || 1e12) || String(a.date + (a.time || '')).localeCompare(String(b.date + (b.time || '')))), out = [];
+  let base = null, litres = 0, parts = [];
+  f.forEach(x => {
+    const full = x.full !== false;
+    if(base){ litres += N(x.litres); parts.push(x); }
+    if(full && N(x.km)){
+      if(base && N(x.km) > N(base.km) && litres > 0) out.push({fill:x, from:base, km:N(x.km) - N(base.km), litres, kmpl:(N(x.km) - N(base.km)) / litres, partials:parts.length - 1, fills:parts.slice()});
+      base = x; litres = 0; parts = [];
+    } else if(full && !N(x.km)){ base = null; litres = 0; parts = []; }   // a full tank without an odometer breaks the chain
+  });
   return out;
 }
 function fuelAnomaly(vid){
@@ -10690,7 +10714,7 @@ fleetAlerts = function(){
   if(unchecked.length) push(0, '📋', `${unchecked.length} active vehicle(s) not checked today: ${unchecked.slice(0, 6).map(fvShort).join(', ')}${unchecked.length > 6 ? '…' : ''}`, ['check', '']);
   return out.sort((a, b) => b.sev - a.sev);
 };
-function safetyWords(c){ const it = Object.entries(c.items || {}).filter(([k, v]) => v !== 'OK' && SAFETY_ITEMS.includes(k)).map(([k]) => k.replace(' & wheel nuts', '').replace(' & indicators', '')); return it.length ? it.join(', ') : 'Safety'; }
+function safetyWords(c){ const it = Object.entries(c.items || {}).filter(([k, v]) => /^(Not OK|Fail)$/.test(v) && SAFETY_ITEMS.includes(k)).map(([k]) => k.replace(' & wheel nuts', '').replace(' & indicators', '')); return it.length ? it.join(', ') : 'Safety'; }
 const _bindAlertActs0 = bindAlertActs;
 bindAlertActs = function(v){ _bindAlertActs0(v); bind(v, '[data-fact="plan"]', 'click', el => { segState.fservice = 'plans'; showTab('fservice'); setTimeout(() => editPlan(el.dataset.fid), 200); });
   bind(v, '[data-fact="fuel"]', 'click', el => { segState.ffuel = 'fuel'; showTab('ffuel'); }); };
@@ -10758,7 +10782,7 @@ editService = function(id, preset){
     {k:'cost', label:'Total cost', type:'number', half:true}, {k:'ref', label:'Invoice / job no.', half:true}, {k:'by', label:'Mechanic / supervisor'},
     {k:'offFrom', label:'Vehicle off road from (date & time)', type:'datetime-local', half:true}, {k:'offTo', label:'Back in operation (date & time)', type:'datetime-local', half:true}];
   const box = formModal(id ? 'Edit service / repair' : 'Log service or repair', fields, vals, v => {
-    if(!v.vehicleId) throw new Error('Choose the vehicle.');
+    if(!v.vehicleId) throw new Error('Choose the vehicle.'); if(checkOdo(v.vehicleId, v.km, v.date, s.id) === false) return false;
     const items = [...document.querySelectorAll('#fsItems [data-mi]:checked')].map(i => i.dataset.mi);
     if(v.offTo && !v.offFrom) throw new Error('Enter when the vehicle went off road, or clear “Back in operation”.');
     if(v.offFrom && v.offTo && new Date(v.offTo) < new Date(v.offFrom)) throw new Error('“Back in operation” is before “off road from”.');
@@ -11162,6 +11186,7 @@ function renderHealthForm(v){
     const vid = q('#haV').value, who = q('#haA').value.trim(), systems = readSys(), r = healthResult({systems});
     if(!vid){ toast('Choose the vehicle.', true); return; } if(who.length < 2){ toast('Enter the technician / assessor name.', true); return; } if(!r.checked){ toast('Score at least one system.', true); return; }
     const dtcs = q('#haDtc').value.toUpperCase().split(/[\s,;]+/).filter(Boolean), badDtc = dtcs.find(c => !/^[PBCU][0-9A-F]{4}$/.test(c)); if(badDtc){ toast('“' + badDtc + '” is not a fault code (format P0420).', true); return; }
+    try{ if(checkOdo(vid, q('#haK').value, q('#haD').value, h.id) === false) return; }catch(e){ toast(e.message, true); return; }
     let sig = h.signature || '', signedBy = h.signedBy || '';
     if(pad.dirty()){ if(!q('#haSigOk').checked){ toast('Tick the sign-off statement.', true); return; } sig = pad.data(); signedBy = who; }
     const km = N(q('#haK').value);
@@ -11501,7 +11526,7 @@ editFuel = function(id, preset){
     {k:'_ph', type:'html', html:`<div class="field"><label>Photos</label><div class="rf-tools"><label class="rf-btn grey" style="cursor:pointer">📷 Odometer<input type="file" id="ffOdo" accept="image/*" capture="environment" style="display:none"></label><label class="rf-btn grey" style="cursor:pointer">🧾 Receipt<input type="file" id="ffRc" accept="image/*" capture="environment" style="display:none"></label></div><div id="ffPh" class="fl-photos"></div></div>`}];
   const box = formModal(id ? 'Edit fuel' : 'Add fuel', fields, x, v => {
     if(!v.vehicleId) throw new Error('Choose the vehicle.'); if(!(N(v.litres) > 0)) throw new Error('Enter the litres.');
-    const t = fv(v.vehicleId), prev = curKm(v.vehicleId); if(N(v.km) && prev && N(v.km) < prev - 5 && !id) throw new Error('The odometer is lower than the last reading (' + nf(prev) + ' km). Check it.');
+    const t = fv(v.vehicleId); if(!N(v.km)) throw new Error('Enter the odometer reading — it is needed to work out fuel consumption.'); if(checkOdo(v.vehicleId, v.km, v.date, x.id) === false) return false;
     if(t && N(t.tankL) && N(v.litres) > N(t.tankL) * 1.02 && !confirm(nf(v.litres, 1) + ' L is more than the tank (' + nf(t.tankL) + ' L). Save anyway? It will be reported as an exception.')) return false;
     const rn = String(v.receiptNo || '').trim().toUpperCase(); if(rn && Store.list('ffuel').some(f => f.id !== x.id && String(f.receiptNo || '').trim().toUpperCase() === rn) && !confirm('Receipt ' + v.receiptNo + ' has already been entered. Save anyway? It will be reported as a duplicate.')) return false;
     const rec = Object.assign({}, x, v, {odoPhoto:ph.odo, rcptPhoto:ph.rcpt}); delete rec._ph;
@@ -11566,7 +11591,7 @@ if(FLEET) tyreAction = function(truck, pos){
   fields.push({k:'note', label:'Note'});
   formModal(truck.plate + ' — ' + pos + (ty ? ' · ' + ty.tid + ' ' + (ty.brand || '') : cur ? ' · ' + (cur.brand || '') + ' ' + (cur.serial || '') : ' (empty)'), fields, {date:today(), km:curKm(truck.id) || '', size:truck.tyreSize || '', reason:TYRE_REASONS[0], dest:'scrap', tyreId:stock[0] ? stock[0].id : 'new'}, v => {
     const ev = {truckId:truck.id, pos, by:myName() || '', action:v.action, date:v.date, km:N(v.km), note:v.note || ''};
-    if(N(v.km) && N(v.km) < curKm(truck.id) - 5) throw new Error('The odometer is lower than the last reading (' + nf(curKm(truck.id)) + ' km).');
+    if(checkOdo(truck.id, v.km, v.date) === false) return false;
     if(v.action === 'fit'){
       let tyre = v.tyreId !== 'new' ? Store.get('ftyre', v.tyreId) : null;
       if(!tyre){ if(!v.serial && !v.brand) throw new Error('Enter at least the serial number or brand of the new tyre.'); if(v.dot && !dotDate(v.dot)) throw new Error('DOT date code must be 4 digits: week and year, e.g. 2324.');
@@ -11674,9 +11699,9 @@ editDriver = function(id){
   formModal(id ? 'Edit driver' : 'Add driver', [
     {k:'name', label:'Full name', req:true}, {k:'phone', label:'Phone / WhatsApp', type:'tel', half:true}, {k:'staffNo', label:'Staff no.', half:true}, {k:'dept', label:'Department', half:true}, {k:'status', label:'Status', type:'select', opts:[['active', 'Active'], ['leave', 'On leave'], ['left', 'Left the company']], half:true},
     {k:'licNo', label:'Driver\'s licence no.', half:true}, {k:'licClass', label:'Licence class', half:true, ph:'e.g. E, F, G'}, {k:'licExp', label:'Licence expires', type:'date', half:true},
-    {k:'licVerified', label:'Licence verification', type:'select', opts:['Not verified', 'Verified', 'Failed / invalid'], half:true}, {k:'licVerifiedOn', label:'Verified on', type:'date', half:true}, {k:'licVerifyHow', label:'Verified how / by', half:true, ph:'e.g. FRSC portal — Ada'},
+    {k:'pin', label:'Driver PIN for inspections (4–6 digits, optional)', type:'password', half:true}, {k:'licVerified', label:'Licence verification', type:'select', opts:['Not verified', 'Verified', 'Failed / invalid'], half:true}, {k:'licVerifiedOn', label:'Verified on', type:'date', half:true}, {k:'licVerifyHow', label:'Verified how / by', half:true, ph:'e.g. FRSC portal — Ada'},
     {k:'medExp', label:'Medical due', type:'date', half:true}, {k:'eyeExp', label:'Eye test due', type:'date', half:true}, {k:'emergency', label:'Next of kin & phone'}, {k:'notes', label:'Notes', type:'textarea', rows:2}
-  ], d, v => { if(v.licVerified === 'Verified' && !v.licVerifiedOn) throw new Error('Enter the date the licence was verified.'); Store.put('fdriver', Object.assign({}, d, v)); toast(v.name + ' saved.'); },
+  ], d, v => { if(v.pin && !/^\d{4,6}$/.test(v.pin)) throw new Error('The PIN must be 4 to 6 digits.'); if(v.licVerified === 'Verified' && !v.licVerifiedOn) throw new Error('Enter the date the licence was verified.'); Store.put('fdriver', Object.assign({}, d, v)); toast(v.name + ' saved.'); },
   id && can('admin') ? {label:'Delete', fn:async () => { if(!(await askConfirm('Delete driver ' + d.name + '?'))) return false; Store.remove('fdriver', d.id); }} : null);
 };
 function driverFile(id){
@@ -11784,6 +11809,397 @@ if(FLEET){
       open.forEach(a => Store.put('fassign', Object.assign({}, a, {to:today()}))); if(t.driverId) Store.put('fassign', {vehicleId:t.id, driverId:t.driverId, from:today(), by:myName() || ''}); }); });
 }
 Object.assign(window.RF = window.RF || {}, {fleetAlerts:() => fleetAlerts(), fuelAnomaly:v => fuelAnomaly(v), lowTyres:v => lowTyres(v), setSeg:(k, v) => { segState[k] = v; }, approvers, pickApprover, budgetLines, fuelExceptions, tyreLife, tyreForecast, dotDate, driverScore, tco, replacementFlags, newRequest, reqActionModal, editFuel, tyreAction:(...a) => tyreAction(...a), editDriver});
+/* ===================== FLEET MANAGER v8.0 corrections =====================
+   1. Daily inspection: every item must be answered Pass / Fail / N/A (nothing is pre-ticked); N/A is not allowed on safety items;
+      a Fail needs a note; the driver must be identified (licence valid, PIN if set) and the odometer entered and validated.
+   2. Fuel: one engine (fuelIntervals) for the fuel list, anomalies, exceptions and driver scores — partial fills between full tanks count.
+   3. Robotik Fix invoices covering several vehicles are allocated across them and must add up to the invoice total.
+   4. Odometer: every entry is checked against earlier AND later readings (by date), with a warning on impossible jumps. */
+/* ---------- odometer validation, shared by every form ---------- */
+function odoPoints(vid, exId){
+  const p = [], add = (date, km, src, id) => { if(N(km) > 0 && id !== exId && date) p.push({date:String(date).slice(0, 10), km:N(km), src}); };
+  const t = fv(vid); if(t && N(t.addedKm)) add(t.addedDate || String(t.createdAt || '').slice(0, 10), t.addedKm, 'vehicle added', '_add');
+  Store.list('ffuel').forEach(x => { if(x.vehicleId === vid) add(x.date, x.km, 'fuel', x.id); });
+  Store.list('ftrip').forEach(x => { if(x.vehicleId === vid){ add(x.date, x.startKm, 'trip start', x.id); add(x.date, x.endKm, 'trip end', x.id); } });
+  Store.list('fcheck').forEach(x => { if(x.vehicleId === vid && !x.healthId) add(x.date, x.km, 'daily check', x.id); });
+  Store.list('fservice').forEach(x => { if(x.vehicleId === vid && !x.baseline) add(x.date, x.km, 'service', x.id); });
+  Store.list('tyreevent').forEach(x => { if(x.truckId === vid) add(x.date, x.km, 'tyre record', x.id); });
+  Store.list('fhealth').forEach(x => { if(x.vehicleId === vid) add(x.date, x.km, 'health assessment', x.id); });
+  return p;
+}
+function validateOdo(vid, km, date, exId){
+  km = N(km); if(!km) return {};
+  if(km > 3000000) return {error:'That odometer reading (' + nf(km) + ' km) is not realistic.'};
+  date = String(date || today()).slice(0, 10);
+  const pts = odoPoints(vid, exId), before = pts.filter(x => x.date <= date).sort((a, b) => b.km - a.km)[0], after = pts.filter(x => x.date > date).sort((a, b) => a.km - b.km)[0];
+  if(before && km < before.km - 5) return {error:'Odometer ' + nf(km) + ' km is LOWER than the ' + before.src + ' reading of ' + nf(before.km) + ' km on ' + fmtDate(before.date) + '. Check the reading.'};
+  if(after && km > after.km + 5) return {error:'Odometer ' + nf(km) + ' km is HIGHER than the later ' + after.src + ' reading of ' + nf(after.km) + ' km on ' + fmtDate(after.date) + '. Check the reading and the date.'};
+  if(before){ const t = fv(vid) || {}, days = Math.max(1, Math.round((new Date(date) - new Date(before.date)) / 864e5)), limit = days * (HEAVY_TYPES.includes(t.type) ? 1200 : 900) + 300;
+    if(km - before.km > limit) return {warn:nf(km - before.km) + ' km since the ' + before.src + ' on ' + fmtDate(before.date) + ' (' + days + ' day' + (days > 1 ? 's' : '') + ') is more than this vehicle can normally cover.'}; }
+  return {};
+}
+function checkOdo(vid, km, date, exId){
+  const r = validateOdo(vid, km, date, exId); if(r.error) throw new Error(r.error);
+  if(r.warn && !confirm(r.warn + '\n\nSave anyway? It will be flagged for checking.')) return false;
+  return true;
+}
+/* ---------- daily inspection: answer every item ---------- */
+dailyCheck = function(vehicleId){
+  const t0 = vehicleId ? fv(vehicleId) : null, ds = fdList(), ans = {}, notes = {};
+  const items = FCHECK_ITEMS.slice();
+  const box = modal(`<h2 style="margin-top:0">📋 Daily vehicle inspection</h2>
+    <div class="field"><label for="dcV">Vehicle *</label><select id="dcV">${vehOpts('— choose —').map(([k, l]) => `<option value="${esc(k)}"${k === (vehicleId || '') ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+    <div class="grid2"><div class="field"><label for="dcD">Driver *</label><select id="dcD"><option value="">— who is driving? —</option>${ds.map(d => `<option value="${esc(d.id)}"${t0 && t0.driverId === d.id ? ' selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div>
+      <div class="field" id="dcPinBox" style="display:none"><label for="dcPin">Driver PIN *</label><input id="dcPin" type="password" inputmode="numeric" maxlength="6" autocomplete="off"></div></div>
+    <div class="field"><label for="dcK">Odometer now (km) *</label><input id="dcK" type="number" inputmode="numeric" placeholder="Read it from the dashboard"><div class="rf-note" id="dcKn"></div></div>
+    <div class="fl-prog"><span id="dcCnt">0 of ${items.length} items completed</span><b id="dcPct">0%</b></div><div class="fl-bar sm"><i id="dcBar" style="width:0;background:#2a78d6"></i></div>
+    <div class="rf-note">Answer every item. 🛑 = safety-critical: N/A is not allowed, and a Fail grounds the vehicle.</div>
+    <div id="dcItems">${items.map(i => { const s = SAFETY_ITEMS.includes(i); return `<div class="fl-ci" data-dci="${esc(i)}"><div class="n">${s ? '🛑 ' : ''}${esc(i)}</div><div class="b"><button type="button" data-dcv="Pass">Pass</button><button type="button" data-dcv="Fail">Fail</button>${s ? '' : '<button type="button" data-dcv="N/A">N/A</button>'}</div><input class="fl-cin" data-dcn="${esc(i)}" placeholder="What is wrong? (required)" style="display:none"></div>`; }).join('')}</div>
+    <div class="field" style="margin-top:8px"><label for="dcN">Other remarks</label><textarea id="dcN" rows="2"></textarea></div>
+    <label style="display:flex;gap:8px;align-items:center;margin:4px 0"><input type="checkbox" id="dcSafe" style="width:20px;height:20px"> Something else makes the vehicle unsafe to drive (explain above)</label>
+    <div class="rf-tools"><button class="rf-btn green big" id="dcSave" disabled>Submit inspection</button><button class="rf-btn grey" id="dcX">Cancel</button></div>`);
+  const q = s => box.querySelector(s);
+  const drv = () => fd(q('#dcD').value);
+  const refresh = () => {
+    const n = items.filter(i => ans[i]).length, pct = Math.round(n / items.length * 100);
+    q('#dcCnt').textContent = n + ' of ' + items.length + ' items completed'; q('#dcPct').textContent = pct + '%'; q('#dcBar').style.width = pct + '%'; q('#dcBar').style.background = pct === 100 ? '#16a34a' : '#2a78d6';
+    const d = drv(); q('#dcPinBox').style.display = d && d.pin ? '' : 'none';
+    const ready = n === items.length && q('#dcV').value && q('#dcD').value && N(q('#dcK').value) > 0 && items.every(i => ans[i] !== 'Fail' || (notes[i] || '').trim().length >= 3);
+    q('#dcSave').disabled = !ready;
+  };
+  box.querySelectorAll('[data-dci]').forEach(row => row.querySelectorAll('[data-dcv]').forEach(b => b.onclick = () => {
+    const i = row.dataset.dci; ans[i] = b.dataset.dcv;
+    row.querySelectorAll('[data-dcv]').forEach(x => x.className = x === b ? 'on ' + (b.dataset.dcv === 'Pass' ? 'p' : b.dataset.dcv === 'Fail' ? 'f' : 'na') : '');
+    const inp = row.querySelector('[data-dcn]'); inp.style.display = ans[i] === 'Fail' ? '' : 'none'; if(ans[i] === 'Fail') inp.focus(); refresh(); }));
+  box.querySelectorAll('[data-dcn]').forEach(inp => inp.oninput = () => { notes[inp.dataset.dcn] = inp.value; refresh(); });
+  const odoNote = () => { const vid = q('#dcV').value, km = N(q('#dcK').value), last = vid ? curKm(vid) : 0; const r = vid && km ? validateOdo(vid, km, today()) : {};
+    q('#dcKn').innerHTML = r.error ? '<b style="color:#b91c1c">' + esc(r.error) + '</b>' : r.warn ? '<b style="color:#b45309">⚠ ' + esc(r.warn) + '</b>' : last ? 'Last recorded: ' + nf(last) + ' km' : ''; };
+  q('#dcV').onchange = e => { const v = fv(e.target.value); if(v && v.driverId && !q('#dcD').value) q('#dcD').value = v.driverId; odoNote(); refresh(); };
+  q('#dcD').onchange = refresh; q('#dcK').oninput = () => { odoNote(); refresh(); }; odoNote(); refresh();
+  q('#dcX').onclick = closeModal;
+  q('#dcSave').onclick = () => {
+    const vid = q('#dcV').value, d = drv(), km = N(q('#dcK').value);
+    if(!vid || !d){ toast('Choose the vehicle and the driver.', true); return; }
+    if(d.status === 'left'){ toast(d.name + ' has left the company.', true); return; }
+    if(d.licExp && daysTo(d.licExp) < 0){ toast('⛔ ' + d.name + '\'s driving licence expired on ' + fmtDate(d.licExp) + ' — this driver must not drive. Choose another driver.', true); return; }
+    if(d.licVerified === 'Failed / invalid'){ toast('⛔ ' + d.name + '\'s licence failed verification — this driver must not drive.', true); return; }
+    if(d.pin && q('#dcPin').value !== String(d.pin)){ toast('Wrong driver PIN.', true); return; }
+    const missing = items.filter(i => !ans[i]); if(missing.length){ toast('Answer every item — ' + missing.length + ' left.', true); return; }
+    let r; try{ r = checkOdo(vid, km, today()); }catch(e){ toast(e.message, true); return; } if(r === false) return;
+    const failed = items.filter(i => ans[i] === 'Fail'), note = q('#dcN').value.trim();
+    if(q('#dcSafe').checked && note.length < 3){ toast('Explain what makes the vehicle unsafe.', true); return; }
+    const defects = [failed.map(i => i + ': ' + notes[i].trim()).join('; '), note].filter(Boolean).join(' — ');
+    const safety = failed.some(i => SAFETY_ITEMS.includes(i)) || (q('#dcSafe').checked && !!note);
+    const c = Store.put('fcheck', {vehicleId:vid, driverId:d.id, driverName:d.name, date:today(), at:nowIso(), km, items:Object.assign({}, ans), itemNotes:Object.fromEntries(failed.map(i => [i, notes[i].trim()])), defects:failed.length || q('#dcSafe').checked ? defects : (note ? '' : ''), remarks:note, ok:!failed.length && !q('#dcSafe').checked, safety, by:myName() || d.name, pinOk:!!d.pin, odoWarn:validateOdo(vid, km, today()).warn || ''});
+    const t2 = fv(vid); if(t2 && km > N(t2.km)) Store.put('truck', Object.assign({}, t2, {km, kmDate:today()}));
+    if(safety) takeOffRoad(vid, {cat:'Breakdown', reason:'Grounded: ' + defects, grounded:true, defectId:c.id, status:'offroad'});
+    closeModal(); toast(safety ? '⛔ Safety defect — ' + fvShort(fv(vid)) + ' is GROUNDED until repaired and cleared.' : failed.length ? 'Inspection saved — ' + failed.length + ' defect(s) reported to the fleet manager.' : 'Inspection saved — all items passed.', safety);
+  };
+};
+/* ---------- Robotik Fix invoice across several vehicles ---------- */
+function invoiceAllocated(o){
+  const recs = Store.list('fservice').filter(x => x.ref === o.invoice_no && x.vendor === 'Robotik Fix'), sum = recs.reduce((a, x) => a + N(x.cost), 0);
+  return {sum, n:new Set(recs.map(x => x.vehicleId)).size, done:recs.length > 0 && Math.abs(sum - N(o.invoice_total)) < 1, recs};
+}
+function allocateInvoice(o){
+  if(!o) return; const total = N(o.invoice_total), done = invoiceAllocated(o), ids0 = (o.vehicleIds || []).filter(id => fv(id));
+  const ids = ids0.length ? ids0 : []; const rows = {}; done.recs.forEach(r => { rows[r.vehicleId] = N(rows[r.vehicleId]) + N(r.cost); });
+  const left = total - done.sum, startIds = ids.length ? ids : (fvList()[0] ? [fvList()[0].id] : []);
+  if(!done.recs.length) startIds.forEach((id, k) => { rows[id] = Math.floor(total / startIds.length) + (k === 0 ? total - Math.floor(total / startIds.length) * startIds.length : 0); });
+  const type = /mount|rotate|balance|align|combo|tyre|wheel/.test(o.service || '') ? 'Tyres' : /brake|drum/.test(o.service || '') ? 'Brakes' : o.service === 'service' ? 'Routine service' : 'Repair', svcName = (FLEET_SERVICES.find(s => s[0] === o.service) || [])[1] || '';
+  const box = modal(`<h2 style="margin-top:0">Allocate invoice ${esc(o.invoice_no)}</h2><div class="m">${esc(svcName)} · ${esc(o.vehicles || '')}</div><div class="fl-big" style="font-size:24px">${money(total)}</div>
+    <p class="rf-note">Share the invoice between the vehicles it covers. The amounts must add up to the invoice total. Use the amounts on the Robotik Fix invoice for each vehicle where they are shown.</p>
+    <div id="aiRows"></div><div class="rf-tools"><select id="aiAdd"><option value="">＋ add a vehicle…</option>${vehOpts().map(([k, l]) => `<option value="${esc(k)}">${esc(l)}</option>`).join('')}</select><button class="rf-btn grey" id="aiEq">Split equally</button></div>
+    <div class="fl-rem" id="aiSum"></div>
+    <div class="grid2"><div class="field"><label for="aiDate">Date</label><input id="aiDate" type="date" value="${esc(String(o.updated_at || o.created_at || today()).slice(0, 10))}"></div><div class="field"><label for="aiType">Work type</label><select id="aiType">${FS_TYPES.map(x => `<option${x === type ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></div></div>
+    <div class="rf-tools"><button class="rf-btn green" id="aiSave">Save allocation</button><button class="rf-btn grey" id="aiX">Cancel</button></div>`);
+  const q = s => box.querySelector(s);
+  const draw = () => { q('#aiRows').innerHTML = Object.keys(rows).map(id => `<div class="fl-rep" style="grid-template-columns:1.6fr 1fr auto"><span style="align-self:center">${esc(fvShort(fv(id)))} ${esc((fv(id) || {}).model || '')}</span><input type="number" data-aiv="${esc(id)}" value="${esc(String(rows[id]))}"><button class="rf-btn grey" data-aix="${esc(id)}">✕</button></div>`).join('');
+    box.querySelectorAll('[data-aiv]').forEach(i => i.oninput = () => { rows[i.dataset.aiv] = N(i.value); sum(); });
+    box.querySelectorAll('[data-aix]').forEach(b => b.onclick = () => { delete rows[b.dataset.aix]; draw(); }); sum(); };
+  const sum = () => { const s = Object.values(rows).reduce((a, b) => a + N(b), 0), d = total - s; q('#aiSum').className = 'fl-rem ' + (Math.abs(d) < 1 ? 'good' : 'bad'); q('#aiSum').textContent = Math.abs(d) < 1 ? '✓ Allocated in full: ' + money(s) : (d > 0 ? money(d) + ' still to allocate' : money(-d) + ' too much') + ' (allocated ' + money(s) + ' of ' + money(total) + ')'; return d; };
+  q('#aiAdd').onchange = e => { if(e.target.value && rows[e.target.value] == null){ rows[e.target.value] = Math.max(0, total - Object.values(rows).reduce((a, b) => a + N(b), 0)); draw(); } e.target.value = ''; };
+  q('#aiEq').onclick = () => { const k = Object.keys(rows); if(!k.length) return; const each = Math.floor(total / k.length); k.forEach((id, i) => rows[id] = each + (i === 0 ? total - each * k.length : 0)); draw(); };
+  q('#aiX').onclick = closeModal;
+  q('#aiSave').onclick = () => { if(!Object.keys(rows).length){ toast('Add at least one vehicle.', true); return; } if(Math.abs(sum()) >= 1){ toast('The amounts must add up to ' + money(total) + '.', true); return; }
+    if(Object.values(rows).some(v => N(v) < 0)){ toast('Amounts cannot be negative.', true); return; }
+    done.recs.forEach(r => Store.remove('fservice', r.id));
+    Object.entries(rows).filter(([, v]) => N(v) > 0).forEach(([id, v]) => Store.put('fservice', {vehicleId:id, date:q('#aiDate').value || today(), km:'', type:q('#aiType').value, vendor:'Robotik Fix', ref:o.invoice_no, cost:N(v), desc:svcName + ' — Robotik Fix ' + o.invoice_no + (Object.keys(rows).length > 1 ? ' (share of ' + money(total) + ')' : ''), items:[], allocation:{invoice:o.invoice_no, total, share:N(v)}}));
+    closeModal(); toast('Invoice allocated to ' + Object.keys(rows).length + ' vehicle(s).'); renderView(curTab); };
+  draw();
+}
+Object.assign(window.RF = window.RF || {}, {validateOdo, fuelIntervals:v => fuelIntervals(v), invoiceAllocated, allocateInvoice, dailyCheck});
+/* ===================== ROBOTIK FLEET CLOUD (v8.1) =====================
+   One Supabase project, run by Robotik Fix, for every fleet company. Each fleet is sealed off by the database itself.
+   Robotik Fix (Fleet tab → Fleet clients → Fleet Cloud): saves the Fleet Cloud address + publishable key (published to fleets
+   through the Robotik Fix public settings) and the registration key (kept on the admin's device only); every fleet code is registered.
+   Fleet owner: opens the invite → Setup → “Create my fleet account” (name, email, password). Staff: created by the fleet admin,
+   then simply “Sign in”. No database setup for anyone except Robotik Fix, once. */
+const FC_CFG_KEY = 'rf3_fleet_cloud', FC_REG_KEY = 'rf3_fleet_cloud_reg';
+function fcCfg(){ try{ return JSON.parse(localStorage.getItem(FC_CFG_KEY) || 'null'); }catch(e){ return null; } }
+function fcOn(){ return !!(Cloud.cfg && Cloud.cfg.fleetCloud); }
+async function fcRpc(cfg, fn, body, auth){
+  const h = {apikey:cfg.key, 'Content-Type':'application/json'}; if(auth) h.Authorization = 'Bearer ' + await Cloud.token();
+  let r; try{ r = await fetch(cfg.url + '/rest/v1/rpc/' + fn, {method:'POST', headers:h, body:JSON.stringify(body || {})}); }catch(e){ const er = new Error('No internet connection.'); er.status = 0; throw er; }
+  const t = await r.text(); let j = null; try{ j = t ? JSON.parse(t) : null; }catch(e){}
+  if(!r.ok){ const er = new Error((j && (j.message || j.hint)) || ('Fleet Cloud error ' + r.status)); er.status = r.status; throw er; }
+  return j;
+}
+/* ---------------- fleet edition ---------------- */
+async function loadFleetCloudCfg(){
+  try{ const rows = await hqFetch('rf_public?select=value&key=eq.fleet_cloud'); const v = rows && rows[0] && rows[0].value;
+    if(v && v.url && v.key){ localStorage.setItem(FC_CFG_KEY, JSON.stringify({url:v.url, key:v.key, at:nowIso()})); return v; }
+    localStorage.removeItem(FC_CFG_KEY); return null; }
+  catch(e){ return fcCfg(); }
+}
+function useFleetCloud(cfg){ localStorage.setItem(CFG_KEY, JSON.stringify({url:cfg.url, key:cfg.key, fleetCloud:true})); Cloud.loadCfg(); }
+async function fcLoadMe(){ if(!fcOn() || !Cloud.sess) return null; try{ const m = await Cloud.rest('POST', 'rpc/fc_me', {}); Cloud.fleetId = m && m.fleet; Cloud.fleetInfo = m; return m; }catch(e){ return null; } }
+function fleetCloudCardHtml(){
+  const cfg = fcCfg(), code = partnerCode();
+  if(fcOn() && mode === 'cloud'){
+    const fi = Cloud.fleetInfo || {}, early = (typeof earlierRecords === 'function' ? earlierRecords() : []).length;
+    return `<div class="card" id="rfFleetCloud"><h2 class="red">☁ ROBOTIK FLEET CLOUD</h2>
+      <div class="banner" style="background:#e8f8f1;border-color:#a7dcc3">✓ Connected${fi.name ? ' — <b>' + esc(fi.name) + '</b>' : ''}${me ? ' · signed in as <b>' + esc(me.name || me.email) + '</b> (' + esc(me.role) + ')' : ''}. Every phone your team signs in on shares the same vehicles, checks, fuel and costs.</div>
+      ${early ? `<p><b>${early}</b> record(s) were saved on this phone before you joined the Fleet Cloud.</p><button class="rf-btn green" id="fcUp">⬆ Upload them to the Fleet Cloud</button>` : ''}
+      ${can('admin') ? '<p class="rf-note">Add drivers and staff: <b>Team → Create user</b>. Send them their login by WhatsApp; they open the app and tap Sign in.</p>' : ''}
+      <p class="rf-note">Your records are kept by Robotik Fix in the Robotik Fleet Cloud and are visible only to people your admin adds to your fleet.</p></div>`;
+  }
+  if(!cfg) return `<div class="card" id="rfFleetCloud"><h2 class="red">☁ ROBOTIK FLEET CLOUD</h2><p>Share this fleet with your team on several phones. ${navigator.onLine ? 'The Fleet Cloud is not open yet — ask Robotik Fix.' : 'Connect to the internet to set it up.'}</p><button class="rf-btn grey" id="fcRetry">🔄 Check again</button></div>`;
+  const b = brandSetting() || {}, co = ((b.companies || [])[0] || {}).name || '';
+  return `<div class="card" id="rfFleetCloud"><h2 class="red">☁ ROBOTIK FLEET CLOUD</h2>
+    <p>Use the app on <b>all your team's phones</b> — drivers do checks and fuel, managers see everything — free, provided by Robotik Fix.</p>
+    <div class="rf-seg"><button class="${window.__fcMode !== 'signin' ? 'on' : ''}" data-fcm="new">New fleet account</button><button class="${window.__fcMode === 'signin' ? 'on' : ''}" data-fcm="signin">I already have a login</button></div>
+    ${window.__fcMode === 'signin' ? `<p class="rf-note">Fleet owners, managers and drivers whose login was created by their admin.</p><button class="rf-btn big" id="fcSignIn" style="width:100%">Sign in</button>` :
+    `<div id="fcNew">${code ? `<div class="rf-note">Fleet code: <b>${esc(code)}</b></div>` : '<div class="field"><label for="fcCode">Fleet code from Robotik Fix</label><input id="fcCode" placeholder="e.g. RF-7KQ2M9XA"></div>'}
+      <div class="field"><label for="fcCo">Fleet company name</label><input id="fcCo" value="${esc(co)}"></div>
+      <div class="field"><label for="fcYou">Your name</label><input id="fcYou" autocomplete="name" value="${esc(myName() || '')}"></div>
+      <div class="field"><label for="fcEmail">Email</label><input id="fcEmail" type="email" autocomplete="username"></div>
+      <div class="grid2"><div class="field"><label for="fcPw">Password (6+ characters)</label><input id="fcPw" type="password" autocomplete="new-password"></div><div class="field"><label for="fcPw2">Password again</label><input id="fcPw2" type="password" autocomplete="new-password"></div></div>
+      <label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="checkbox" id="fcAgree" style="width:20px;height:20px;flex:none"> <span>I understand our fleet records will be kept by Robotik Fix in the Robotik Fleet Cloud, visible only to people we add to our fleet.</span></label>
+      <button class="rf-btn green big" id="fcCreate" style="width:100%">Create my fleet account</button></div>`}
+    <p class="rf-note" id="fcMsg"></p></div>`;
+}
+async function fcCreateAccount(){
+  const cfg = fcCfg(), msg = t => { const m = $('fcMsg'); if(m) m.innerHTML = t; };
+  const code = (partnerCode() || ($('fcCode') ? $('fcCode').value : '')).trim().toUpperCase(), co = $('fcCo').value.trim(), name = $('fcYou').value.trim(), email = $('fcEmail').value.trim(), pw = $('fcPw').value;
+  if(!/^[A-Z0-9-]{6,40}$/.test(code)) return msg('Enter the fleet code Robotik Fix gave you.');
+  if(co.length < 2 || name.length < 2) return msg('Enter the fleet company name and your name.');
+  if(!/^\S+@\S+\.\S+$/.test(email)) return msg('Enter a valid email.');
+  if(pw.length < 6) return msg('Use a password of at least 6 characters.'); if(pw !== $('fcPw2').value) return msg('The two passwords are different.');
+  if(!$('fcAgree').checked) return msg('Tick the box to agree to where your records are kept.');
+  const btn = $('fcCreate'); btn.disabled = true; msg('Checking your fleet code…');
+  try{
+    const st = await fcRpc(cfg, 'fc_code_status', {p_code:code});
+    if(st === 'used'){ window.__fcMode = 'signin'; renderSetup(); toast('This fleet already has an account — sign in with your email and password.', true); return; }
+    if(st === 'off') return msg('This fleet code is switched off. Contact Robotik Fix.');
+    if(st !== 'available') return msg('This fleet code is not yet active in the Fleet Cloud. Ask Robotik Fix to activate it, then try again.');
+    msg('Creating your fleet…');
+    useFleetCloud(cfg);
+    const j = await Cloud.auth('signup', {email, password:pw, data:{name, fleet_code:code, fleet_name:co}});
+    localStorage.setItem(PCODE_KEY, code);
+    if(!j.access_token){ msg('<b>Almost done:</b> open the email from the Fleet Cloud and tap the confirmation link, then come back and tap <b>Sign in</b>.'); window.__fcMode = 'signin'; return; }
+    Cloud.saveSess(j); localStorage.removeItem('rf3_me'); me = null;
+    await startCloud(); await fcLoadMe();
+    toast('✅ Fleet account created — you are the admin of ' + co + '.');
+    if(typeof earlierRecords === 'function' && earlierRecords().length) setTimeout(() => copyEarlierRecords(), 600);
+    renderSetup();
+  }catch(e){ console.warn('fleet cloud signup', e && e.stack); msg(esc(/registered|already/i.test(e.message) ? 'That email already has an account — tap “I already have a login”.' : e.message)); if(!Cloud.sess){ localStorage.removeItem(CFG_KEY); Cloud.loadCfg(); } }
+  finally{ if($('fcCreate')) $('fcCreate').disabled = false; }
+}
+function bindFleetCloudCard(){
+  if($('fcRetry')) $('fcRetry').onclick = async () => { await loadFleetCloudCfg(); renderSetup(); };
+  bind($('rfFleetCloud') || document.createElement('div'), '[data-fcm]', 'click', el => { window.__fcMode = el.dataset.fcm; renderSetup(); });
+  if($('fcCreate')) $('fcCreate').onclick = fcCreateAccount;
+  if($('fcSignIn')) $('fcSignIn').onclick = async () => { const cfg = fcCfg(); if(!cfg) return; useFleetCloud(cfg); await startCloud(); };
+  if($('fcUp')) $('fcUp').onclick = async () => { await copyEarlierRecords(); renderSetup(); };
+}
+if(FLEET){
+  renderSetup = (orig => function(){ const r = orig.apply(this, arguments);
+    const box = $('rfSetupCards') || $('view-sync'); if(!box) return r;
+    const old = $('rfFleetCloud'); if(old) old.remove();
+    const holder = document.createElement('div'); holder.innerHTML = fleetCloudCardHtml(); const card = holder.firstElementChild;
+    const co = $('rfFleetCo'); if(co) co.after(card); else box.prepend(card);
+    // the do-it-yourself database stays available, labelled as the advanced choice
+    document.querySelectorAll('#view-sync .card h2').forEach(h => { if(/TEAM DATABASE/.test(h.textContent) && !fcOn()) h.textContent = 'ADVANCED: YOUR OWN DATABASE (instead of the Fleet Cloud)'; });
+    bindFleetCloudCard(); return r; })(renderSetup);
+  const _sc = startCloud;
+  startCloud = async function(){ await _sc.apply(this, arguments); if(fcOn() && Cloud.sess){ await fcLoadMe(); if(curTab === 'sync') renderSetup(); } };
+  const _sl = showLogin;
+  showLogin = function(msg, pending){ _sl.apply(this, arguments);
+    if(fcOn()){ const t = $('rfLoginToggle'); if(t) t.parentElement.innerHTML = '<span>New driver or staff member? Your fleet admin creates your login (Team → Create user).</span>';
+      const p = $('rfPending'); if(p && pending) p.querySelector('p').innerHTML = 'This login is not part of a fleet. If you are a driver or staff member, ask your fleet admin to create your login. If you own the fleet, use <b>Create my fleet account</b> with your fleet code.'; } };
+  const _rv4 = renderView; renderView = function(v){ if(v === 'team' && !segState.team && can('admin')) segState.team = 'users'; return _rv4.apply(this, arguments); };   // fleet admins open Team on their people
+  window.addEventListener('load', () => setTimeout(async () => { await loadFleetCloudCfg(); if(curTab === 'sync') renderSetup(); }, 400));
+}
+/* ---------------- Robotik Fix HQ: Fleet Cloud control ---------------- */
+function fcHqCfg(){ return Object.assign({}, fcCfg() || {}, {reg:localStorage.getItem(FC_REG_KEY) || ''}); }
+async function fcRegister(code, name, active){ const c = fcHqCfg(); if(!c.url || !c.reg) return null; return fcRpc(c, 'fc_register_code', {p_key:c.reg, p_code:code, p_name:name, p_active:active !== false}); }
+async function fleetCloudPanel(box, keys){
+  const c = fcHqCfg(); let ov = null, err = '';
+  if(c.url && c.reg){ try{ ov = await fcRpc(c, 'fc_overview', {p_key:c.reg}); }catch(e){ err = e.message; } }
+  const reg = new Map((ov || []).map(x => [x.code, x]));
+  const div = document.createElement('div'); div.className = 'card'; div.id = 'fcPanel';
+  div.innerHTML = `<h2>☁ ROBOTIK FLEET CLOUD</h2>${c.url && c.reg && !err ? `<div class="banner" style="background:#e8f8f1;border-color:#a7dcc3">✓ Fleet Cloud open: ${esc(c.url.replace(/^https?:\/\//, ''))}. Fleet owners create their own account from the invite link — no database work for them.</div>` :
+      `<p>One free Supabase project for all your fleet clients. Create it once (see the setup guide), run <b>fleet-cloud-setup.sql</b>, then paste the three values here.</p>${err ? `<p style="color:#b91c1c">${esc(err)}</p>` : ''}`}
+    <details${c.url && c.reg && !err ? '' : ' open'}><summary>Fleet Cloud settings</summary>
+      <div class="field"><label for="fcU">Project URL</label><input id="fcU" value="${esc(c.url || '')}" placeholder="https://xxxx.supabase.co"></div>
+      <div class="field"><label for="fcK">Publishable key</label><input id="fcK" value="${esc(c.key || '')}" placeholder="sb_publishable_…"></div>
+      <div class="field"><label for="fcR">Registration key (shown at the end of the setup SQL)</label><input id="fcR" value="${esc(c.reg || '')}" placeholder="RFC-…"></div>
+      <button class="rf-btn green need-admin" id="fcSave">Save &amp; register all fleet codes</button></details>
+    ${ov ? `<h3 class="fl-h3">Fleets in the Cloud</h3>${keys.map(k => { const x = reg.get(k.code); return `<div class="rf-row"><div class="t"><span>${esc(k.garage)}</span><span class="rf-badge ${!x ? 'amber' : x.registered ? 'green' : ''}">${!x ? 'not activated' : x.registered ? 'in use' : 'waiting for owner'}</span></div>${x && x.registered ? `<div class="m">${x.users} user(s) · ${x.vehicles} vehicle(s) · last activity ${x.last ? esc(new Date(x.last).toLocaleString('en-GB', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})) : '—'}</div>` : ''}</div>`; }).join('') || '<p class="rf-note">No fleet codes yet.</p>'}` : ''}`;
+  box.prepend(div); try{ applyRoleClass(); }catch(e){}
+  $('fcSave').onclick = async () => {
+    const url = $('fcU').value.trim().replace(/\/+$/, ''), key = $('fcK').value.trim(), regk = $('fcR').value.trim();
+    if(!/^https:\/\/.+/.test(url) || key.length < 20){ toast('Enter the Project URL and publishable key.', true); return; }
+    if(/^sb_secret_|service_role/.test(key)){ toast('That is the SECRET key — never put it in the app. Use the publishable key.', true); return; }
+    if(!/^RFC-[0-9A-F]{24}$/i.test(regk)){ toast('Enter the registration key shown at the end of the setup SQL (RFC-…).', true); return; }
+    try{ await fcRpc({url, key}, 'fc_overview', {p_key:regk}); }catch(e){ toast('Fleet Cloud not reachable or key wrong: ' + e.message, true); return; }
+    localStorage.setItem(FC_CFG_KEY, JSON.stringify({url, key})); localStorage.setItem(FC_REG_KEY, regk);
+    try{ await Cloud.rest('POST', 'rf_public?on_conflict=key', [{key:'fleet_cloud', value:{url, key}, updated_at:nowIso()}], 'resolution=merge-duplicates,return=minimal'); }catch(e){ toast('Saved here, but could not publish it to fleets: ' + e.message, true); }
+    let n = 0; for(const k of keys){ try{ await fcRegister(k.code, k.garage, k.active); n++; }catch(e){} }
+    toast('Fleet Cloud saved — ' + n + ' fleet code(s) activated.'); renderView('fleet');
+  };
+}
+if(EDITION === 'robotik'){
+  // codes are activated in the Fleet Cloud as soon as Robotik Fix creates or switches them
+  const _rp = Cloud.rest.bind(Cloud);
+  Cloud.rest = async function(method, path, body, prefer){
+    const out = await _rp(method, path, body, prefer);
+    try{ if(/^rf_partner_keys/.test(path) && (method === 'POST' || method === 'PATCH') && fcHqCfg().reg){
+      if(method === 'POST'){ const rows = Array.isArray(body) ? body : [body]; rows.forEach(r => { if(r && r.kind === 'fleet') fcRegister(r.code, r.garage, true).catch(() => {}); }); }
+      else { const code = decodeURIComponent((path.match(/code=eq\.([^&]+)/) || [])[1] || ''); if(code && body && 'active' in body) fcRegister(code, null, body.active).catch(() => {}); } } }catch(e){}
+    return out; };
+  const _rfh = renderFleetsHQ;
+  renderFleetsHQ = async function(seg){ await _rfh.apply(this, arguments);
+    if(seg === 'clients'){ const box = $('flHQ'); if(!box) return; let keys = []; try{ keys = (await Cloud.rest('GET', 'rf_partner_keys?select=*&kind=eq.fleet&order=created_at.desc')) || []; }catch(e){}
+      if($('flHQ') && !$('fcPanel')) await fleetCloudPanel($('flHQ'), keys); } };
+}
+Object.assign(window.RF = window.RF || {}, {Cloud, fcCfg, loadFleetCloudCfg, fcLoadMe});
+/* ===================== FLEET MANAGER: 4-DAY TEST DRIVE (v8.2) =====================
+   The plain link robotikfix.github.io/robotik-fix-app/fleet/ (no code) starts a 4-day test drive on that phone:
+   full app, optional sample fleet to explore, and Robotik Fix receives the visitor's contact as a lead.
+   After 4 days the app is locked (records kept) until a fleet code from Robotik Fix is entered — then everything continues. */
+const TRIAL_DAYS = 4, TRIAL_START = 'rf3_trial_start', TRIAL_SEEN = 'rf3_trial_seen', TRIAL_LEAD = 'rf3_trial_lead';
+function trialNow(){ const seen = N(localStorage.getItem(TRIAL_SEEN)), now = Date.now(); if(now > seen) localStorage.setItem(TRIAL_SEEN, String(now)); return Math.max(now, seen); }   // putting the phone's clock back does not add days
+function trialState(){
+  if(partnerCode() || (Cloud.cfg && Cloud.cfg.fleetCloud)) return {state:'licensed'};
+  const s = N(localStorage.getItem(TRIAL_START)); if(!s) return {state:'new'};
+  const used = (trialNow() - s) / 864e5, left = TRIAL_DAYS - used;
+  return left > 0 ? {state:'trial', daysLeft:Math.ceil(left), hoursLeft:Math.ceil(left * 24), ends:new Date(s + TRIAL_DAYS * 864e5)} : {state:'expired', ends:new Date(s + TRIAL_DAYS * 864e5)};
+}
+function trialWa(text){ openWhatsApp(HQ.wa, text || 'Hello Robotik Fix, I am testing Robotik Fleet Manager and would like a free fleet code to keep using it.'); }
+/* ---------- sample fleet so a visitor can explore at once ---------- */
+function loadDemoFleet(){
+  const d = n => addDays(today(), -n), P = (k, o) => Store.put(k, Object.assign({demo:true}, o));
+  const drivers = [['Musa Bello', '08031110001', addDays(today(), 400)], ['Tunde Ade', '08031110002', addDays(today(), 12)], ['Chika Obi', '08031110003', addDays(today(), 700)]].map(([name, phone, licExp]) => P('fdriver', {name, phone, licExp, status:'active', licVerified:'Verified', licVerifiedOn:d(30)}));
+  const V = [['RF-001', 'KJA 101 AA', 'Toyota Hilux 2.4', 'Pickup', 'Diesel', 61000, '4', 80, 10.5], ['RF-002', 'KJA 202 BB', 'Sinotruk Howo 371', 'Tipper', 'Diesel', 142000, '10', 300, 2.6],
+    ['RF-003', 'KJA 303 CC', 'Toyota Hiace', 'Van / bus', 'Diesel', 98000, '6', 70, 9], ['RF-004', 'LND 404 DD', 'Toyota Camry', 'Car', 'Petrol', 75000, '4', 70, 11], ['RF-005', 'LSR 505 EE', 'Toyota Prado', 'SUV / 4x4', 'Petrol', 89000, '4', 87, 8]]
+    .map(([fleetNo, plate, model, type, engine, km, config, tankL, bench], i) => P('truck', {fleetNo, plate, model, type, engine, km:km, addedKm:km - 4000, addedDate:d(70), kmDate:today(), config, tankL, benchKmpl:bench, status:'active', driverId:drivers[i % 3].id,
+      insExp:addDays(today(), i === 3 ? 9 : 200), licExp:addDays(today(), i === 2 ? -3 : 150), duty:i === 1 ? 'Severe' : 'Normal', dept:i < 3 ? 'Logistics' : 'Admin', cost:[28e6, 85e6, 32e6, 24e6, 60e6][i], purchaseDate:d(365 * (i + 1)), lifeYears:i === 1 ? 8 : 5, residualPct:20}));
+  V.forEach((t, i) => {
+    let km = t.addedKm;
+    for(let w = 9; w >= 1; w--){ const dist = Math.round((t.type === 'Tipper' ? 520 : 420) * (0.85 + ((w * 7 + i) % 5) / 10)), eff = t.benchKmpl * (i === 3 && w === 1 ? 0.7 : (0.92 + ((w + i) % 3) / 20));
+      km += dist; P('ffuel', {vehicleId:t.id, driverId:t.driverId, date:d(w * 7), time:'08:30', km, litres:Math.round(dist / eff * 10) / 10, cost:Math.round(dist / eff * (t.engine === 'Petrol' ? 900 : 1300)), full:true, receiptNo:'D' + i + w, station:'Demo station'});
+      P('ftrip', {vehicleId:t.id, driverId:t.driverId, date:d(w * 7 - 1), from:'Lekki', to:['Apapa', 'Ikeja', 'Epe', 'Ibadan', 'Abeokuta'][w % 5], startKm:km - dist, endKm:km, purpose:'Demo trip'}); }
+    Store.put('truck', Object.assign({}, Store.get('truck', t.id), {km, kmDate:today()}));
+    P('fservice', {vehicleId:t.id, date:d(40), km:km - 2500, type:'Routine service', vendor:i % 2 ? 'Robotik Fix' : 'In-house', desc:'Engine oil & filters', cost:[85000, 240000, 90000, 70000, 110000][i], items:['oil', 'airf'].concat(t.engine === 'Diesel' ? ['fuelf'] : [])});
+    P('fcheck', {vehicleId:t.id, driverId:t.driverId, date:today(), at:nowIso(), km, items:Object.fromEntries(FCHECK_ITEMS.map(x => [x, i === 0 && x === 'Brakes' ? 'Fail' : 'Pass'])), defects:i === 0 ? 'Brakes: Grinding noise front left' : '', ok:i !== 0, safety:i === 0, by:'Demo driver'});
+  });
+  const h = V[0]; takeOffRoad(h.id, {cat:'Breakdown', reason:'Grounded: Brakes — grinding noise front left (sample)', grounded:true, defectId:(Store.list('fcheck').find(c => c.vehicleId === h.id) || {}).id, status:'offroad'});
+  Store.list('fdown').forEach(x => { if(!x.demo) Store.put('fdown', Object.assign({}, x, {demo:true})); });
+  P('fincident', {no:'INC-DEMO-001', vehicleId:V[2].id, driverId:V[2].driverId, when:new Date(Date.now() - 20 * 864e5).toISOString(), type:'Accident / collision', location:'Ikate junction', desc:'Rear-ended by a bus at the junction (sample incident).', claimStatus:'Claim filed', claimRef:'DEMO-123', estimate:480000, status:'open'});
+  P('freq', {no:'WR-DEMO-001', vehicleId:V[1].id, driverId:V[1].driverId, fault:'Air leak on the rear brake chamber (sample)', priority:'High — fix this week', stage:'estimated', estimate:320000, workshop:'Robotik Fix', diagnosis:'Ruptured brake chamber diaphragm', reportedAt:nowIso(), history:[{stage:'reported', at:nowIso(), by:'Demo driver'}]});
+  Store.saveSetting({fleetBudget:{monthly:3000000, annual:36000000}});
+  toast('Sample fleet loaded — 5 vehicles, drivers, fuel, checks, a grounded vehicle and an incident. Remove it any time in Setup.');
+}
+function removeDemoFleet(){
+  let n = 0; ['truck', 'fdriver', 'ffuel', 'ftrip', 'fservice', 'fcheck', 'fdown', 'fincident', 'freq', 'fhealth', 'fcost', 'fassign'].forEach(k => Store.list(k).filter(x => x.demo || (k === 'fassign' && !fv(x.vehicleId))).forEach(x => { Store.remove(k, x.id); n++; }));
+  Store.list('fdown').filter(x => !fv(x.vehicleId)).forEach(x => Store.remove('fdown', x.id));
+  return n;
+}
+function hasDemo(){ return Store.list('truck').some(t => t.demo); }
+/* ---------- welcome, banner and lock screens ---------- */
+function trialOverlay(html){ let o = $('flTrial'); if(!o){ o = document.createElement('div'); o.id = 'flTrial'; document.body.appendChild(o); } o.innerHTML = '<div class="inner">' + html + '</div>'; o.classList.add('on'); return o; }
+function closeTrialOverlay(){ const o = $('flTrial'); if(o) o.classList.remove('on'); }
+function showTrialWelcome(){
+  const o = trialOverlay(`<div class="fl-tw-head">🚚<h2>Robotik Fleet Manager</h2><div>Free <b>${TRIAL_DAYS}-day test drive</b> — no code needed</div></div>
+    <ul class="fl-tw-list"><li>Dashboard with alerts that need attention</li><li>Vehicles, papers &amp; expiry reminders</li><li>Daily inspections that ground unsafe vehicles</li><li>Fuel monitoring &amp; exception reports</li><li>Maintenance plans, approvals, budgets, tyres, reports</li></ul>
+    <div class="field"><label for="twCo">Fleet / company name *</label><input id="twCo"></div>
+    <div class="grid2"><div class="field"><label for="twName">Your name *</label><input id="twName" autocomplete="name"></div><div class="field"><label for="twPh">Phone / WhatsApp *</label><input id="twPh" type="tel" autocomplete="tel"></div></div>
+    <div class="field"><label for="twN">How many vehicles do you manage?</label><select id="twN"><option>1–5</option><option>6–20</option><option>21–50</option><option>51–200</option><option>Over 200</option></select></div>
+    <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="twDemo" checked style="width:20px;height:20px"> Fill the app with a sample fleet so I can explore straight away</label>
+    <p class="rf-note">Robotik Fix receives these contact details to help you during the test drive. Your fleet records stay on this phone.</p>
+    <button class="rf-btn green big" id="twGo" style="width:100%">Start my ${TRIAL_DAYS}-day test drive</button>
+    <p class="rf-note" style="text-align:center;margin-top:10px">Already have a fleet code from Robotik Fix? <a href="#" id="twCode">Enter it</a><br>Driver or staff with a login from your fleet admin? <a href="#" id="twLogin">Sign in</a></p>`);
+  o.querySelector('#twLogin').onclick = e => { e.preventDefault(); closeTrialOverlay(); window.__fcMode = 'signin'; showTab('sync'); setTimeout(() => { const b = $('fcSignIn'); if(b) b.scrollIntoView({block:'center'}); }, 300); };
+  o.querySelector('#twCode').onclick = e => { e.preventDefault(); showTrialCode(false); };
+  o.querySelector('#twGo').onclick = async () => {
+    const co = o.querySelector('#twCo').value.trim(), nm = o.querySelector('#twName').value.trim(), ph = o.querySelector('#twPh').value.trim();
+    if(co.length < 2 || nm.length < 2){ toast('Enter your company and your name.', true); return; }
+    if(ph.replace(/\D/g, '').length < 10){ toast('Enter a phone number with at least 10 digits.', true); return; }
+    localStorage.setItem(TRIAL_START, String(Date.now())); trialNow();
+    if(!brandSetting()) Store.saveSetting({brand:{short:co, companies:[{name:co, address:'', tel:ph}]}});
+    localStorage.setItem(TRIAL_LEAD, JSON.stringify({co, nm, ph, n:o.querySelector('#twN').value, at:nowIso()}));
+    if(o.querySelector('#twDemo').checked) loadDemoFleet();
+    closeTrialOverlay(); applyBrand && applyBrand(); showTab('home'); trialBanner();
+    // tell Robotik Fix (it appears under Fleet tab → Fleet jobs as a test-drive sign-up)
+    try{ await hqFetch('rf_partner_orders', {method:'POST', headers:{Prefer:'return=minimal'}, body:JSON.stringify({garage:co, data:{ref:'TD-' + Date.now().toString(36).toUpperCase(), fleet:true, trial:true, service:'fleet', qty:1, garage:co, contact:nm, contactPhone:ph, vehicles:'Fleet size: ' + o.querySelector('#twN').value, notes:'Started a ' + TRIAL_DAYS + '-day test drive of Robotik Fleet Manager', date:today()}})}); }catch(e){}
+  };
+}
+function showTrialCode(locked){
+  const st = trialState();
+  const o = trialOverlay(`<div class="fl-tw-head">${locked ? '⏳' : '🔑'}<h2>${locked ? 'Your test drive has ended' : 'Enter your fleet code'}</h2>${locked ? `<div>Your ${TRIAL_DAYS}-day test drive ended on ${esc(fmtDate(st.ends.toISOString().slice(0, 10)))}. <b>All your records are still here.</b></div>` : ''}</div>
+    <p>${locked ? 'Get a <b>free fleet code</b> from Robotik Fix to keep using Robotik Fleet Manager — and to send jobs, approve quotes and use the Fleet Cloud on all your team\'s phones.' : 'Type the code Robotik Fix gave you.'}</p>
+    <div class="field"><label for="tcCode">Fleet code</label><input id="tcCode" placeholder="e.g. RF-7KQ2M9XA" autocapitalize="characters"></div>
+    <button class="rf-btn green big" id="tcGo" style="width:100%">Unlock</button>
+    <button class="rf-btn wa big" id="tcWa" style="width:100%;margin-top:8px">💬 Ask Robotik Fix for a free code</button>
+    ${locked ? '' : '<p style="text-align:center"><a href="#" id="tcBack">Back</a></p>'}`);
+  o.querySelector('#tcWa').onclick = () => { const l = JSON.parse(localStorage.getItem(TRIAL_LEAD) || '{}'); trialWa('Hello Robotik Fix, ' + (l.nm ? 'this is ' + l.nm + (l.co ? ' of ' + l.co : '') + '. ' : '') + 'I tested Robotik Fleet Manager' + (l.n ? ' (' + l.n + ' vehicles)' : '') + ' and would like a fleet code to keep using it.'); };
+  if(o.querySelector('#tcBack')) o.querySelector('#tcBack').onclick = e => { e.preventDefault(); showTrialWelcome(); };
+  o.querySelector('#tcGo').onclick = async () => {
+    const c = o.querySelector('#tcCode').value.trim().toUpperCase(); if(!/^[A-Z0-9-]{6,40}$/.test(c)){ toast('That does not look like a fleet code.', true); return; }
+    try{ const f = await hqFetch('rpc/rf_fleet_feed', {method:'POST', body:JSON.stringify({p_code:c})}); if(f && f.error){ toast(f.error, true); return; } }
+    catch(e){ toast(e.status === 0 || !navigator.onLine ? 'Connect to the internet to check the code.' : e.message, true); return; }
+    localStorage.setItem(PCODE_KEY, c); closeTrialOverlay();
+    if(!brandSetting()) showTab('sync'); else showTab('home');
+    toast('✅ Unlocked — welcome to Robotik Fleet Manager.' + (hasDemo() ? ' You can remove the sample fleet in Setup.' : ''));
+  };
+}
+function trialBanner(){
+  const st = trialState(), old = $('flTrialBar'); if(old) old.remove();
+  if(st.state !== 'trial') return;
+  const b = document.createElement('div'); b.id = 'flTrialBar';
+  b.innerHTML = `🧪 Test drive: <b>${st.daysLeft > 1 ? st.daysLeft + ' days' : st.hoursLeft + ' hours'} left</b> <button id="tbCode">Enter code</button><button id="tbWa">Get a free code</button>`;
+  const top = document.querySelector('.tabs'); if(top) top.before(b); else document.body.prepend(b);
+  b.querySelector('#tbCode').onclick = () => showTrialCode(false); b.querySelector('#tbWa').onclick = () => trialWa();
+}
+function trialGate(){
+  const st = trialState();
+  if(st.state === 'licensed'){ closeTrialOverlay(); const b = $('flTrialBar'); if(b) b.remove(); return true; }
+  if(st.state === 'new'){ showTrialWelcome(); return false; }
+  if(st.state === 'expired'){ showTrialCode(true); return false; }
+  trialBanner(); return true;
+}
+if(FLEET){
+  window.addEventListener('load', () => setTimeout(trialGate, 300));
+  // an expired test drive can only open the code screen
+  const _st = showTab;
+  showTab = window.showTab = function(t){ if(trialState().state === 'expired'){ showTrialCode(true); return; } return _st.apply(this, arguments); };
+  setInterval(() => { const s = trialState().state; if(s === 'expired' && !($('flTrial') && $('flTrial').classList.contains('on'))) showTrialCode(true); else if(s === 'trial') trialBanner(); }, 60000);
+  // Setup: remove the sample fleet
+  renderSetup = (orig => function(){ const r = orig.apply(this, arguments); if(!hasDemo()) return r;
+    const c = document.createElement('div'); c.className = 'card'; c.id = 'flDemoCard';
+    c.innerHTML = '<h2>SAMPLE FLEET</h2><p>The app contains a sample fleet (5 vehicles and their records) to explore. Remove it before entering your own vehicles.</p><button class="rf-btn red" id="fdRemove">Remove the sample fleet</button>';
+    const box = $('rfSetupCards') || $('view-sync'); const co = $('rfFleetCo'); if(co) co.after(c); else if(box) box.prepend(c);
+    $('fdRemove').onclick = async () => { if(!(await askConfirm('Remove the sample fleet? Your own records are kept.'))) return; const n = removeDemoFleet(); toast(n + ' sample record(s) removed.'); renderSetup(); };
+    return r; })(renderSetup);
+}
+// Robotik Fix side: label test-drive sign-ups in Fleet jobs
+if(EDITION === 'robotik'){
+  const _prh = poRowHtml;
+  poRowHtml = function(o){ const h = _prh.apply(this, arguments); return (o.data || {}).trial ? h.replace('🚚 <b>Fleet</b>', '🧪 <b>Test drive sign-up</b>') : h; };
+}
+Object.assign(window.RF = window.RF || {}, {trialState, loadDemoFleet, removeDemoFleet, trialGate});
 
 })();
 </script>
