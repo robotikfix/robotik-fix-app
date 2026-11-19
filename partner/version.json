@@ -1,1 +1,1 @@
-{"version": "7.5", "notes": "v7.5: Fleet Manager setup is company information only; fleet clients and fleet jobs moved to the Fleet tab; Fleet tab off in partner and global apps (switch in Setup)"}
+{"version": "7.8", "notes": "v7.8: Fleet Manager repair requests with approval limits, budgets with alerts, fuel exceptions, tyre register, driver scores, cost of ownership"}
