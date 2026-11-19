@@ -1,1 +1,1 @@
-{"version": "7.8", "notes": "v7.8: Fleet Manager repair requests with approval limits, budgets with alerts, fuel exceptions, tyre register, driver scores, cost of ownership"}
+{"version": "7.9", "notes": "v7.9: fixes the app not opening (\"site can't be reached\") when several Robotik apps are installed on one phone"}
