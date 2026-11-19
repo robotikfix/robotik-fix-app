@@ -1480,9 +1480,7 @@ function showTab(tab){
   document.getElementById('view-doc').style.display = tab==='doc' ? 'block' : 'none';
   document.getElementById('view-search').style.display = tab==='search' ? 'block' : 'none';
   document.getElementById('view-sync').style.display = tab==='sync' ? 'block' : 'none';
-  document.getElementById('tabDocBtn').classList.toggle('active', tab==='doc');
-  document.getElementById('tabSearchBtn').classList.toggle('active', tab==='search');
-  document.getElementById('tabSyncBtn').classList.toggle('active', tab==='sync');
+  [['tabDocBtn','doc'],['tabSearchBtn','search'],['tabSyncBtn','sync']].forEach(function(x){ var b = document.getElementById(x[0]); if(b) b.classList.toggle('active', tab===x[1]); });
   if(tab==='search'){ if(cloudConnected) fetchRecordsCloud(); else renderRecords(); }
 }
 
@@ -2571,6 +2569,16 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
 .rf-prof-hide{display:none!important}
 #rfModal #rlTabs label,#rfModal #rlTiles label,#rfModal .rl-all{display:flex!important;gap:8px;align-items:center;justify-content:flex-start;text-align:left;font-weight:normal;margin:0;padding:3px 0}
 #rfModal #rlTabs input[type=checkbox],#rfModal #rlTiles input[type=checkbox],#rfModal .rl-all input[type=checkbox]{width:20px!important;height:20px!important;min-width:20px;flex:0 0 20px;margin:0;padding:0}
+/* fleet manager */
+.fl-fig{margin:10px 0}.fl-fig figcaption{font-weight:bold;color:var(--navy);font-size:13px;margin-bottom:4px}
+.fl-leg{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:#52514e;margin:2px 0 4px}.fl-leg i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.fl-h3{color:var(--navy);font-size:13px;margin:14px 0 6px}
+.fl-al{cursor:pointer}.fl-al.s3{border-left:4px solid #dc2626}.fl-al.s2{border-left:4px solid #f59e0b}.fl-al.s1,.fl-al.s0{border-left:4px solid #94a3b8}
+.fl-detail{margin-top:8px;border-top:1px dashed #d4d9e3;padding-top:8px}.fl-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin:6px 0}
+.fl-grid>div{background:#f7f9fc;border-radius:8px;padding:8px}.fl-quick{flex-wrap:wrap}
+.fl-chk{border:2px solid #16a34a;background:#f0fdf4;color:#14532d;border-radius:10px;padding:9px 8px;font-weight:bold;font-size:13px;text-align:left}
+.fl-chk.bad{border-color:#dc2626;background:#fef2f2;color:#991b1b}
+.rf-kpi .v.neg,.neg{color:#b91c1c}
 </style>
 <script>
 (function(){
@@ -2582,7 +2590,7 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
    database (Supabase) with staff logins and roles (admin / cashier / technician).
    Without the team database everything still works on this device alone, as before.
 =========================================================================================== */
-const RF_VERSION = '7.3';
+const RF_VERSION = '7.4';
 /* Multi-user team database: built, but switched OFF for now. Set to true to turn it back on. */
 const EDITION = 'partner';      // build script switches this to 'partner' for the partner-garage app
 const TEAM_ENABLED = true; // every edition: each business connects its own team database (partners keep their separate link to Robotik HQ)
@@ -2672,7 +2680,7 @@ window.rfFitImages = async function(root){
   });
   return () => undo.reverse().forEach(f => f());
 };
-const LOCAL_KINDS = ['pcredit', 'sale', 'jobupdate', 'letter', 'receipt', 'customer', 'crmtask', 'crmnote', 'deal', 'consent', 'porder', 'income', 'transfer', 'item','stockmove','labour','bundle','po','expense','appt','reminder','truck','tyreevent','timelog','payconfirm','setting','counter','joblink','jobpart','comeback','tow','supplier','supbill','suppay','worker','staffpay','tool','toolmove','corp','jobtrack','assetlog','msglog','diag','vehspec'];
+const LOCAL_KINDS = ['fdriver', 'fservice', 'ffuel', 'ftrip', 'fcheck', 'fcost', 'role', 'staffrole', 'pcredit', 'sale', 'jobupdate', 'letter', 'receipt', 'customer', 'crmtask', 'crmnote', 'deal', 'consent', 'porder', 'income', 'transfer', 'item','stockmove','labour','bundle','po','expense','appt','reminder','truck','tyreevent','timelog','payconfirm','setting','counter','joblink','jobpart','comeback','tow','supplier','supbill','suppay','worker','staffpay','tool','toolmove','corp','jobtrack','assetlog','msglog','diag','vehspec'];
 function loadLocal(){
   LOCAL_KINDS.forEach(k => {
     const b = bucket(k); b.clear();
@@ -3404,13 +3412,15 @@ function decorateDocScreen(){
 }
 
 /* ===================== Navigation ===================== */
-const TABS = GLOBAL
+const TABS = EDITION === 'fleet'
+  ? [['home', '🏠 Dashboard'], ['fvehicles', '🚚 Vehicles'], ['fdrivers', 'Drivers'], ['fchecks', '📋 Checks'], ['ffuel', '⛽ Fuel & trips'], ['fservice', '🔧 Service'], ['fleet', '🛞 Tyres'], ['freports', '📊 Reports'], ['frobotik', '📤 Robotik Fix'], ['team', 'Team'], ['sync', 'Setup']]
+  : GLOBAL
   ? [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['crm', 'Customers', 'need-cashier'], ['stock', 'Stock'], ['book', 'Bookings'], ['workshop', 'Workshop'], ['money', 'Money', 'need-cashier'], ['fleet', 'Fleet'], ['team', 'Team'], ['sync', 'Setup']]
   : EDITION === 'partner'
   ? [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['stock', 'Stock'], ['workshop', 'Workshop'], ['money', 'Money', 'need-cashier'], ['send', '📦 Send to Robotik Fix'], ['team', 'Team'], ['sync', 'Setup']]
   : [['home', '🏠 Home'], ['doc', 'Document'], ['quick', 'Quick Invoice'], ['search', 'Records'], ['crm', 'Customers', 'need-cashier'], ['stock', 'Stock'], ['book', 'Bookings'], ['workshop', 'Workshop'],
      ['money', 'Money', 'need-cashier'], ['partners', 'Partners', 'need-cashier'], ['fleet', 'Fleet'], ['team', 'Team'], ['sync', 'Setup']];
-const NEW_VIEWS = GLOBAL ? ['home', 'crm', 'letters', 'sales', 'quick', 'system', 'assets', 'tech', 'stock', 'book', 'workshop', 'money', 'fleet', 'team'] : EDITION === 'partner' ? ['home', 'crm', 'letters', 'sales', 'quick', 'send', 'system', 'assets', 'tech', 'stock', 'workshop', 'money', 'team'] : ['home', 'crm', 'letters', 'sales', 'system', 'plugins', 'assets', 'tech', 'quick', 'stock', 'book', 'workshop', 'money', 'partners', 'fleet', 'team'];
+const NEW_VIEWS = EDITION === 'fleet' ? ['home', 'fvehicles', 'fdrivers', 'fchecks', 'ffuel', 'fservice', 'fleet', 'freports', 'frobotik', 'system', 'team'] : GLOBAL ? ['home', 'crm', 'letters', 'sales', 'quick', 'system', 'assets', 'tech', 'stock', 'book', 'workshop', 'money', 'fleet', 'team'] : EDITION === 'partner' ? ['home', 'crm', 'letters', 'sales', 'quick', 'send', 'system', 'assets', 'tech', 'stock', 'workshop', 'money', 'team'] : ['home', 'crm', 'letters', 'sales', 'system', 'plugins', 'assets', 'tech', 'quick', 'stock', 'book', 'workshop', 'money', 'partners', 'fleet', 'team'];
 let curTab = 'doc';
 const segState = {partners:'orders', stock:'items', book:'day', money:'reports', fleet:'trucks', team:'clock', workshop:'jobs'};
 function buildNav(){
@@ -4568,7 +4578,7 @@ function applyBrand(){
   const h1 = document.querySelector('.topbar h1') || ($('syncStatus') && $('syncStatus').parentNode);
   if(h1 && h1.firstChild && h1.firstChild.nodeType === 3) h1.firstChild.textContent = brandVals().biz.toUpperCase();
   window.RF_BIZ = brandVals().biz; window.RF_BIZ_FULL = brandVals().bizFull;
-  document.title = brandVals().biz + (GLOBAL ? ' — Robotik Garage Manager' : GARAGE ? ' — Garage Manager' : ' - Workshop Manager');
+  document.title = brandVals().biz + (EDITION === 'fleet' ? ' — Robotik Fleet Manager' : GLOBAL ? ' — Robotik Garage Manager' : GARAGE ? ' — Garage Manager' : ' - Workshop Manager');
   refreshDocExtras();
   if(EDITION === 'partner' && !$('rfPowered')){
     const tb = $('syncStatus'); if(tb){ const s = document.createElement('div'); s.id = 'rfPowered'; s.style.cssText = 'font-size:10px;opacity:.75;font-weight:normal'; s.textContent = 'Powered by Robotik Fix'; tb.parentNode.appendChild(s); }
@@ -4800,7 +4810,7 @@ function partnerSetupNote(){
 }
 
 /* ===================== ROBOTIK EDITION: Partners tab ===================== */
-const PO_STATUSES = [['new', 'New', 'red'], ['accepted', 'Accepted', 'blue'], ['picked up', 'Picked up', 'amber'], ['done', 'Done', 'green'], ['cancelled', 'Cancelled', '']];
+const PO_STATUSES = [['new', 'New', 'red'], ['accepted', 'Accepted', 'blue'], ['picked up', 'Picked up', 'amber'], ['in progress', 'In progress', 'amber'], ['ready', 'Ready', 'green'], ['done', 'Done', 'green'], ['cancelled', 'Cancelled', '']];
 let pOrders = [], pSeg = 'orders', pFilter = 'open', pLastSeen = localStorage.getItem('rf3_po_seen') || '';
 async function fetchPartnerOrders(){
   if(mode !== 'cloud') return null;
@@ -4889,21 +4899,21 @@ async function setOrderStatus(o, status){
 async function renderPartners(noFetch){
   const v = $('view-partners'); if(!v) return;
   if(mode !== 'cloud'){ v.innerHTML = wrap('PARTNER GARAGES', '<p>Partner orders arrive through the team database. Connect it in <b>Setup → Team database</b> first.</p>', true); return; }
-  let h = seg('partners', [['orders', 'Orders' + (pOrders.filter(o => o.status === 'new').length ? ' (' + pOrders.filter(o => o.status === 'new').length + ')' : '')], ['garages', 'Garages'], ['prices', 'Trade prices', 'need-admin'], ['invite', 'Invite a garage']], segState.partners || 'orders');
+  let h = seg('partners', [['orders', 'Orders' + (pOrders.filter(o => o.status === 'new').length ? ' (' + pOrders.filter(o => o.status === 'new').length + ')' : '')], ['garages', 'Garages'], ['prices', 'Trade prices', 'need-admin'], ['fleets', '🚚 Fleets', 'need-cashier'], ['invite', 'Invite a garage']], segState.partners || 'orders');
   const s = segState.partners || 'orders';
   if(!noFetch && s !== 'invite') { v.innerHTML = h + '<div class="rf-empty">Loading…</div>'; try{ await fetchPartnerOrders(); }catch(e){ v.innerHTML = h + wrap('PARTNER GARAGES', '<p>' + esc(e.status === 0 ? 'No internet connection.' : /rf_partner_orders|does not exist|schema cache/i.test(e.message) ? 'Partner orders are not set up yet — run partner-orders.sql in the Supabase SQL Editor (one time).' : e.message) + '</p>'); return; } }
   if(s === 'orders'){
     const list = pOrders.filter(o => pFilter === 'all' || (pFilter === 'open' ? !['done', 'cancelled'].includes(o.status) : o.status === pFilter));
     h += wrap('PARTNER ORDERS', `<div class="rf-seg">${[['open', 'Open'], ['new', 'New'], ['done', 'Done'], ['all', 'All']].map(([k, l]) => `<button class="${k === pFilter ? 'on' : ''}" data-pf="${k}">${l}</button>`).join('')}<button data-pr="1">🔄</button></div>` +
       (list.map(o => { const d = o.data || {}, st = PO_STATUSES.find(x => x[0] === o.status) || PO_STATUSES[0]; const svc = (PARTNER_SERVICES.find(x => x[0] === d.service) || [])[1] || d.service;
-        const next = {new:'accepted', accepted:'picked up', 'picked up':'done'}[o.status];
+        const next = {new:'accepted', accepted:'picked up', 'picked up':'in progress', 'in progress':'ready', ready:'done'}[o.status], svcN = (FLEET_SERVICES.find(x => x[0] === d.service) || [])[1]; const svc2 = svcN && !(PARTNER_SERVICES.find(x => x[0] === d.service)) ? svcN : svc;
         return `<div class="rf-row"><div class="t"><span>${esc(o.garage)} ${creditBadge(o.garage)}</span><span class="rf-badge ${st[2]}">${esc(st[1])}</span></div>
-          <div class="m"><b>${esc(svc)}</b>${d.vclass ? ' · <b>' + esc(d.vclass) + '</b>' : ''} · qty ${esc(d.qty)} ${d.vehicles ? '· ' + esc(d.vehicles) : ''}</div>
+          <div class="m">${d.fleet ? '🚚 <b>Fleet</b> · ' : ''}<b>${esc(svc2)}</b>${d.vclass ? ' · <b>' + esc(d.vclass) + '</b>' : ''} · qty ${esc(d.qty)} ${d.vehicles ? '· ' + esc(d.vehicles) : ''}</div>
           ${d.custName ? `<div class="m">Customer: ${esc(d.custName)} ${esc(d.custPhone || '')}</div>` : ''}
           <div class="m">${d.pickup ? '🚚 Pickup: ' + esc(d.pickupAddr || '') + ' · ' : ''}📞 ${esc(d.contact || '')} ${esc(d.contactPhone || '')}${d.when ? ' · ⏰ ' + esc(d.when) : ''}</div>
-          ${d.notes ? `<div class="m">📝 ${esc(d.notes)}</div>` : ''}
+          ${d.notes ? `<div class="m">📝 ${esc(d.notes)}</div>` : ''}${o.hq_note ? `<div class="m">💬 Our note to them: <b>${esc(o.hq_note)}</b></div>` : ''}
           <div class="m">${esc(new Date(o.created_at).toLocaleString('en-NG', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}))} · ref ${esc(d.ref || '')}${o.handled_by ? ' · ' + esc(o.handled_by) : ''}</div>
-          <div class="acts">${next ? `<button class="rf-btn" data-pn="${esc(o.id)}" data-to="${next}">→ ${next}</button>` : ''}<button class="rf-btn green" data-pinv="${esc(o.id)}">🧾 Invoice</button><button class="rf-btn wa" data-pwa="${esc(o.id)}">💬 WhatsApp</button>${!['done', 'cancelled'].includes(o.status) ? `<button class="rf-btn grey" data-pn="${esc(o.id)}" data-to="cancelled">Cancel</button>` : ''}</div></div>`; }).join('') || '<div class="rf-empty">No orders here yet. Invite garages from the “Invite a garage” tab.</div>'), true);
+          <div class="acts">${next ? `<button class="rf-btn" data-pn="${esc(o.id)}" data-to="${next}">→ ${next}</button>` : ''}${next && next !== 'done' && o.status !== 'new' ? `<button class="rf-btn grey" data-pn="${esc(o.id)}" data-to="done">✓ done</button>` : ''}<button class="rf-btn grey" data-pnote="${esc(o.id)}">💬 Note</button><button class="rf-btn green" data-pinv="${esc(o.id)}">🧾 Invoice</button><button class="rf-btn wa" data-pwa="${esc(o.id)}">💬 WhatsApp</button>${!['done', 'cancelled'].includes(o.status) ? `<button class="rf-btn grey" data-pn="${esc(o.id)}" data-to="cancelled">Cancel</button>` : ''}</div></div>`; }).join('') || '<div class="rf-empty">No orders here yet. Invite garages from the “Invite a garage” tab.</div>'), true);
   } else if(s === 'garages'){
     const m0 = today().slice(0, 8) + '01', g = {};
     pOrders.forEach(o => { const x = g[o.garage] || (g[o.garage] = {orders:0, month:0, last:'', phone:(o.data || {}).contactPhone}); x.orders++; if(o.created_at.slice(0, 10) >= m0) x.month++; if(o.created_at > x.last) x.last = o.created_at; });
@@ -4918,6 +4928,8 @@ async function renderPartners(noFetch){
         <div class="acts"><button class="rf-btn need-admin" data-pcr="${esc(k)}">💳 ${t ? 'Change credit' : 'Give credit'}</button></div></div>`; }).join('')
       + (Object.keys(g).length ? '' : '<div class="rf-empty">No partner orders yet.</div>')
       + '<p class="rf-note">Owed amounts count invoices made from partner orders, or invoices whose customer name matches the garage. With credit, each invoice made from an order says when it must be paid; the app warns you before invoicing a garage that is over its limit or has overdue invoices.</p>', true);
+  } else if(s === 'fleets'){
+    h += '<div id="flHQ"><div class="rf-empty">Loading…</div></div>';
   } else if(s === 'prices'){
     h += wrap('TRADE PRICES (SHOWN IN PARTNER APPS)', '<p class="rf-note">Partner garages see these prices in their app. Leave a price empty to hide that line.</p><div id="tpBox" class="rf-empty">Loading…</div>', true);
   } else {
@@ -4932,6 +4944,9 @@ async function renderPartners(noFetch){
   bind(v, '[data-pn]', 'click', el => setOrderStatus(pOrders.find(o => o.id === el.dataset.pn), el.dataset.to));
   bind(v, '[data-pinv]', 'click', async el => { const o = pOrders.find(x => x.id === el.dataset.pinv); if(o.status === 'new') await setOrderStatus(o, 'accepted'); if(await invoiceFromOrder(o) !== false) showTab('quick'); });
   bind(v, '[data-pcr]', 'click', el => editPartnerCredit(el.dataset.pcr));
+  bind(v, '[data-pnote]', 'click', async el => { const o = pOrders.find(x => x.id === el.dataset.pnote); const t = await promptText('Note the customer sees (e.g. "Waiting for brake pads, ready Thursday")', o.hq_note || ''); if(t === null) return;
+    try{ await Cloud.rest('PATCH', 'rf_partner_orders?id=eq.' + encodeURIComponent(o.id), {hq_note:t || null, updated_at:nowIso()}, 'return=minimal'); o.hq_note = t; toast('Note saved — they see it in their app.'); }catch(e){ toast(/hq_note/.test(e.message) ? 'Run upgrade-7.4-fleet.sql in Supabase first.' : e.message, true); } renderPartners(true); });
+  if(s === 'fleets') renderFleetsHQ();
   bind(v, '[data-pwa]', 'click', el => { const o = pOrders.find(x => x.id === el.dataset.pwa), d = o.data || {}; openWhatsApp(d.contactPhone, `Hello ${d.contact || o.garage}, this is Robotik Fix about your order ${d.ref || ''} (${(PARTNER_SERVICES.find(x => x[0] === d.service) || [])[1] || d.service}, qty ${d.qty}). `); });
   if($('pInvWa')) $('pInvWa').onclick = () => openWhatsApp('', $('pInvMsg').value);
   if($('pInvCopy')) $('pInvCopy').onclick = () => navigator.clipboard && navigator.clipboard.writeText(partnerAppLink()).then(() => toast('Link copied.'));
@@ -9773,6 +9788,642 @@ setTimeout(applyProfileUI, 0); window.addEventListener('load', () => setTimeout(
 
 // Home: hide group buttons (Money, Track…) that have no tiles for this person's role
 renderHome = (orig => function(){ const r = orig.apply(this, arguments); try{ if(myProfile()){ const ks = new Set(homeTiles().map(x => x.k)); document.querySelectorAll('#view-home [data-hg]').forEach(b => { if(b.dataset.hg !== 'all') b.style.display = ks.has(b.dataset.hg) ? '' : 'none'; }); } }catch(e){} return r; })(renderHome);
+/* ===================== ROBOTIK FLEET MANAGER (edition 'fleet', v7.4) =====================
+   A free app for fleet managers. They run their own fleet here and send jobs to Robotik Fix.
+   Records (all kept by the fleet itself, on its phone or its own team database):
+     truck      vehicle: plate, fleetNo, make/model, year, type, status, driverId, km, papers (expiry dates), service interval
+     fdriver    driver: name, phone, licence no/class/expiry, status
+     fservice   service / repair: vehicleId, date, km, type, vendor, cost, downtime days, notes
+     ffuel      fuel: vehicleId, driverId, date, litres, cost, km, station
+     ftrip      trip: vehicleId, driverId, date, from, to, startKm, endKm, purpose
+     fcheck     daily check: vehicleId, driverId, date, km, items{}, defects, fixed
+     fcost      other costs: vehicleId, date, category, amount
+     tyreevent  tyres by position (shared with the Robotik Fix tyre module)
+   Link with Robotik Fix (partner code): send jobs, follow stages and notes, approve quotes, see invoices and balance,
+   share vehicles due for service. */
+const FLEET = EDITION === 'fleet';
+const FV_TYPES = ['Car', 'SUV / 4x4', 'Pickup', 'Van / bus', 'Truck', 'Tipper', 'Tanker', 'Trailer', 'Armoured vehicle', 'Motorcycle', 'Other'];
+const FV_STATUS = [['active', 'Active', 'green'], ['workshop', 'In workshop', 'amber'], ['offroad', 'Off road', 'red'], ['sold', 'Sold / retired', '']];
+const FV_PAPERS = [['insExp', 'Insurance'], ['licExp', 'Vehicle licence'], ['rwExp', 'Roadworthiness'], ['permitExp', 'Hackney / heavy-duty permit'], ['extExp', 'Fire extinguisher']];
+const FS_TYPES = ['Routine service', 'Repair', 'Tyres', 'Brakes', 'Battery', 'AC', 'Electrical', 'Body / paint', 'Inspection', 'Other'];
+const FS_VENDORS = ['In-house', 'Robotik Fix', 'Other garage'];
+const FC_CATS = ['Tolls & parking', 'Fines', 'Insurance premium', 'Licences & permits', 'Tracking / telematics', 'Washing', 'Driver allowance', 'Other'];
+const FCHECK_ITEMS = ['Tyres & wheel nuts', 'Lights & indicators', 'Brakes', 'Engine oil', 'Coolant', 'Horn', 'Wipers & washer', 'Mirrors', 'Seat belts', 'Fire extinguisher', 'First-aid kit', 'Warning triangle', 'Body damage', 'Leaks under vehicle'];
+const COST_CATS = ['Fuel', 'Maintenance', 'Tyres', 'Other'];
+const COST_COL = {Fuel:'#2a78d6', Maintenance:'#eb6834', Tyres:'#1baf7a', Other:'#eda100'};   // validated categorical slots 1–4 (adjacent order)
+const SEQ_COL = '#2a78d6';
+let fvOpen = null, fvQ = '', fvFilter = '', fsVeh = '', ffSeg = 'fuel', frPeriod = 'month', frAnchor = '', robSeg = 'send', fleetFeed = null, fleetFeedAt = 0;
+/* ---------- helpers ---------- */
+function fleetName(){ try{ const b = brandSetting(), c = b && (b.companies || []).find(x => x && x.name); return (c && c.name) || 'Our fleet'; }catch(e){ return 'Our fleet'; } }
+function fv(id){ return Store.get('truck', id); }
+function fvList(all){ return Store.list('truck').filter(t => all || t.status !== 'sold').sort((a, b) => String(a.fleetNo || a.plate).localeCompare(String(b.fleetNo || b.plate), undefined, {numeric:true})); }
+function fvName(t){ return t ? [t.fleetNo, t.plate].filter(Boolean).join(' · ') + (t.model ? ' — ' + t.model : '') : '—'; }
+function fvShort(t){ return t ? (t.fleetNo ? t.fleetNo + ' · ' : '') + (t.plate || '') : '—'; }
+function fd(id){ return Store.get('fdriver', id); }
+function fdList(){ return Store.list('fdriver').filter(d => d.status !== 'left').sort((a, b) => String(a.name).localeCompare(String(b.name))); }
+function vehOpts(blank){ return (blank ? [['', blank]] : []).concat(fvList().map(t => [t.id, fvShort(t) + (t.model ? ' ' + t.model : '')])); }
+function drvOpts(blank){ return (blank ? [['', blank]] : []).concat(fdList().map(d => [d.id, d.name])); }
+function daysTo(d){ if(!d) return null; return Math.round((new Date(d + 'T00:00:00') - new Date(today() + 'T00:00:00')) / 864e5); }
+function addMonths(d, m){ const [y, mo, da] = String(d).slice(0, 10).split('-').map(Number), t = new Date(Date.UTC(y, mo - 1 + N(m), 1)), last = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate(); t.setUTCDate(Math.min(da, last)); return t.toISOString().slice(0, 10); }
+function fInR(d, f, t){ d = String(d || '').slice(0, 10); return d >= f && d <= t; }
+function nf(n, dp){ return Number(n || 0).toLocaleString('en-NG', {maximumFractionDigits:dp == null ? 0 : dp, minimumFractionDigits:dp || 0}); }
+// every odometer reading we know for a vehicle
+function readings(id){
+  const r = [];
+  const t = fv(id); if(t && N(t.km)) r.push([String(t.kmDate || t.updatedAt || t.createdAt || today()).slice(0, 10), N(t.km)]);
+  Store.list('ffuel').forEach(x => { if(x.vehicleId === id && N(x.km)) r.push([x.date, N(x.km)]); });
+  Store.list('ftrip').forEach(x => { if(x.vehicleId === id){ if(N(x.startKm)) r.push([x.date, N(x.startKm)]); if(N(x.endKm)) r.push([x.date, N(x.endKm)]); } });
+  Store.list('fcheck').forEach(x => { if(x.vehicleId === id && N(x.km)) r.push([x.date, N(x.km)]); });
+  Store.list('fservice').forEach(x => { if(x.vehicleId === id && N(x.km)) r.push([x.date, N(x.km)]); });
+  Store.list('tyreevent').forEach(x => { if(x.truckId === id && N(x.km)) r.push([x.date, N(x.km)]); });
+  return r.sort((a, b) => String(a[0]).localeCompare(String(b[0])) || a[1] - b[1]);
+}
+function curKm(id){ const r = readings(id); return r.length ? Math.max(...r.map(x => x[1])) : 0; }
+function kmIn(id, f, t){ const r = readings(id), before = r.filter(x => x[0] < f).map(x => x[1]), inside = r.filter(x => fInR(x[0], f, t)).map(x => x[1]);
+  if(!inside.length) return 0; const start = before.length ? Math.max(...before) : Math.min(...inside); return Math.max(0, Math.max(...inside) - start); }
+function lastService(id){ return Store.list('fservice').filter(s => s.vehicleId === id && s.type === 'Routine service').sort((a, b) => String(b.date).localeCompare(String(a.date)))[0] || null; }
+function serviceDue(t){
+  const ls = lastService(t.id), km = curKm(t.id), every = N(t.svcKm), months = N(t.svcMonths);
+  if(!every && !months) return null;
+  const baseKm = ls ? N(ls.km) : N(t.svcBaseKm), baseDate = ls ? ls.date : (t.svcBaseDate || '');
+  const dueKm = every && baseKm ? baseKm + every : null, dueDate = months && baseDate ? addMonths(baseDate, months) : null;
+  const kmLeft = dueKm != null ? dueKm - km : null, dLeft = dueDate ? daysTo(dueDate) : null;
+  const state = (kmLeft != null && kmLeft <= 0) || (dLeft != null && dLeft < 0) ? 'overdue' : (kmLeft != null && kmLeft <= 1000) || (dLeft != null && dLeft <= 14) ? 'due' : 'ok';
+  return {dueKm, dueDate, kmLeft, dLeft, state, last:ls};
+}
+function paperAlerts(t){ return FV_PAPERS.map(([k, l]) => ({k, l, d:t[k], left:daysTo(t[k])})).filter(p => p.d && p.left <= 30); }
+function openDefects(id){ return Store.list('fcheck').filter(c => (!id || c.vehicleId === id) && c.defects && !c.fixed).sort((a, b) => String(b.date).localeCompare(String(a.date))); }
+function lowTyres(id){ const lowT = N(Store.setting().lowTread) || 4; try{ return Object.entries(tyreState(id).st).filter(([, x]) => x.tread !== '' && x.tread != null && N(x.tread) <= lowT).map(([p]) => p); }catch(e){ return []; } }
+// every alert across the fleet, worst first
+function fleetAlerts(){
+  const out = [], push = (sev, icon, text, act) => out.push({sev, icon, text, act});
+  fvList().forEach(t => {
+    paperAlerts(t).forEach(p => push(p.left < 0 ? 3 : 2, p.left < 0 ? '⛔' : '📄', `${fvShort(t)}: ${p.l} ${p.left < 0 ? 'EXPIRED ' + fmtDate(p.d) : 'expires ' + fmtDate(p.d) + ' (' + p.left + ' days)'}`, ['veh', t.id]));
+    const sd = serviceDue(t); if(sd && sd.state !== 'ok') push(sd.state === 'overdue' ? 3 : 2, '🔧', `${fvShort(t)}: service ${sd.state === 'overdue' ? 'OVERDUE' : 'due soon'}${sd.dueKm ? ' at ' + nf(sd.dueKm) + ' km' + (sd.kmLeft != null ? ' (' + (sd.kmLeft < 0 ? nf(-sd.kmLeft) + ' km over' : nf(sd.kmLeft) + ' km left') + ')' : '') : ''}${sd.dueDate ? ' · by ' + fmtDate(sd.dueDate) : ''}`, ['svc', t.id]);
+    const lt = lowTyres(t.id); if(lt.length) push(2, '🛞', `${fvShort(t)}: ${lt.length} tyre(s) worn low (${lt.join(', ')})`, ['tyre', t.id]);
+    if(t.status === 'workshop') push(1, '🛠', `${fvShort(t)} is in the workshop`, ['veh', t.id]);
+  });
+  openDefects().forEach(c => { const t = fv(c.vehicleId); push(2, '⚠', `${fvShort(t)}: defect reported ${fmtDate(c.date)} — ${c.defects}`, ['defect', c.id]); });
+  fdList().forEach(d => { const l = daysTo(d.licExp); if(d.licExp && l <= 30) push(l < 0 ? 3 : 2, '🪪', `Driver ${d.name}: licence ${l < 0 ? 'EXPIRED ' + fmtDate(d.licExp) : 'expires ' + fmtDate(d.licExp) + ' (' + l + ' days)'}`, ['drv', d.id]); });
+  const checked = new Set(Store.list('fcheck').filter(c => c.date === today()).map(c => c.vehicleId));
+  const unchecked = fvList().filter(t => t.status === 'active' && !checked.has(t.id));
+  if(unchecked.length && fvList().length) push(0, '📋', `${unchecked.length} active vehicle(s) not checked today: ${unchecked.slice(0, 6).map(fvShort).join(', ')}${unchecked.length > 6 ? '…' : ''}`, ['check', '']);
+  return out.sort((a, b) => b.sev - a.sev);
+}
+/* ---------- costs (one list for dashboards and reports) ---------- */
+function costEntries(f, t){
+  const out = [], add = (date, vehicleId, cat, amount, label) => { if(N(amount) && fInR(date, f, t)) out.push({date:String(date).slice(0, 10), vehicleId, cat, amount:N(amount), label}); };
+  Store.list('ffuel').forEach(x => add(x.date, x.vehicleId, 'Fuel', x.cost, nf(x.litres, 1) + ' L'));
+  Store.list('fservice').forEach(x => add(x.date, x.vehicleId, x.type === 'Tyres' ? 'Tyres' : 'Maintenance', x.cost, x.type + (x.vendor ? ' · ' + x.vendor : '')));
+  Store.list('tyreevent').forEach(x => { if(fv(x.truckId)) add(x.date, x.truckId, 'Tyres', x.cost, 'Tyre ' + x.action + ' ' + (x.pos || '')); });
+  Store.list('fcost').forEach(x => add(x.date, x.vehicleId, 'Other', x.amount, x.category));
+  return out;
+}
+function fSumBy(list, key){ const m = {}; list.forEach(x => { const k = typeof key === 'function' ? key(x) : x[key]; m[k] = (m[k] || 0) + x.amount; }); return m; }
+/* ---------- charts (SVG, hover titles, table view alongside) ---------- */
+function svgStacked(buckets, opts){
+  // buckets: [{label, parts:{Fuel:..}}]; 4 fixed categories, legend + direct total labels on the biggest bars only
+  const W = 640, H = 230, L = 52, B = 34, T = 14, cw = (W - L - 8) / Math.max(1, buckets.length), bw = Math.max(3, Math.min(34, cw - 4));
+  const tot = b => COST_CATS.reduce((s, c) => s + N(b.parts[c]), 0), max = Math.max(1, ...buckets.map(tot)), y = v => T + (H - T - B) * (1 - v / max);
+  const ticks = niceTicks(max); let g = ticks.map(v => `<line x1="${L}" x2="${W - 4}" y1="${y(v)}" y2="${y(v)}" stroke="#e7e6e2"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="10" fill="#6b6a66">${shortMoney(v)}</text>`).join('');
+  const top = buckets.map((b, i) => [tot(b), i]).sort((a, b) => b[0] - a[0]).slice(0, 3).map(x => x[1]);
+  buckets.forEach((b, i) => { let acc = 0; const x = L + i * cw + (cw - bw) / 2;
+    COST_CATS.forEach((c, ci) => { const v = N(b.parts[c]); if(!v) return; const y1 = y(acc + v), y0 = y(acc); acc += v; const last = !COST_CATS.slice(ci + 1).some(k => N(b.parts[k]));
+      g += `<path d="${barPath(x, y1, bw, Math.max(1, y0 - y1 - 2), last)}" fill="${COST_COL[c]}"><title>${esc(b.label)} · ${c}: ${money(v)}</title></path>`; });
+    if(top.includes(i) && tot(b)) g += `<text x="${x + bw / 2}" y="${y(tot(b)) - 4}" text-anchor="middle" font-size="10" fill="#0b0b0b">${shortMoney(tot(b))}</text>`;
+    const every = Math.ceil(buckets.length / 12); if(i % every === 0) g += `<text x="${x + bw / 2}" y="${H - B + 14}" text-anchor="middle" font-size="10" fill="#52514e">${esc(b.short || b.label)}</text>`; });
+  g += `<line x1="${L}" x2="${W - 4}" y1="${H - B}" y2="${H - B}" stroke="#c9c8c3"/>`;
+  return `<figure class="fl-fig"><figcaption>${esc(opts.title)}</figcaption>${legendHtml(COST_CATS.map(c => [c, COST_COL[c]]))}<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opts.title)}" style="width:100%;height:auto">${g}</svg></figure>`;
+}
+function svgBars(rows, opts){
+  // rows: [[label, value]] — one series, one hue (magnitude); value labels on every bar (horizontal, short list)
+  rows = rows.slice(0, opts.max || 10); if(!rows.length) return '';
+  const W = 640, rh = 26, L = 150, H = rows.length * rh + 8, max = Math.max(1, ...rows.map(r => N(r[1])));
+  const g = rows.map(([l, v], i) => { const w = (W - L - 90) * N(v) / max, y = 4 + i * rh;
+    return `<text x="${L - 8}" y="${y + 15}" text-anchor="end" font-size="11" fill="#0b0b0b">${esc(String(l).slice(0, 22))}</text><path d="${barPathH(L, y + 4, Math.max(2, w), rh - 10)}" fill="${opts.color || SEQ_COL}"><title>${esc(l)}: ${opts.fmt ? opts.fmt(v) : money(v)}</title></path><text x="${L + Math.max(2, w) + 6}" y="${y + 15}" font-size="11" fill="#52514e">${opts.fmt ? opts.fmt(v) : shortMoney(v)}</text>`; }).join('');
+  return `<figure class="fl-fig"><figcaption>${esc(opts.title)}</figcaption><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opts.title)}" style="width:100%;height:auto">${g}</svg></figure>`;
+}
+function legendHtml(items){ return `<div class="fl-leg">${items.map(([l, c]) => `<span><i style="background:${c}"></i>${esc(l)}</span>`).join('')}</div>`; }
+function barPath(x, y, w, h, roundTop){ const r = roundTop ? Math.min(4, w / 2, h) : 0; return `M${x},${y + h}V${y + r}${r ? `Q${x},${y} ${x + r},${y}` : ''}H${x + w - r}${r ? `Q${x + w},${y} ${x + w},${y + r}` : ''}V${y + h}Z`; }
+function barPathH(x, y, w, h){ const r = Math.min(4, h / 2, w); return `M${x},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h - r}Q${x + w},${y + h} ${x + w - r},${y + h}H${x}Z`; }
+function niceTicks(max){ const p = Math.pow(10, Math.floor(Math.log10(max))), s = [1, 2, 2.5, 5, 10].map(m => m * p).find(st => max / st <= 5) || p * 10; const out = []; for(let v = 0; v <= max + 1e-9; v += s) out.push(v); return out; }
+function shortMoney(v){ v = N(v); const s = (typeof curSym === 'function' ? curSym() : '₦'); return s + (v >= 1e6 ? (v / 1e6).toFixed(v >= 1e7 ? 0 : 1) + 'm' : v >= 1e3 ? (v / 1e3).toFixed(v >= 1e4 ? 0 : 1) + 'k' : nf(v)); }
+/* ---------- period maths for reports ---------- */
+function periodOf(kind, anchor){
+  const a = anchor || today(), d = new Date(a + 'T00:00:00');
+  if(kind === 'day') return {f:a, t:a, label:fmtDate(a)};
+  if(kind === 'week'){ const wd = (d.getDay() + 6) % 7, f = addDays(a, -wd); return {f, t:addDays(f, 6), label:'Week of ' + fmtDate(f)}; }
+  if(kind === 'month'){ const f = a.slice(0, 8) + '01', t = addDays(addMonths(f, 1), -1); return {f, t, label:new Date(f + 'T12:00:00').toLocaleDateString('en-GB', {month:'long', year:'numeric'})}; }
+  const f = a.slice(0, 4) + '-01-01'; return {f, t:a.slice(0, 4) + '-12-31', label:'Year ' + a.slice(0, 4)};
+}
+function stepPeriod(kind, anchor, dir){ const a = anchor || today(); return kind === 'day' ? addDays(a, dir) : kind === 'week' ? addDays(a, 7 * dir) : kind === 'month' ? addMonths(a.slice(0, 8) + '01', dir) : (N(a.slice(0, 4)) + dir) + '-01-01'; }
+function bucketsOf(kind, p){
+  if(kind === 'year') return Array.from({length:12}, (_, i) => { const f = p.f.slice(0, 5) + String(i + 1).padStart(2, '0') + '-01'; return {f, t:addDays(addMonths(f, 1), -1), label:new Date(f + 'T12:00:00').toLocaleDateString('en-GB', {month:'short'})}; });
+  if(kind === 'day') return [{f:p.f, t:p.t, label:fmtDate(p.f)}];
+  const out = []; for(let d = p.f; d <= p.t; d = addDays(d, 1)) out.push({f:d, t:d, label:fmtDate(d), short:kind === 'week' ? new Date(d + 'T00:00:00').toLocaleDateString('en-GB', {weekday:'short'}) : d.slice(8)});
+  return out;
+}
+function fleetStats(f, t){
+  const costs = costEntries(f, t), vs = fvList(true), byVeh = {};
+  vs.forEach(v => { byVeh[v.id] = {v, cost:0, fuel:0, litres:0, km:kmIn(v.id, f, t), down:0, svc:0}; });
+  costs.forEach(c => { const x = byVeh[c.vehicleId]; if(x){ x.cost += c.amount; if(c.cat === 'Fuel') x.fuel += c.amount; } });
+  Store.list('ffuel').forEach(x => { if(byVeh[x.vehicleId] && fInR(x.date, f, t)) byVeh[x.vehicleId].litres += N(x.litres); });
+  Store.list('fservice').forEach(x => { if(byVeh[x.vehicleId] && fInR(x.date, f, t)){ byVeh[x.vehicleId].down += N(x.downtime); byVeh[x.vehicleId].svc++; } });
+  const rows = Object.values(byVeh), km = rows.reduce((s, r) => s + r.km, 0), litres = rows.reduce((s, r) => s + r.litres, 0), cost = costs.reduce((s, c) => s + c.amount, 0);
+  const trips = Store.list('ftrip').filter(x => fInR(x.date, f, t)), checks = Store.list('fcheck').filter(x => fInR(x.date, f, t));
+  return {costs, rows, km, litres, cost, byCat:fSumBy(costs, 'cat'), perKm:km ? cost / km : 0, kmpl:litres ? km / litres : 0, trips, checks, down:rows.reduce((s, r) => s + r.down, 0),
+    robotik:Store.list('fservice').filter(x => x.vendor === 'Robotik Fix' && fInR(x.date, f, t)).reduce((s, x) => s + N(x.cost), 0)};
+}
+/* ---------- forms ---------- */
+function editVehicle(id){
+  const t = id ? fv(id) : {status:'active', type:'Truck', config:'10', svcKm:10000, svcMonths:6, svcBaseDate:today()};
+  formModal(id ? 'Edit vehicle — ' + fvShort(t) : 'Add vehicle', [
+    {k:'plate', label:'Registration no.', req:true, half:true, ph:'e.g. KJA 123 AB'}, {k:'fleetNo', label:'Fleet / unit no.', half:true, ph:'e.g. T-07'},
+    {k:'model', label:'Make & model', half:true, ph:'e.g. Toyota Hilux, Howo 371'}, {k:'year', label:'Year', type:'number', half:true},
+    {k:'type', label:'Type', type:'select', opts:FV_TYPES, half:true}, {k:'status', label:'Status', type:'select', opts:FV_STATUS.map(s => [s[0], s[1]]), half:true},
+    {k:'driverId', label:'Main driver', type:'select', opts:drvOpts('— none —'), half:true}, {k:'km', label:'Odometer now (km)', type:'number', half:true},
+    {k:'config', label:'Wheel layout (for tyres)', type:'select', opts:Object.entries(AXLE_CONFIGS).map(([k, c]) => [k, c.label])}, {k:'tyreSize', label:'Tyre size', half:true, ph:'e.g. 315/80R22.5'},
+    {k:'vin', label:'Chassis / VIN', half:true}, {k:'site', label:'Site / route', half:true},
+    {k:'insExp', label:'Insurance expires', type:'date', half:true}, {k:'licExp', label:'Vehicle licence expires', type:'date', half:true},
+    {k:'rwExp', label:'Roadworthiness expires', type:'date', half:true}, {k:'permitExp', label:'Hackney / heavy-duty permit expires', type:'date', half:true},
+    {k:'extExp', label:'Fire extinguisher expires', type:'date', half:true}, {k:'svcKm', label:'Service every (km)', type:'number', half:true},
+    {k:'svcMonths', label:'…or every (months)', type:'number', half:true}, {k:'svcBaseKm', label:'Last service at (km), if not logged', type:'number', half:true},
+    {k:'svcBaseDate', label:'Last service date, if not logged', type:'date', half:true}, {k:'cost', label:'Purchase cost', type:'number', half:true},
+    {k:'notes', label:'Notes', type:'textarea', rows:2}
+  ], t, v => {
+    const plate = String(v.plate || '').trim().toUpperCase(); if(Store.list('truck').some(x => x.id !== t.id && lc(x.plate) === lc(plate))) throw new Error('There is already a vehicle ' + plate + '.');
+    const s = Store.put('truck', Object.assign({}, t, v, {plate, owner:fleetName(), km:N(v.km) || N(t.km), kmDate:N(v.km) !== N(t.km) ? today() : t.kmDate}));
+    fvOpen = s.id; toast(plate + ' saved.');
+  }, id && can('admin') ? {label:'Delete', fn:async () => { if(!(await askConfirm('Delete ' + fvShort(t) + '? Its history stays in reports.'))) return false; Store.remove('truck', t.id); fvOpen = null; }} : null);
+}
+function editDriver(id){
+  const d = id ? fd(id) : {status:'active'};
+  formModal(id ? 'Edit driver' : 'Add driver', [
+    {k:'name', label:'Full name', req:true}, {k:'phone', label:'Phone / WhatsApp', type:'tel', half:true}, {k:'staffNo', label:'Staff no.', half:true},
+    {k:'licNo', label:'Driver\'s licence no.', half:true}, {k:'licClass', label:'Licence class', half:true, ph:'e.g. E, F, G'},
+    {k:'licExp', label:'Licence expires', type:'date', half:true}, {k:'medExp', label:'Medical / eye test due', type:'date', half:true},
+    {k:'status', label:'Status', type:'select', opts:[['active', 'Active'], ['leave', 'On leave'], ['left', 'Left the company']], half:true}, {k:'emergency', label:'Next of kin & phone', half:true},
+    {k:'notes', label:'Notes', type:'textarea', rows:2}
+  ], d, v => { Store.put('fdriver', Object.assign({}, d, v)); toast(v.name + ' saved.'); },
+  id && can('admin') ? {label:'Delete', fn:async () => { if(!(await askConfirm('Delete driver ' + d.name + '?'))) return false; Store.remove('fdriver', d.id); }} : null);
+}
+function editService(id, preset){
+  const s = id ? Store.get('fservice', id) : Object.assign({date:today(), type:'Routine service', vendor:'In-house'}, preset || {});
+  if(!id && s.vehicleId && !s.km) s.km = curKm(s.vehicleId) || '';
+  formModal(id ? 'Edit service / repair' : 'Log service or repair', [
+    {k:'vehicleId', label:'Vehicle', type:'select', opts:vehOpts(), req:true}, {k:'date', label:'Date', type:'date', half:true}, {k:'km', label:'Odometer (km)', type:'number', half:true},
+    {k:'type', label:'Work type', type:'select', opts:FS_TYPES, half:true}, {k:'vendor', label:'Done by', type:'select', opts:FS_VENDORS, half:true},
+    {k:'desc', label:'What was done', type:'textarea', rows:2, ph:'e.g. Engine oil & filters, front brake pads'},
+    {k:'cost', label:'Total cost', type:'number', half:true}, {k:'downtime', label:'Days off the road', type:'number', step:'0.5', half:true},
+    {k:'ref', label:'Invoice / job no.', half:true}, {k:'by', label:'Mechanic / supervisor', half:true}
+  ], s, v => { if(!v.vehicleId) throw new Error('Choose the vehicle.'); Store.put('fservice', Object.assign({}, s, v));
+    const t = fv(v.vehicleId); if(t && N(v.km) > N(t.km)) Store.put('truck', Object.assign({}, t, {km:N(v.km), kmDate:v.date}));
+    toast('Saved for ' + fvShort(t) + '.'); },
+  id && can('cashier') ? {label:'Delete', fn:async () => { if(!(await askConfirm('Delete this record?'))) return false; Store.remove('fservice', s.id); }} : null);
+}
+function editFuel(id, preset){
+  const x = id ? Store.get('ffuel', id) : Object.assign({date:today(), full:true}, preset || {});
+  if(!id && x.vehicleId && !x.driverId){ const t = fv(x.vehicleId); if(t) x.driverId = t.driverId || ''; }
+  formModal(id ? 'Edit fuel' : 'Add fuel', [
+    {k:'vehicleId', label:'Vehicle', type:'select', opts:vehOpts(), req:true}, {k:'driverId', label:'Driver', type:'select', opts:drvOpts('—'), half:true}, {k:'date', label:'Date', type:'date', half:true},
+    {k:'litres', label:'Litres', type:'number', step:'any', req:true, half:true}, {k:'cost', label:'Amount paid', type:'number', req:true, half:true},
+    {k:'km', label:'Odometer (km)', type:'number', half:true}, {k:'fuelType', label:'Fuel', type:'select', opts:['Diesel (AGO)', 'Petrol (PMS)', 'Gas (CNG)'], half:true},
+    {k:'full', label:'Filled the tank to full', type:'check'}, {k:'station', label:'Station / receipt no.'}
+  ], x, v => { if(!v.vehicleId) throw new Error('Choose the vehicle.'); if(!(N(v.litres) > 0)) throw new Error('Enter the litres.');
+    const t = fv(v.vehicleId), prev = curKm(v.vehicleId); if(N(v.km) && prev && N(v.km) < prev - 5 && !id) throw new Error('The odometer is lower than the last reading (' + nf(prev) + ' km). Check it.');
+    Store.put('ffuel', Object.assign({}, x, v)); if(t && N(v.km) > N(t.km)) Store.put('truck', Object.assign({}, t, {km:N(v.km), kmDate:v.date})); toast('Fuel saved.'); },
+  id && can('cashier') ? {label:'Delete', fn:async () => { if(!(await askConfirm('Delete this fuel entry?'))) return false; Store.remove('ffuel', x.id); }} : null);
+}
+function editTrip(id, preset){
+  const x = id ? Store.get('ftrip', id) : Object.assign({date:today()}, preset || {});
+  if(!id && x.vehicleId && !x.startKm) x.startKm = curKm(x.vehicleId) || '';
+  formModal(id ? 'Edit trip' : 'Log a trip', [
+    {k:'vehicleId', label:'Vehicle', type:'select', opts:vehOpts(), req:true}, {k:'driverId', label:'Driver', type:'select', opts:drvOpts('—'), half:true}, {k:'date', label:'Date', type:'date', half:true},
+    {k:'from', label:'From', half:true}, {k:'to', label:'To', half:true}, {k:'startKm', label:'Start km', type:'number', half:true}, {k:'endKm', label:'End km', type:'number', half:true},
+    {k:'purpose', label:'Purpose / load', half:true}, {k:'income', label:'Income from this trip (optional)', type:'number', half:true}
+  ], x, v => { if(!v.vehicleId) throw new Error('Choose the vehicle.'); if(N(v.endKm) && N(v.startKm) && N(v.endKm) < N(v.startKm)) throw new Error('End km is lower than start km.');
+    Store.put('ftrip', Object.assign({}, x, v)); const t = fv(v.vehicleId); if(t && N(v.endKm) > N(t.km)) Store.put('truck', Object.assign({}, t, {km:N(v.endKm), kmDate:v.date})); toast('Trip saved.'); },
+  id && can('cashier') ? {label:'Delete', fn:async () => { if(!(await askConfirm('Delete this trip?'))) return false; Store.remove('ftrip', x.id); }} : null);
+}
+function editCost(id, preset){
+  const x = id ? Store.get('fcost', id) : Object.assign({date:today(), category:FC_CATS[0]}, preset || {});
+  formModal(id ? 'Edit cost' : 'Other cost', [{k:'vehicleId', label:'Vehicle', type:'select', opts:vehOpts('— whole fleet —')}, {k:'date', label:'Date', type:'date', half:true}, {k:'category', label:'Category', type:'select', opts:FC_CATS, half:true},
+    {k:'amount', label:'Amount', type:'number', req:true, half:true}, {k:'note', label:'Note', half:true}], x, v => { Store.put('fcost', Object.assign({}, x, v)); toast('Cost saved.'); },
+  id && can('cashier') ? {label:'Delete', fn:async () => { if(!(await askConfirm('Delete this cost?'))) return false; Store.remove('fcost', x.id); }} : null);
+}
+function dailyCheck(vehicleId){
+  const t = vehicleId ? fv(vehicleId) : null, ds = fdList(), me0 = ds.find(d => lc(d.name) === lc(myName())) || null;
+  const box = modal(`<h2 style="margin-top:0">📋 Daily vehicle check</h2>
+    <div class="grid2"><div class="field"><label for="dcV">Vehicle</label><select id="dcV">${vehOpts('— choose —').map(([k, l]) => `<option value="${esc(k)}"${k === (vehicleId || '') ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+    <div class="field"><label for="dcD">Driver</label><select id="dcD"><option value="">—</option>${ds.map(d => `<option value="${esc(d.id)}"${(t && t.driverId === d.id) || (me0 && me0.id === d.id) ? ' selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div></div>
+    <div class="field"><label for="dcK">Odometer (km)</label><input id="dcK" type="number" inputmode="numeric" value="${t ? esc(String(curKm(t.id) || '')) : ''}"></div>
+    <div class="rf-note" style="margin:6px 0">Tap any item that is NOT OK:</div>
+    <div id="dcItems" style="display:grid;grid-template-columns:1fr 1fr;gap:6px">${FCHECK_ITEMS.map(i => `<button type="button" class="fl-chk ok" data-dci="${esc(i)}">✓ ${esc(i)}</button>`).join('')}</div>
+    <div class="field" style="margin-top:8px"><label for="dcN">Defects / notes (anything not OK)</label><textarea id="dcN" rows="2" placeholder="e.g. Rear left indicator not working"></textarea></div>
+    <div class="rf-tools"><button class="rf-btn green big" id="dcSave">Save check</button><button class="rf-btn grey" id="dcX">Cancel</button></div>`);
+  box.querySelectorAll('[data-dci]').forEach(b => b.onclick = () => { const bad = b.classList.toggle('bad'); b.classList.toggle('ok', !bad); b.textContent = (bad ? '✗ ' : '✓ ') + b.dataset.dci; });
+  box.querySelector('#dcV').onchange = e => { const v = fv(e.target.value); if(v){ box.querySelector('#dcK').value = curKm(v.id) || ''; if(v.driverId) box.querySelector('#dcD').value = v.driverId; } };
+  box.querySelector('#dcX').onclick = closeModal;
+  box.querySelector('#dcSave').onclick = () => {
+    const vid = box.querySelector('#dcV').value; if(!vid){ toast('Choose the vehicle.', true); return; }
+    const items = {}; box.querySelectorAll('[data-dci]').forEach(b => items[b.dataset.dci] = b.classList.contains('bad') ? 'Not OK' : 'OK');
+    const bad = Object.entries(items).filter(([, s]) => s !== 'OK').map(([k]) => k), note = box.querySelector('#dcN').value.trim();
+    const defects = [bad.join(', '), note].filter(Boolean).join(' — ');
+    const km = N(box.querySelector('#dcK').value), prev = curKm(vid); if(km && prev && km < prev - 5){ toast('The odometer is lower than the last reading (' + nf(prev) + ' km).', true); return; }
+    Store.put('fcheck', {vehicleId:vid, driverId:box.querySelector('#dcD').value, date:today(), at:nowIso(), km, items, defects, ok:!defects, by:myName() || ''});
+    const t2 = fv(vid); if(t2 && km > N(t2.km)) Store.put('truck', Object.assign({}, t2, {km, kmDate:today()}));
+    closeModal(); toast(defects ? 'Check saved — defect reported to the fleet manager.' : 'Check saved — all OK.');
+  };
+}
+/* ---------- screens ---------- */
+function fleetKpis(list){ return `<div class="rf-kpis">${list.map(([l, v, cls]) => `<div class="rf-kpi"><div class="l">${l}</div><div class="v ${cls || ''}">${v}</div></div>`).join('')}</div>`; }
+function alertRows(al, max){
+  return al.slice(0, max || 50).map(a => `<div class="rf-row fl-al s${a.sev}" data-fact="${esc(a.act[0])}" data-fid="${esc(a.act[1])}"><div class="t"><span>${a.icon} ${esc(a.text)}</span><span class="rf-badge ${a.sev >= 3 ? 'red' : a.sev === 2 ? 'amber' : ''}">${a.sev >= 3 ? 'Urgent' : a.sev === 2 ? 'Soon' : 'Info'}</span></div></div>`).join('') || '<div class="rf-empty">✅ No alerts — papers, services, tyres and checks are all in order.</div>';
+}
+function bindAlertActs(v){ bind(v, '[data-fact]', 'click', el => { const a = el.dataset.fact, id = el.dataset.fid;
+  if(a === 'veh' || a === 'svc'){ fvOpen = id; showTab('fvehicles'); } else if(a === 'tyre'){ openTruck = id; showTab('fleet'); } else if(a === 'drv') editDriver(id);
+  else if(a === 'defect') showTab('fchecks'); else if(a === 'check') dailyCheck(); }); }
+function renderFleetHome(){
+  const v = $('view-home'); if(!v) return;
+  const p = periodOf('month'), s = fleetStats(p.f, p.t), vs = fvList(), al = fleetAlerts();
+  const cnt = st => vs.filter(t => t.status === st).length;
+  let h = `<div class="card fl-hero"><h2 class="red">🚚 ${esc(fleetName())} — FLEET DASHBOARD</h2>
+    ${fleetKpis([['Vehicles', vs.length], ['Active', cnt('active')], ['In workshop', cnt('workshop'), cnt('workshop') ? 'neg' : ''], ['Off road', cnt('offroad'), cnt('offroad') ? 'neg' : ''], ['Alerts', al.filter(a => a.sev >= 2).length, al.some(a => a.sev >= 3) ? 'neg' : ''], ['Drivers', fdList().length]])}
+    ${fleetKpis([['Spent this month', shortMoney(s.cost)], ['Km this month', nf(s.km)], ['Cost per km', s.km ? money(s.perKm) : '—'], ['Fuel km per litre', s.kmpl ? nf(s.kmpl, 1) : '—']])}
+    <div class="rf-tools fl-quick"><button class="rf-btn green" data-fq="check">📋 Daily check</button><button class="rf-btn" data-fq="fuel">⛽ Add fuel</button><button class="rf-btn" data-fq="trip">🛣 Trip</button><button class="rf-btn" data-fq="svc">🔧 Service / repair</button><button class="rf-btn red" data-fq="rob">📤 Send job to Robotik Fix</button></div></div>`;
+  h += wrap('⚠ NEEDS ATTENTION', alertRows(al, 12) + (al.length > 12 ? `<p class="rf-note">+ ${al.length - 12} more — see Vehicles and Drivers.</p>` : ''));
+  const months = Array.from({length:6}, (_, i) => { const f = addMonths(today().slice(0, 8) + '01', i - 5); return {f, t:addDays(addMonths(f, 1), -1), label:new Date(f + 'T12:00:00').toLocaleDateString('en-GB', {month:'short'})}; });
+  const all6 = costEntries(months[0].f, months[5].t);
+  h += `<div class="card"><h2>SPENDING — LAST 6 MONTHS</h2>${svgStacked(months.map(m => ({label:m.label, parts:fSumBy(all6.filter(c => fInR(c.date, m.f, m.t)), 'cat')})), {title:'Fleet spending by month and category'})}
+    ${svgBars(s.rows.filter(r => r.cost).sort((a, b) => b.cost - a.cost).map(r => [fvShort(r.v), r.cost]), {title:'This month: spending per vehicle (top 10)'})}
+    <p class="rf-note">Full daily, weekly, monthly and yearly reports are in the <b>Reports</b> tab.</p></div>`;
+  const rob = (fleetFeed && fleetFeed.orders) || [], openJobs = rob.filter(o => !['done', 'cancelled'].includes(o.status)), pq = ((fleetFeed && fleetFeed.quotes) || []).filter(q => q.status === 'pending');
+  h += wrap('🔧 ROBOTIK FIX', !partnerCode() ? '<p class="rf-note">Enter the code Robotik Fix gave you (Robotik Fix tab) to send jobs and follow them here.</p>' :
+    `${fleetKpis([['Open jobs', openJobs.length], ['Quotes to approve', pq.length, pq.length ? 'neg' : ''], ['Owed to Robotik Fix', money((fleetFeed && fleetFeed.balance) || 0)]])}<div class="rf-tools"><button class="rf-btn" data-fq="robjobs">Open jobs & quotes</button></div>`);
+  v.innerHTML = h;
+  bindAlertActs(v);
+  bind(v, '[data-fq]', 'click', el => { const q = el.dataset.fq; if(q === 'check') dailyCheck(); else if(q === 'fuel') editFuel(); else if(q === 'trip') editTrip(); else if(q === 'svc') editService(); else { robSeg = q === 'rob' ? 'send' : 'jobs'; showTab('frobotik'); } });
+  if(partnerCode() && Date.now() - fleetFeedAt > 60000) loadFleetFeed().then(() => { if(curTab === 'home') renderFleetHome(); });
+}
+function vehicleCard(t){
+  const st = FV_STATUS.find(s => s[0] === t.status) || FV_STATUS[0], sd = serviceDue(t), pa = FV_PAPERS.map(([k, l]) => [l, t[k], daysTo(t[k])]).filter(x => x[1]), drv = fd(t.driverId);
+  const y = periodOf('year'), ys = costEntries(y.f, y.t).filter(c => c.vehicleId === t.id), ycost = ys.reduce((s, c) => s + c.amount, 0), ykm = kmIn(t.id, y.f, y.t);
+  const hist = [].concat(
+    Store.list('fservice').filter(x => x.vehicleId === t.id).map(x => [x.date, '🔧 ' + x.type + (x.desc ? ': ' + x.desc : '') + (x.vendor ? ' (' + x.vendor + ')' : ''), x.cost, ['fs', x.id]]),
+    Store.list('ffuel').filter(x => x.vehicleId === t.id).map(x => [x.date, '⛽ ' + nf(x.litres, 1) + ' L' + (x.km ? ' @ ' + nf(x.km) + ' km' : ''), x.cost, ['ff', x.id]]),
+    Store.list('fcheck').filter(x => x.vehicleId === t.id).map(x => [x.date, (x.defects ? '⚠ Check: ' + x.defects + (x.fixed ? ' (fixed)' : '') : '📋 Check: all OK'), 0, null]),
+    Store.list('ftrip').filter(x => x.vehicleId === t.id).map(x => [x.date, '🛣 ' + [x.from, x.to].filter(Boolean).join(' → ') + (N(x.endKm) - N(x.startKm) > 0 ? ' · ' + nf(N(x.endKm) - N(x.startKm)) + ' km' : ''), 0, ['ft', x.id]]),
+    Store.list('fcost').filter(x => x.vehicleId === t.id).map(x => [x.date, '💳 ' + x.category + (x.note ? ': ' + x.note : ''), x.amount, ['fc', x.id]])
+  ).sort((a, b) => String(b[0]).localeCompare(String(a[0]))).slice(0, 15);
+  return `<div class="fl-detail">
+    <div class="m">${esc(t.type || '')}${t.year ? ' · ' + esc(t.year) : ''} · ${t.vin ? 'VIN ' + esc(t.vin) + ' · ' : ''}odometer <b>${nf(curKm(t.id))} km</b>${drv ? ' · driver <b>' + esc(drv.name) + '</b>' + (drv.phone ? ' ' + esc(drv.phone) : '') : ''}${t.site ? ' · ' + esc(t.site) : ''}</div>
+    <div class="fl-grid">
+      <div><b>Papers</b>${pa.length ? pa.map(([l, d, left]) => `<div class="m">${left < 0 ? '⛔' : left <= 30 ? '⚠' : '✓'} ${esc(l)}: ${esc(fmtDate(d))}${left < 0 ? ' <b class="neg">expired</b>' : left <= 30 ? ' <b>(' + left + ' days)</b>' : ''}</div>`).join('') : '<div class="m">No expiry dates entered.</div>'}</div>
+      <div><b>Service</b>${sd ? `<div class="m">${sd.state === 'overdue' ? '⛔ Overdue' : sd.state === 'due' ? '⚠ Due soon' : '✓ OK'}${sd.dueKm ? ' · next at ' + nf(sd.dueKm) + ' km' : ''}${sd.dueDate ? ' · by ' + esc(fmtDate(sd.dueDate)) : ''}</div><div class="m">Last: ${sd.last ? esc(fmtDate(sd.last.date)) + (sd.last.km ? ' @ ' + nf(sd.last.km) + ' km' : '') : 'not logged yet'}</div>` : '<div class="m">Set a service interval (Edit).</div>'}</div>
+      <div><b>This year</b><div class="m">Spent ${money(ycost)} · ${nf(ykm)} km${ykm ? ' · ' + money(ycost / ykm) + '/km' : ''}</div><div class="m">${Object.entries(fSumBy(ys, 'cat')).map(([k, v]) => esc(k) + ' ' + shortMoney(v)).join(' · ') || '—'}</div></div>
+    </div>
+    <div class="rf-tools" style="flex-wrap:wrap"><button class="rf-btn" data-fe="${esc(t.id)}">✏ Edit</button><button class="rf-btn green" data-fx="check" data-fv="${esc(t.id)}">📋 Check</button><button class="rf-btn" data-fx="fuel" data-fv="${esc(t.id)}">⛽ Fuel</button><button class="rf-btn" data-fx="svc" data-fv="${esc(t.id)}">🔧 Service</button><button class="rf-btn" data-fx="trip" data-fv="${esc(t.id)}">🛣 Trip</button><button class="rf-btn" data-fx="tyre" data-fv="${esc(t.id)}">🛞 Tyres</button><button class="rf-btn grey" data-fx="cost" data-fv="${esc(t.id)}">💳 Cost</button><button class="rf-btn red" data-fx="rob" data-fv="${esc(t.id)}">📤 Robotik</button></div>
+    ${hist.length ? '<table class="rf-table"><tr><th>Date</th><th>History</th><th class="n">Cost</th></tr>' + hist.map(([d, l, c, ed]) => `<tr${ed ? ` data-fhe="${ed[0]}" data-fhid="${esc(ed[1])}" style="cursor:pointer"` : ''}><td>${esc(fmtDate(d))}</td><td>${esc(l)}</td><td class="n">${N(c) ? money(c) : ''}</td></tr>`).join('') + '</table>' : ''}</div>`;
+}
+function renderFleetVehicles(){
+  const v = $('view-fvehicles'); if(!v) return;
+  let list = fvList(fvFilter === 'sold');
+  if(fvFilter && fvFilter !== 'sold') list = list.filter(t => t.status === fvFilter); else if(fvFilter === 'sold') list = list.filter(t => t.status === 'sold');
+  if(fvQ) list = list.filter(t => lc([t.plate, t.fleetNo, t.model, t.type, t.site, (fd(t.driverId) || {}).name].join(' ')).includes(lc(fvQ)));
+  let h = `<div class="card"><h2 class="red">VEHICLES (${fvList().length})</h2><div class="rf-tools"><button class="rf-btn green big" id="fvAdd">＋ Add vehicle</button><select id="fvF"><option value="">All in use</option>${FV_STATUS.map(s => `<option value="${s[0]}"${fvFilter === s[0] ? ' selected' : ''}>${s[1]}</option>`).join('')}</select><input id="fvQ" placeholder="Search plate, fleet no., driver…" value="${esc(fvQ)}" style="flex:1;min-width:140px"></div>
+    <div class="rf-tools"><button class="rf-btn grey" id="fvCsv">⬇ Vehicle list (CSV)</button></div>`;
+  h += list.map(t => { const st = FV_STATUS.find(s => s[0] === t.status) || FV_STATUS[0], sd = serviceDue(t), pa = paperAlerts(t), df = openDefects(t.id).length, lt = lowTyres(t.id).length;
+    const chips = [pa.some(p => p.left < 0) ? '<span class="rf-badge red">⛔ papers</span>' : pa.length ? '<span class="rf-badge amber">📄 papers</span>' : '', sd && sd.state !== 'ok' ? `<span class="rf-badge ${sd.state === 'overdue' ? 'red' : 'amber'}">🔧 service</span>` : '', df ? '<span class="rf-badge amber">⚠ defect</span>' : '', lt ? '<span class="rf-badge amber">🛞 tyres</span>' : ''].join(' ');
+    return `<div class="rf-row"><div class="t" data-fo="${esc(t.id)}" style="cursor:pointer"><span>${esc(fvShort(t))} <span class="rf-note" style="font-weight:normal">${esc(t.model || '')}</span></span><span class="rf-badge ${st[2]}">${esc(st[1])}</span></div>
+      <div class="m" data-fo="${esc(t.id)}" style="cursor:pointer">${chips || '✓ all in order'} · ${nf(curKm(t.id))} km${fd(t.driverId) ? ' · ' + esc(fd(t.driverId).name) : ''}</div>${fvOpen === t.id ? vehicleCard(t) : ''}</div>`; }).join('')
+    || `<div class="rf-empty">${fvList().length ? 'Nothing matches.' : 'No vehicles yet. Tap “＋ Add vehicle” — registration, papers expiry dates and service interval.'}</div>`;
+  v.innerHTML = h + '</div>';
+  $('fvAdd').onclick = () => editVehicle();
+  $('fvF').onchange = e => { fvFilter = e.target.value; renderFleetVehicles(); };
+  let tm; $('fvQ').oninput = e => { clearTimeout(tm); tm = setTimeout(() => { fvQ = e.target.value; renderFleetVehicles(); const q = $('fvQ'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }, 300); };
+  $('fvCsv').onclick = () => downloadCsv('fleet_vehicles_' + today() + '.csv', [['Fleet no.', 'Registration', 'Model', 'Type', 'Year', 'Status', 'Driver', 'Odometer km'].concat(FV_PAPERS.map(p => p[1] + ' expires')).concat(['Service due km', 'Service due date'])]
+    .concat(fvList(true).map(t => { const sd = serviceDue(t) || {}; return [t.fleetNo, t.plate, t.model, t.type, t.year, (FV_STATUS.find(s => s[0] === t.status) || [])[1], (fd(t.driverId) || {}).name, curKm(t.id)].concat(FV_PAPERS.map(p => t[p[0]] || '')).concat([sd.dueKm || '', sd.dueDate || '']); })));
+  bind(v, '[data-fo]', 'click', el => { fvOpen = fvOpen === el.dataset.fo ? null : el.dataset.fo; renderFleetVehicles(); });
+  bind(v, '[data-fe]', 'click', el => editVehicle(el.dataset.fe));
+  bind(v, '[data-fx]', 'click', el => { const id = el.dataset.fv, a = el.dataset.fx;
+    if(a === 'check') dailyCheck(id); else if(a === 'fuel') editFuel(null, {vehicleId:id}); else if(a === 'svc') editService(null, {vehicleId:id}); else if(a === 'trip') editTrip(null, {vehicleId:id});
+    else if(a === 'cost') editCost(null, {vehicleId:id}); else if(a === 'tyre'){ openTruck = id; showTab('fleet'); } else { robSeg = 'send'; window.__robVeh = id; showTab('frobotik'); } });
+  bind(v, '[data-fhe]', 'click', el => { const k = el.dataset.fhe, id = el.dataset.fhid; if(k === 'fs') editService(id); else if(k === 'ff') editFuel(id); else if(k === 'ft') editTrip(id); else if(k === 'fc') editCost(id); });
+}
+function renderFleetDrivers(){
+  const v = $('view-fdrivers'); if(!v) return;
+  const p = periodOf('month'), list = Store.list('fdriver').sort((a, b) => (a.status === 'left') - (b.status === 'left') || String(a.name).localeCompare(String(b.name)));
+  let h = `<div class="card"><h2 class="red">DRIVERS (${fdList().length})</h2><div class="rf-tools"><button class="rf-btn green big" id="fdAdd">＋ Add driver</button></div>`;
+  h += list.map(d => { const l = daysTo(d.licExp), veh = fvList().filter(t => t.driverId === d.id), fuel = Store.list('ffuel').filter(x => x.driverId === d.id && fInR(x.date, p.f, p.t)), trips = Store.list('ftrip').filter(x => x.driverId === d.id && fInR(x.date, p.f, p.t));
+    const km = trips.reduce((s, x) => s + Math.max(0, N(x.endKm) - N(x.startKm)), 0), checks = Store.list('fcheck').filter(x => x.driverId === d.id && fInR(x.date, p.f, p.t)).length;
+    return `<div class="rf-row" data-fde="${esc(d.id)}" style="cursor:pointer"><div class="t"><span>${esc(d.name)}${d.status === 'left' ? ' (left)' : d.status === 'leave' ? ' (on leave)' : ''}</span>${d.licExp ? `<span class="rf-badge ${l < 0 ? 'red' : l <= 30 ? 'amber' : 'green'}">${l < 0 ? '⛔ licence expired' : l <= 30 ? '⚠ licence ' + l + ' days' : '✓ licence'}</span>` : '<span class="rf-badge">no licence date</span>'}</div>
+      <div class="m">${esc(d.phone || '')}${d.licNo ? ' · licence ' + esc(d.licNo) + (d.licClass ? ' (' + esc(d.licClass) + ')' : '') : ''}${veh.length ? ' · drives ' + veh.map(fvShort).map(esc).join(', ') : ''}</div>
+      <div class="m">This month: ${trips.length} trip(s), ${nf(km)} km · fuel ${nf(fuel.reduce((s, x) => s + N(x.litres), 0), 1)} L · ${checks} daily check(s)</div></div>`; }).join('') || '<div class="rf-empty">No drivers yet.</div>';
+  v.innerHTML = h + '</div>';
+  $('fdAdd').onclick = () => editDriver(); bind(v, '[data-fde]', 'click', el => editDriver(el.dataset.fde));
+}
+function renderFleetService(){
+  const v = $('view-fservice'); if(!v) return;
+  const due = fvList().map(t => [t, serviceDue(t)]).filter(([, s]) => s && s.state !== 'ok').sort((a, b) => (a[1].state === 'overdue' ? 0 : 1) - (b[1].state === 'overdue' ? 0 : 1));
+  let rec = Store.list('fservice').sort((a, b) => String(b.date).localeCompare(String(a.date))); if(fsVeh) rec = rec.filter(r => r.vehicleId === fsVeh);
+  let h = `<div class="card"><h2 class="red">SERVICE &amp; REPAIRS</h2><div class="rf-tools"><button class="rf-btn green big" id="fsAdd">＋ Log service / repair</button><button class="rf-btn grey" id="fsCost">💳 Other cost</button></div>
+    <h3 class="fl-h3">Due for service (${due.length})</h3>${due.map(([t, s]) => `<div class="rf-row"><div class="t"><span>${s.state === 'overdue' ? '⛔' : '⚠'} ${esc(fvShort(t))} ${esc(t.model || '')}</span><span class="rf-badge ${s.state === 'overdue' ? 'red' : 'amber'}">${s.state === 'overdue' ? 'Overdue' : 'Due soon'}</span></div>
+      <div class="m">${s.dueKm ? 'Due at ' + nf(s.dueKm) + ' km (now ' + nf(curKm(t.id)) + ')' : ''}${s.dueDate ? ' · by ' + esc(fmtDate(s.dueDate)) : ''}</div><div class="acts"><button class="rf-btn" data-fsl="${esc(t.id)}">✓ Log the service</button><button class="rf-btn red" data-fsr="${esc(t.id)}">📤 Book with Robotik Fix</button></div></div>`).join('') || '<p class="rf-note">✅ No vehicle is due for service.</p>'}
+    <h3 class="fl-h3">History</h3><div class="rf-tools"><select id="fsV">${vehOpts('All vehicles').map(([k, l]) => `<option value="${esc(k)}"${k === fsVeh ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+    ${rec.slice(0, 80).map(r => `<div class="rf-row" data-fse="${esc(r.id)}" style="cursor:pointer"><div class="t"><span>${esc(fmtDate(r.date))} · ${esc(fvShort(fv(r.vehicleId)))} · ${esc(r.type)}</span><span>${money(r.cost)}</span></div><div class="m">${esc(r.desc || '')}${r.vendor ? ' · ' + esc(r.vendor) : ''}${r.km ? ' · ' + nf(r.km) + ' km' : ''}${N(r.downtime) ? ' · ' + r.downtime + ' day(s) off road' : ''}${r.ref ? ' · ' + esc(r.ref) : ''}</div></div>`).join('') || '<div class="rf-empty">No records yet.</div>'}</div>`;
+  v.innerHTML = h;
+  $('fsAdd').onclick = () => editService(null, fsVeh ? {vehicleId:fsVeh} : null); $('fsCost').onclick = () => editCost();
+  $('fsV').onchange = e => { fsVeh = e.target.value; renderFleetService(); };
+  bind(v, '[data-fse]', 'click', el => editService(el.dataset.fse));
+  bind(v, '[data-fsl]', 'click', el => editService(null, {vehicleId:el.dataset.fsl, type:'Routine service'}));
+  bind(v, '[data-fsr]', 'click', el => { robSeg = 'send'; window.__robVeh = el.dataset.fsr; window.__robSvc = 'service'; showTab('frobotik'); });
+}
+function renderFleetFuel(){
+  const v = $('view-ffuel'); if(!v) return;
+  let h = seg('ffuel', [['fuel', '⛽ Fuel'], ['trips', '🛣 Trips']], ffSeg);
+  if(ffSeg === 'fuel'){
+    const fills = Store.list('ffuel').sort((a, b) => String(b.date).localeCompare(String(a.date)) || N(b.km) - N(a.km));
+    // km per litre between full fills of the same vehicle
+    const eff = {}; fvList(true).forEach(t => { const f = Store.list('ffuel').filter(x => x.vehicleId === t.id && N(x.km)).sort((a, b) => N(a.km) - N(b.km)); for(let i = 1; i < f.length; i++) if(f[i].full !== false && N(f[i].km) > N(f[i - 1].km)) eff[f[i].id] = (N(f[i].km) - N(f[i - 1].km)) / N(f[i].litres); });
+    const p = periodOf('month'), mf = fills.filter(x => fInR(x.date, p.f, p.t));
+    h += `<div class="card"><h2 class="red">FUEL</h2><div class="rf-tools"><button class="rf-btn green big" id="ffAdd">＋ Add fuel</button></div>
+      ${fleetKpis([['Litres this month', nf(mf.reduce((s, x) => s + N(x.litres), 0), 1)], ['Spent this month', shortMoney(mf.reduce((s, x) => s + N(x.cost), 0))], ['Average price / L', mf.length ? money(mf.reduce((s, x) => s + N(x.cost), 0) / Math.max(1, mf.reduce((s, x) => s + N(x.litres), 0))) : '—']])}
+      ${fills.slice(0, 80).map(x => `<div class="rf-row" data-ffe="${esc(x.id)}" style="cursor:pointer"><div class="t"><span>${esc(fmtDate(x.date))} · ${esc(fvShort(fv(x.vehicleId)))}</span><span>${money(x.cost)}</span></div><div class="m">${nf(x.litres, 1)} L${N(x.litres) ? ' @ ' + money(N(x.cost) / N(x.litres)) + '/L' : ''}${x.km ? ' · ' + nf(x.km) + ' km' : ''}${eff[x.id] ? ' · <b>' + nf(eff[x.id], 1) + ' km/L</b>' : ''}${fd(x.driverId) ? ' · ' + esc(fd(x.driverId).name) : ''}${x.station ? ' · ' + esc(x.station) : ''}</div></div>`).join('') || '<div class="rf-empty">No fuel entries yet.</div>'}</div>`;
+  } else {
+    const trips = Store.list('ftrip').sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    h += `<div class="card"><h2 class="red">TRIPS</h2><div class="rf-tools"><button class="rf-btn green big" id="ftAdd">＋ Log a trip</button></div>
+      ${trips.slice(0, 80).map(x => `<div class="rf-row" data-fte="${esc(x.id)}" style="cursor:pointer"><div class="t"><span>${esc(fmtDate(x.date))} · ${esc(fvShort(fv(x.vehicleId)))}</span><span>${N(x.endKm) - N(x.startKm) > 0 ? nf(N(x.endKm) - N(x.startKm)) + ' km' : ''}</span></div><div class="m">${esc([x.from, x.to].filter(Boolean).join(' → '))}${x.purpose ? ' · ' + esc(x.purpose) : ''}${fd(x.driverId) ? ' · ' + esc(fd(x.driverId).name) : ''}${N(x.income) ? ' · income ' + money(x.income) : ''}</div></div>`).join('') || '<div class="rf-empty">No trips yet.</div>'}</div>`;
+  }
+  v.innerHTML = h;
+  if($('ffAdd')) $('ffAdd').onclick = () => editFuel(); if($('ftAdd')) $('ftAdd').onclick = () => editTrip();
+  bind(v, '[data-ffe]', 'click', el => editFuel(el.dataset.ffe)); bind(v, '[data-fte]', 'click', el => editTrip(el.dataset.fte));
+}
+function renderFleetChecks(){
+  const v = $('view-fchecks'); if(!v) return;
+  const todayC = Store.list('fcheck').filter(c => c.date === today()), done = new Set(todayC.map(c => c.vehicleId)), act = fvList().filter(t => t.status === 'active');
+  const defects = openDefects();
+  let h = `<div class="card"><h2 class="red">DAILY CHECKS</h2><div class="rf-tools"><button class="rf-btn green big" id="fcAdd">📋 Do a daily check</button></div>
+    ${fleetKpis([['Checked today', done.size + ' / ' + act.length, done.size < act.length ? 'neg' : ''], ['Open defects', defects.length, defects.length ? 'neg' : '']])}
+    <h3 class="fl-h3">Not checked today</h3>${act.filter(t => !done.has(t.id)).map(t => `<div class="rf-row"><div class="t"><span>${esc(fvShort(t))} ${esc(t.model || '')}</span><button class="rf-btn" data-fck="${esc(t.id)}">📋 Check now</button></div></div>`).join('') || '<p class="rf-note">✅ Every active vehicle has been checked today.</p>'}
+    <h3 class="fl-h3">Open defects</h3>${defects.map(c => `<div class="rf-row"><div class="t"><span>⚠ ${esc(fvShort(fv(c.vehicleId)))} · ${esc(fmtDate(c.date))}</span><span>${esc((fd(c.driverId) || {}).name || c.by || '')}</span></div><div class="m">${esc(c.defects)}</div>
+      <div class="acts"><button class="rf-btn green" data-fcfix="${esc(c.id)}">✓ Fixed</button><button class="rf-btn red" data-fcrob="${esc(c.id)}">📤 Send to Robotik Fix</button></div></div>`).join('') || '<p class="rf-note">✅ No open defects.</p>'}
+    <h3 class="fl-h3">Recent checks</h3>${Store.list('fcheck').sort((a, b) => String(b.at || b.date).localeCompare(String(a.at || a.date))).slice(0, 30).map(c => `<div class="rf-row"><div class="t"><span>${esc(fmtDate(c.date))} · ${esc(fvShort(fv(c.vehicleId)))}</span><span class="rf-badge ${c.defects ? (c.fixed ? 'green' : 'amber') : 'green'}">${c.defects ? (c.fixed ? 'fixed' : 'defect') : 'all OK'}</span></div>${c.defects ? `<div class="m">${esc(c.defects)}</div>` : ''}</div>`).join('') || '<div class="rf-empty">No checks yet.</div>'}</div>`;
+  v.innerHTML = h;
+  $('fcAdd').onclick = () => dailyCheck(); bind(v, '[data-fck]', 'click', el => dailyCheck(el.dataset.fck));
+  bind(v, '[data-fcfix]', 'click', el => { const c = Store.get('fcheck', el.dataset.fcfix); Store.put('fcheck', Object.assign({}, c, {fixed:true, fixedAt:nowIso(), fixedBy:myName()})); toast('Marked fixed.'); });
+  bind(v, '[data-fcrob]', 'click', el => { const c = Store.get('fcheck', el.dataset.fcrob); robSeg = 'send'; window.__robVeh = c.vehicleId; window.__robSvc = 'repair'; window.__robNote = 'Defect from daily check ' + fmtDate(c.date) + ': ' + c.defects; showTab('frobotik'); });
+}
+function renderFleetReports(){
+  const v = $('view-freports'); if(!v) return;
+  const p = periodOf(frPeriod, frAnchor), s = fleetStats(p.f, p.t), bk = bucketsOf(frPeriod, p);
+  const prevP = periodOf(frPeriod, stepPeriod(frPeriod, frAnchor || today(), -1)), prev = fleetStats(prevP.f, prevP.t);
+  const delta = (a, b) => b ? ((a - b) / b * 100 >= 0 ? '▲ ' : '▼ ') + nf(Math.abs((a - b) / b * 100)) + '% vs previous' : '';
+  let h = `<div class="card"><h2 class="red">REPORTS</h2><div class="rf-seg">${[['day', 'Daily'], ['week', 'Weekly'], ['month', 'Monthly'], ['year', 'Annual']].map(([k, l]) => `<button class="${k === frPeriod ? 'on' : ''}" data-frp="${k}">${l}</button>`).join('')}</div>
+    <div class="rf-tools" style="align-items:center"><button class="rf-btn grey" data-frs="-1">◀</button><b style="flex:1;text-align:center">${esc(p.label)}</b><button class="rf-btn grey" data-frs="1">▶</button></div>
+    <div id="frBody">${fleetKpis([['Total spent', shortMoney(s.cost)], ['Km driven', nf(s.km)], ['Cost per km', s.km ? money(s.perKm) : '—'], ['Fuel', nf(s.litres, 1) + ' L'], ['km per litre', s.kmpl ? nf(s.kmpl, 1) : '—'], ['Days off road', nf(s.down, 1)]])}
+    <p class="rf-note" style="margin-top:0">${esc(delta(s.cost, prev.cost))}${s.robotik ? ' · Robotik Fix jobs: ' + money(s.robotik) : ''} · ${s.trips.length} trip(s) · ${s.checks.length} daily check(s)${s.checks.filter(c => c.defects).length ? ', ' + s.checks.filter(c => c.defects).length + ' with defects' : ''}</p>
+    ${frPeriod === 'day' ? '' : svgStacked(bk.map(b => ({label:b.label, short:b.short, parts:fSumBy(s.costs.filter(c => fInR(c.date, b.f, b.t)), 'cat')})), {title:'Spending by ' + (frPeriod === 'year' ? 'month' : 'day') + ' and category'})}
+    ${svgBars(COST_CATS.map(c => [c, s.byCat[c] || 0]).filter(r => r[1]), {title:'Spending by category'})}
+    ${svgBars(s.rows.filter(r => r.cost).sort((a, b) => b.cost - a.cost).map(r => [fvShort(r.v), r.cost]), {title:'Spending per vehicle (top 10)'})}
+    ${svgBars(s.rows.filter(r => r.km && r.litres).map(r => [fvShort(r.v), r.km / r.litres]).sort((a, b) => a[1] - b[1]), {title:'Fuel economy per vehicle (km per litre, worst first)', fmt:x => nf(x, 1) + ' km/L', color:'#1baf7a'})}
+    <h3 class="fl-h3">Per vehicle</h3><div style="overflow-x:auto"><table class="rf-table"><tr><th>Vehicle</th><th class="n">km</th><th class="n">Fuel L</th><th class="n">km/L</th><th class="n">Spent</th><th class="n">per km</th><th class="n">Days off</th></tr>
+    ${s.rows.filter(r => r.cost || r.km || r.litres).sort((a, b) => b.cost - a.cost).map(r => `<tr><td>${esc(fvShort(r.v))}</td><td class="n">${nf(r.km)}</td><td class="n">${nf(r.litres, 1)}</td><td class="n">${r.litres && r.km ? nf(r.km / r.litres, 1) : '—'}</td><td class="n">${money(r.cost)}</td><td class="n">${r.km ? money(r.cost / r.km) : '—'}</td><td class="n">${nf(r.down, 1)}</td></tr>`).join('')}
+    <tr class="tot"><td>Total</td><td class="n">${nf(s.km)}</td><td class="n">${nf(s.litres, 1)}</td><td class="n">${s.kmpl ? nf(s.kmpl, 1) : '—'}</td><td class="n">${money(s.cost)}</td><td class="n">${s.km ? money(s.perKm) : '—'}</td><td class="n">${nf(s.down, 1)}</td></tr></table></div>
+    <h3 class="fl-h3">All costs (${s.costs.length})</h3><div style="overflow-x:auto"><table class="rf-table"><tr><th>Date</th><th>Vehicle</th><th>Category</th><th>Detail</th><th class="n">Amount</th></tr>${s.costs.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 300).map(c => `<tr><td>${esc(fmtDate(c.date))}</td><td>${esc(fvShort(fv(c.vehicleId)))}</td><td>${esc(c.cat)}</td><td>${esc(c.label || '')}</td><td class="n">${money(c.amount)}</td></tr>`).join('')}</table></div></div>
+    <div class="rf-tools"><button class="rf-btn big" id="frPrint">🖨 Print / PDF</button><button class="rf-btn grey" id="frCsv">⬇ CSV</button><button class="rf-btn wa" id="frWa">💬 Summary on WhatsApp</button></div></div>`;
+  v.innerHTML = h;
+  bind(v, '[data-frp]', 'click', el => { frPeriod = el.dataset.frp; renderFleetReports(); });
+  bind(v, '[data-frs]', 'click', el => { frAnchor = stepPeriod(frPeriod, frAnchor || today(), N(el.dataset.frs)); renderFleetReports(); });
+  $('frPrint').onclick = () => printHtmlDoc(`<div style="font-family:Arial,sans-serif"><h1 style="color:#1F3864;font-size:20px;margin:0">${esc(fleetName())} — fleet report</h1><div style="color:#555;margin-bottom:8px">${esc(p.label)} (${esc(fmtDate(p.f))} – ${esc(fmtDate(p.t))})</div><style>.fl-fig{margin:10px 0;break-inside:avoid}.fl-fig figcaption{font-weight:bold;color:#1F3864;margin-bottom:4px}.fl-leg span{margin-right:12px;font-size:11px}.fl-leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}.rf-kpis{display:flex;flex-wrap:wrap;gap:6px}.rf-kpi{border:1px solid #ddd;border-radius:6px;padding:6px 10px}.rf-kpi .l{font-size:10px;color:#666}.rf-kpi .v{font-weight:bold;font-size:15px}table{width:100%;border-collapse:collapse;font-size:11px;margin:6px 0}th,td{border-bottom:1px solid #e3e3e3;padding:4px;text-align:left}td.n,th.n{text-align:right}tr.tot td{font-weight:bold}.fl-h3{color:#1F3864;font-size:13px;margin:12px 0 4px}tr{break-inside:avoid}</style>${$('frBody').innerHTML}</div>`, 'Fleet report ' + p.label);
+  $('frCsv').onclick = () => downloadCsv('fleet_report_' + p.f + '_' + p.t + '.csv', [['Date', 'Vehicle', 'Category', 'Detail', 'Amount']].concat(s.costs.map(c => [c.date, fvShort(fv(c.vehicleId)), c.cat, c.label, c.amount])));
+  $('frWa').onclick = () => openWhatsApp('', `${fleetName()} — fleet report, ${p.label}\nSpent: ${money(s.cost)} (${COST_CATS.filter(c => s.byCat[c]).map(c => c + ' ' + money(s.byCat[c])).join(', ')})\nKm driven: ${nf(s.km)} · cost per km ${s.km ? money(s.perKm) : '—'}\nFuel: ${nf(s.litres, 1)} L · ${s.kmpl ? nf(s.kmpl, 1) + ' km/L' : ''}\nDays off road: ${nf(s.down, 1)}\nAlerts now: ${fleetAlerts().filter(a => a.sev >= 2).length}`);
+}
+/* ---------- the link with Robotik Fix ---------- */
+const FLEET_SERVICES = [['service', 'Routine service', 'Vehicles'], ['repair', 'Repair (describe the problem)', 'Vehicles'], ['diag', 'Diagnostics (warning light, noise…)', 'Vehicles'],
+  ['brake', 'Brake disc resurfacing', 'Pairs'], ['drum', 'Brake drum resurfacing', 'Pairs'], ['mount', 'Tyre de-mounting & mounting', 'Tyres'], ['rotate', 'Tyre rotation', 'Vehicles'],
+  ['balance', 'Wheel balancing', 'Wheels'], ['align', '3D wheel alignment', 'Vehicles'], ['combo', 'Combo: tyre mounting + balancing + 3D alignment', 'Vehicles'],
+  ['wheel', 'Wheel / rim straightening or welding', 'Rims'], ['ac', 'AC repair', 'Vehicles'], ['elec', 'Electrical repair', 'Vehicles'], ['body', 'Bodywork / panel beating', 'Vehicles'], ['paint', 'Spray painting', 'Vehicles'], ['other', 'Something else', 'Quantity']];
+function fleetClassOf(t){ return /armou?r/i.test(t.type || '') ? 'Armoured vehicle' : /suv|pickup|4x4|van|bus/i.test(t.type || '') ? 'SUV / 4x4 / pickup' : 'Car (saloon / hatchback)'; }
+async function loadFleetFeed(){
+  const code = partnerCode(); if(!code) return null;
+  try{ const j = await hqFetch('rpc/rf_fleet_feed', {method:'POST', body:JSON.stringify({p_code:code})});
+    if(j && j.error){ fleetFeed = {error:j.error}; } else { fleetFeed = j || {}; localStorage.setItem('rf3_fleet_feed', JSON.stringify({at:nowIso(), feed:fleetFeed})); }
+  }catch(e){ try{ const c = JSON.parse(localStorage.getItem('rf3_fleet_feed') || 'null'); fleetFeed = Object.assign({}, c && c.feed, {offline:true, at:c && c.at}); }catch(e2){ fleetFeed = {offline:true}; } }
+  fleetFeedAt = Date.now(); return fleetFeed;
+}
+function stageInfo(st){ return {'new':['📨', 'Received by Robotik Fix', ''], 'accepted':['👍', 'Accepted', 'blue'], 'picked up':['🚚', 'Picked up / at Robotik Fix', 'amber'], 'in progress':['🔧', 'Work in progress', 'amber'], 'ready':['✅', 'Ready for collection', 'green'], 'done':['🏁', 'Done', 'green'], 'cancelled':['✗', 'Cancelled', '']}[st] || ['•', st, '']; }
+function codeBoxHtml(){
+  const code = partnerCode();
+  return code ? `<div class="banner" style="background:#e8f8f1;border-color:#a7dcc3">✓ Linked to Robotik Fix with code <b>${esc(code)}</b>${fleetFeed && fleetFeed.name ? ' — ' + esc(fleetFeed.name) : ''}. <a href="#" id="fcChange">Change</a></div>`
+    : `<div class="banner">Enter the <b>fleet code</b> Robotik Fix gave you. With it you can send jobs, follow them, approve quotes and see your invoices here.<div class="rf-tools" style="margin-top:6px"><input id="fcIn" placeholder="e.g. RF-7KQ2M9XA" style="max-width:200px"><button class="rf-btn" id="fcSave">Save code</button></div><div class="rf-note">No code yet? <a href="https://wa.me/${esc(HQ.wa)}?text=${encodeURIComponent('Hello Robotik Fix, please send me a fleet code for Robotik Fleet Manager.')}" target="_blank">Ask Robotik Fix on WhatsApp</a>.</div></div>`;
+}
+async function renderFleetRobotik(){
+  const v = $('view-frobotik'); if(!v) return;
+  const pq = ((fleetFeed && fleetFeed.quotes) || []).filter(q => q.status === 'pending').length;
+  let h = codeBoxHtml() + seg('frobotik', [['send', '📤 Send a job'], ['jobs', 'My jobs'], ['quotes', 'Quotes' + (pq ? ' (' + pq + ')' : '')], ['invoices', 'Invoices'], ['due', 'Service reminders']], robSeg);
+  if(robSeg === 'send') h += robSendHtml(); else h += '<div id="robBody"><div class="rf-empty">Loading from Robotik Fix…</div></div>';
+  v.innerHTML = h;
+  if($('fcSave')) $('fcSave').onclick = async () => { const c = $('fcIn').value.trim().toUpperCase(); if(!/^[A-Z0-9-]{6,40}$/.test(c)){ toast('That code does not look right.', true); return; } localStorage.setItem(PCODE_KEY, c); const f = await loadFleetFeed(); if(f && f.error){ toast(f.error, true); localStorage.removeItem(PCODE_KEY); } else toast('Linked to Robotik Fix.'); renderFleetRobotik(); };
+  if($('fcChange')) $('fcChange').onclick = e => { e.preventDefault(); localStorage.removeItem(PCODE_KEY); fleetFeed = null; renderFleetRobotik(); };
+  if(robSeg === 'send') return bindRobSend(v);
+  if(!partnerCode()){ $('robBody').innerHTML = '<div class="rf-empty">Enter your fleet code above first.</div>'; return; }
+  await loadFleetFeed(); const f = fleetFeed || {}, box = $('robBody'); if(!box) return;
+  if(f.error){ box.innerHTML = `<div class="rf-empty">${esc(f.error)}</div>`; return; }
+  const off = f.offline ? `<p class="rf-note">📴 Offline — showing what was last received${f.at ? ' (' + esc(fmtDate(String(f.at).slice(0, 10))) + ')' : ''}.</p>` : '';
+  const mine = Store.list('porder');
+  if(robSeg === 'jobs'){
+    const orders = f.orders || [], pending = mine.filter(o => !o.delivered);
+    box.innerHTML = wrap('MY JOBS WITH ROBOTIK FIX', off + (pending.length ? pending.map(o => `<div class="rf-row"><div class="t"><span>⏳ ${esc((FLEET_SERVICES.find(s => s[0] === o.service) || [])[1] || o.service)} · ${esc(o.vehicles || '')}</span><button class="rf-btn" data-rres="${esc(o.ref)}">Send again</button></div><div class="m">Not delivered yet${o.error ? ': ' + esc(o.error) : ' (no internet)'}.</div></div>`).join('') : '')
+      + (orders.map(o => { const [ic, lbl, col] = stageInfo(o.status), svc = (FLEET_SERVICES.find(s => s[0] === o.service) || [])[1] || o.service || '';
+        return `<div class="rf-row"><div class="t"><span>${ic} ${esc(svc)}${o.vehicles ? ' · ' + esc(o.vehicles) : ''}</span><span class="rf-badge ${col}">${esc(lbl)}</span></div>
+          <div class="m">${esc(o.track_no || o.ref || '')} · sent ${esc(fmtDate(String(o.created_at).slice(0, 10)))}${o.updated_at && o.updated_at !== o.created_at ? ' · updated ' + esc(new Date(o.updated_at).toLocaleString('en-NG', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})) : ''}</div>
+          ${o.note ? `<div class="m">💬 Robotik Fix: <b>${esc(o.note)}</b></div>` : ''}${o.invoice_no ? `<div class="m">🧾 ${esc(o.invoice_no)} · ${money(o.invoice_total)}${N(o.invoice_total) - N(o.invoice_paid) > 0.5 ? ' · <b class="neg">balance ' + money(N(o.invoice_total) - N(o.invoice_paid)) + '</b>' : ' · paid'}</div>` : ''}</div>`; }).join('') || '<div class="rf-empty">No jobs yet. Use “📤 Send a job”.</div>'), true);
+    bind(box, '[data-rres]', 'click', async el => { const o = mine.find(x => x.ref === el.dataset.rres); if(o && await sendOrder(o)) toast('Delivered to Robotik Fix.'); renderFleetRobotik(); });
+  } else if(robSeg === 'quotes'){
+    const qs = f.quotes || [];
+    box.innerHTML = wrap('QUOTES FROM ROBOTIK FIX', off + (qs.map(q => { const d = q.data || {}, lines = d.lines || [];
+      return `<div class="rf-row"><div class="t"><span>📝 ${esc(d.title || 'Quote')}${d.vehicle ? ' · ' + esc(d.vehicle) : ''}</span><span class="rf-badge ${q.status === 'pending' ? 'amber' : q.status === 'approved' ? 'green' : ''}">${esc(q.status === 'pending' ? 'Waiting for you' : q.status)}</span></div>
+        ${lines.length ? '<table class="rf-table">' + lines.map(l => `<tr><td>${esc(l.desc)}</td><td class="n">${esc(String(l.qty || 1))} × ${money(l.price)}</td><td class="n">${money(N(l.qty || 1) * N(l.price))}</td></tr>`).join('') + `<tr class="tot"><td colspan="2">Total</td><td class="n">${money(d.total)}</td></tr></table>` : `<div class="m">Total <b>${money(d.total)}</b></div>`}
+        ${d.notes ? `<div class="m">${esc(d.notes)}</div>` : ''}<div class="m">${esc(fmtDate(String(q.created_at).slice(0, 10)))}${d.validDays ? ' · valid ' + esc(d.validDays) + ' days' : ''}${q.decided_by ? ' · ' + esc(q.status) + ' by ' + esc(q.decided_by) + ' ' + esc(fmtDate(String(q.decided_at).slice(0, 10))) : ''}${q.decision_note ? ' — ' + esc(q.decision_note) : ''}</div>
+        ${q.status === 'pending' && !f.offline ? `<div class="acts"><button class="rf-btn green" data-qa="${esc(q.id)}">✓ Approve</button><button class="rf-btn red" data-qd="${esc(q.id)}">✗ Decline</button></div>` : ''}</div>`; }).join('') || '<div class="rf-empty">No quotes yet.</div>'), true);
+    const decide = async (id, decision) => { const nm = await promptText(decision === 'approved' ? 'Approve this quote — your name' : 'Decline — your name', myName() || '');
+      if(!nm) return; const note = decision === 'declined' ? (await promptText('Reason (optional)', '')) || '' : '';
+      try{ const r = await hqFetch('rpc/rf_fleet_quote_decide', {method:'POST', body:JSON.stringify({p_code:partnerCode(), p_id:id, p_decision:decision, p_name:nm, p_note:note || null})});
+        if(r && r.error) toast(r.error, true); else toast(decision === 'approved' ? 'Approved — Robotik Fix can start.' : 'Declined.'); }catch(e){ toast(e.message, true); }
+      renderFleetRobotik(); };
+    bind(box, '[data-qa]', 'click', el => decide(el.dataset.qa, 'approved')); bind(box, '[data-qd]', 'click', el => decide(el.dataset.qd, 'declined'));
+  } else if(robSeg === 'invoices'){
+    const inv = (f.orders || []).filter(o => o.invoice_no), cr = f.credit || {};
+    box.innerHTML = wrap('INVOICES & BALANCE', off + fleetKpis([['Balance owed', money(f.balance || 0), N(f.balance) > 0.5 ? 'neg' : ''], ['Unpaid invoices', f.unpaid || 0], ['Credit limit', N(cr.limit) ? money(cr.limit) : '—'], ['Days to pay', N(cr.days) || '—']])
+      + (inv.map(o => { const bal = N(o.invoice_total) - N(o.invoice_paid), logged = Store.list('fservice').some(x => x.ref === o.invoice_no);
+        return `<div class="rf-row"><div class="t"><span>🧾 ${esc(o.invoice_no)} · ${esc(o.vehicles || '')}</span><span class="rf-badge ${bal > 0.5 ? 'amber' : 'green'}">${bal > 0.5 ? 'balance ' + money(bal) : 'paid'}</span></div><div class="m">${money(o.invoice_total)} · ${esc((FLEET_SERVICES.find(s => s[0] === o.service) || [])[1] || o.service || '')} · ${esc(fmtDate(String(o.updated_at || o.created_at).slice(0, 10)))}</div>
+          <div class="acts">${logged ? '<span class="rf-note">✓ in vehicle costs</span>' : `<button class="rf-btn" data-rinv="${esc(o.invoice_no)}">＋ Add to vehicle costs</button>`}</div></div>`; }).join('') || '<div class="rf-empty">No invoices yet.</div>')
+      + '<p class="rf-note">Pay by transfer using the invoice number as reference; Robotik Fix records the payment and it shows here.</p>', true);
+    bind(box, '[data-rinv]', 'click', el => { const o = inv.find(x => x.invoice_no === el.dataset.rinv), ids = (o.vehicleIds || []).filter(id => fv(id));
+      editService(null, {vehicleId:ids[0] || '', vendor:'Robotik Fix', ref:o.invoice_no, cost:N(o.invoice_total) / Math.max(1, ids.length || 1), type:/mount|rotate|balance|align|combo|tyre|wheel/.test(o.service || '') ? 'Tyres' : /brake|drum/.test(o.service || '') ? 'Brakes' : o.service === 'service' ? 'Routine service' : 'Repair', desc:((FLEET_SERVICES.find(s => s[0] === o.service) || [])[1] || '') + ' — Robotik Fix ' + o.invoice_no}); });
+  } else {
+    const due = fleetDueList(), on = !!Store.setting().fleetShareDue;
+    box.innerHTML = wrap('SERVICE REMINDERS', `<label style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><input type="checkbox" id="rdShare"${on ? ' checked' : ''} style="width:20px;height:20px"> Share my vehicles that are due for service with Robotik Fix, so they can offer to do the work</label>
+      <p class="rf-note">${on ? 'Shared: registration, model, km and what is due — nothing else. Last shared: ' + esc(Store.setting().fleetShareAt ? fmtDate(String(Store.setting().fleetShareAt).slice(0, 10)) : 'not yet') + '.' : 'Off — Robotik Fix cannot see your service reminders.'}</p>
+      ${due.map(d => `<div class="rf-row"><div class="t"><span>${d.state === 'overdue' ? '⛔' : '⚠'} ${esc(d.plate)} ${esc(d.model || '')}</span><span class="rf-badge ${d.state === 'overdue' ? 'red' : 'amber'}">${esc(d.what)}</span></div><div class="m">${esc(d.detail)}</div><div class="acts"><button class="rf-btn red" data-rdb="${esc(d.vehicleId)}">📤 Book with Robotik Fix</button></div></div>`).join('') || '<p class="rf-note">✅ Nothing is due.</p>'}
+      ${on ? '<button class="rf-btn" id="rdNow">🔄 Share now</button>' : ''}`, true);
+    $('rdShare').onchange = async e => { Store.saveSetting({fleetShareDue:e.target.checked}); if(e.target.checked) await shareDueNow(true); renderFleetRobotik(); };
+    if($('rdNow')) $('rdNow').onclick = async () => { await shareDueNow(true); renderFleetRobotik(); };
+    bind(box, '[data-rdb]', 'click', el => { robSeg = 'send'; window.__robVeh = el.dataset.rdb; window.__robSvc = 'service'; renderFleetRobotik(); });
+  }
+}
+function fleetDueList(){
+  const out = [];
+  fvList().forEach(t => { const sd = serviceDue(t); if(sd && sd.state !== 'ok') out.push({vehicleId:t.id, plate:t.plate, fleetNo:t.fleetNo || '', model:t.model || '', type:t.type || '', km:curKm(t.id), state:sd.state, what:'Service ' + (sd.state === 'overdue' ? 'overdue' : 'due'), detail:[sd.dueKm ? 'at ' + nf(sd.dueKm) + ' km (now ' + nf(curKm(t.id)) + ')' : '', sd.dueDate ? 'by ' + fmtDate(sd.dueDate) : ''].filter(Boolean).join(' · ')});
+    const lt = lowTyres(t.id); if(lt.length) out.push({vehicleId:t.id, plate:t.plate, fleetNo:t.fleetNo || '', model:t.model || '', type:t.type || '', km:curKm(t.id), state:'due', what:'Tyres worn', detail:lt.length + ' tyre(s) at or below the minimum tread: ' + lt.join(', ')}); });
+  openDefects().forEach(c => { const t = fv(c.vehicleId); if(t) out.push({vehicleId:t.id, plate:t.plate, fleetNo:t.fleetNo || '', model:t.model || '', type:t.type || '', km:curKm(t.id), state:'due', what:'Defect', detail:c.defects}); });
+  return out;
+}
+async function shareDueNow(loud){
+  if(!partnerCode() || !Store.setting().fleetShareDue) return;
+  try{ const r = await hqFetch('rpc/rf_fleet_share_due', {method:'POST', body:JSON.stringify({p_code:partnerCode(), p_data:fleetDueList().slice(0, 300)})});
+    if(r && r.error){ if(loud) toast(r.error, true); return; }
+    Store.saveSetting({fleetShareAt:nowIso()}); if(loud) toast('Shared with Robotik Fix.'); }
+  catch(e){ if(loud) toast(e.status === 0 || !navigator.onLine ? 'No internet — try again later.' : e.message, true); }
+}
+function robSendHtml(){
+  const pre = window.__robVeh || '', svc = window.__robSvc || 'service', note = window.__robNote || ''; window.__robVeh = window.__robSvc = window.__robNote = '';
+  const vs = fvList(), cls = svcClasses(svc), s0 = Store.setting();
+  return wrap('SEND A JOB TO ROBOTIK FIX', `<p class="rf-note" style="margin-top:0">Robotik Fix, 142 Lekki-Epe Expressway, Ikate. The job goes straight to their system; follow it under “My jobs”.</p>
+    <div class="field"><label for="rsSvc">Service</label><select id="rsSvc">${FLEET_SERVICES.map(([k, l]) => `<option value="${k}"${k === svc ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+    <div class="field"><label>Vehicle(s)</label><div id="rsVeh" style="display:grid;grid-template-columns:1fr 1fr;gap:4px;max-height:220px;overflow:auto;border:1px solid #e3e7ee;border-radius:8px;padding:6px">${vs.map(t => `<label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" value="${esc(t.id)}"${t.id === pre ? ' checked' : ''} style="width:18px;height:18px"> ${esc(fvShort(t))} ${esc(t.model || '')}</label>`).join('') || '<span class="rf-note">Add vehicles first (Vehicles tab) — or type them below.</span>'}</div></div>
+    ${cls ? `<div class="field"><label for="rsCls">Vehicle type</label><select id="rsCls">${cls.map(c => `<option>${esc(c)}</option>`).join('')}</select></div>` : ''}
+    <div class="grid2"><div class="field"><label for="rsQty">${esc((FLEET_SERVICES.find(s => s[0] === svc) || [])[2] || 'Quantity')}</label><input id="rsQty" type="number" min="1" value="1"></div><div class="field"><label for="rsWhen">Preferred date / time</label><input id="rsWhen" placeholder="e.g. Monday morning"></div></div>
+    <div class="field"><label for="rsNotes">Describe the job / problem</label><textarea id="rsNotes" rows="3" placeholder="e.g. Brake noise front left, oil leak, full service due">${esc(note)}</textarea></div>
+    <label style="display:flex;gap:8px;align-items:center;margin:4px 0"><input type="checkbox" id="rsPick" style="width:20px;height:20px"> Robotik Fix should pick up the vehicle / parts</label>
+    <div class="field" id="rsAddrBox" style="display:none"><label for="rsAddr">Pickup address</label><input id="rsAddr" value="${esc(s0.fleetAddr || (COMPANIES[0] || {}).address || '')}"></div>
+    <div class="grid2"><div class="field"><label for="rsCon">Contact person</label><input id="rsCon" value="${esc(s0.fleetContact || myName() || '')}"></div><div class="field"><label for="rsPh">Contact phone</label><input id="rsPh" type="tel" value="${esc(s0.fleetPhone || (COMPANIES[0] || {}).tel || '')}"></div></div>
+    <div class="rf-tools"><button class="rf-btn red big" id="rsSend">📤 Send job</button><button class="rf-btn wa" id="rsWa">💬 Send + WhatsApp</button></div>`, true);
+}
+function bindRobSend(v){
+  $('rsSvc').onchange = e => { window.__robSvc = e.target.value; window.__robVeh = [...document.querySelectorAll('#rsVeh input:checked')].map(i => i.value)[0] || ''; window.__robNote = $('rsNotes').value; renderFleetRobotik(); };
+  $('rsPick').onchange = e => { $('rsAddrBox').style.display = e.target.checked ? '' : 'none'; };
+  const auto = () => { const ids = [...document.querySelectorAll('#rsVeh input:checked')].map(i => i.value), svc = $('rsSvc').value;
+    if(['service', 'repair', 'diag', 'rotate', 'align', 'combo', 'ac', 'elec', 'body', 'paint'].includes(svc) && ids.length) $('rsQty').value = ids.length;
+    if($('rsCls') && ids.length){ const c = fleetClassOf(fv(ids[0])); if([...$('rsCls').options].some(o => o.value === c)) $('rsCls').value = c; } };
+  v.querySelectorAll('#rsVeh input').forEach(i => i.onchange = auto); auto();
+  const go = async wa => {
+    if(!partnerCode()){ toast('Enter your fleet code first (top of this screen).', true); return; }
+    if(!brandSetting()){ toast('First enter your company details in Setup → My Business.', true); showTab('sync'); return; }
+    const ids = [...document.querySelectorAll('#rsVeh input:checked')].map(i => i.value), svc = $('rsSvc').value, notes = $('rsNotes').value.trim();
+    if(!ids.length && !notes){ toast('Tick the vehicle(s) or describe the job.', true); return; }
+    const ph = $('rsPh').value.trim(); if(ph.replace(/\D/g, '').length < 10){ toast('Enter a contact phone number.', true); return; }
+    const veh = ids.map(id => { const t = fv(id); return fvShort(t) + (t.model ? ' ' + t.model : '') + (curKm(id) ? ' (' + nf(curKm(id)) + ' km)' : ''); }).join(', ');
+    const o = {ref:'FO-' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5).toUpperCase(), fleet:true, garage:fleetName(), garageFull:(COMPANIES[0] || {}).name || fleetName(), service:svc,
+      vclass:$('rsCls') ? $('rsCls').value : '', qty:Math.max(1, N($('rsQty').value) || 1), vehicles:veh, vehicleIds:ids, notes, when:$('rsWhen').value.trim(),
+      pickup:$('rsPick').checked, pickupAddr:$('rsPick').checked ? $('rsAddr').value.trim() : '', contact:$('rsCon').value.trim(), contactPhone:ph, date:today()};
+    Store.saveSetting({fleetContact:o.contact, fleetPhone:ph, fleetAddr:o.pickupAddr || Store.setting().fleetAddr});
+    const ok = await sendOrder(o, wa);
+    if(ok){ ids.forEach(id => { const t = fv(id); if(t && t.status === 'active' && ['service', 'repair', 'diag', 'body', 'paint', 'ac', 'elec'].includes(svc)) Store.put('truck', Object.assign({}, t, {status:'workshop'})); });
+      toast('Job sent to Robotik Fix — follow it under “My jobs”.'); robSeg = 'jobs'; } else toast('Saved on this phone — it will be sent when you are online (My jobs → Send again).', true);
+    renderFleetRobotik();
+  };
+  $('rsSend').onclick = () => go(false); $('rsWa').onclick = () => go(true);
+}
+function promptText(title, def){
+  return new Promise(ok => { const box = modal(`<h2 style="margin-top:0">${esc(title)}</h2><input id="ptIn" value="${esc(def || '')}" style="width:100%"><div class="rf-tools" style="margin-top:10px"><button class="rf-btn green" id="ptOk">OK</button><button class="rf-btn grey" id="ptX">Cancel</button></div>`);
+    box.querySelector('#ptOk').onclick = () => { const v = box.querySelector('#ptIn').value.trim(); closeModal(); ok(v); }; box.querySelector('#ptX').onclick = () => { closeModal(); ok(null); }; setTimeout(() => box.querySelector('#ptIn').focus(), 50); });
+}
+/* ---------- Robotik Fix HQ: Partners → Fleets ---------- */
+function fleetAppLink(code){ let u; try{ u = new URL('fleet/', HQ.appUrl).href; }catch(e){ u = HQ.appUrl + 'fleet/'; } return code ? u + '?k=' + encodeURIComponent(code) : u; }
+let hqFleetSeg = 'codes';
+async function renderFleetsHQ(){
+  const box = $('flHQ'); if(!box) return;
+  let keys = [], quotes = [], due = [];
+  try{ [keys, quotes, due] = await Promise.all([Cloud.rest('GET', 'rf_partner_keys?select=*&kind=eq.fleet&order=created_at.desc'), Cloud.rest('GET', 'rf_partner_quotes?select=*&order=created_at.desc&limit=200'), Cloud.rest('GET', 'rf_fleet_due?select=*&order=updated_at.desc')]); }
+  catch(e){ box.innerHTML = wrap('FLEETS', '<p>' + esc(/kind|rf_partner_quotes|rf_fleet_due|404|does not exist/.test(e.message + e.status) ? 'Run upgrade-7.4-fleet.sql in Supabase first (SQL Editor → paste → Run).' : e.message) + '</p>', true); return; }
+  keys = keys || []; quotes = quotes || []; due = due || [];
+  // keep each fleet's credit (set with 💳, same as partner garages) visible in its app
+  if(can('admin')) for(const k of keys){ const t = partnerTerms(k.garage), L = t ? N(t.limit) : 0, D = t ? N(t.days) : 0; if(L !== N(k.credit_limit) || D !== N(k.credit_days)){ try{ await Cloud.rest('PATCH', 'rf_partner_keys?code=eq.' + encodeURIComponent(k.code), {credit_limit:L, credit_days:D}, 'return=minimal'); k.credit_limit = L; k.credit_days = D; }catch(e){} } }
+  const nameOf = c => (keys.find(k => k.code === c) || {}).garage || c, openQ = quotes.filter(q => q.status === 'pending').length, newDec = quotes.filter(q => q.status !== 'pending' && q.decided_at && q.decided_at > (localStorage.getItem('rf3_fq_seen') || '')).length;
+  let h = `<div class="rf-seg">${[['codes', 'Fleet codes (' + keys.length + ')'], ['quotes', 'Quotes' + (newDec ? ' (' + newDec + ' answered)' : openQ ? ' (' + openQ + ' waiting)' : '')], ['due', 'Due for service (' + due.reduce((s2, d) => s2 + ((d.data || []).length), 0) + ')']].map(([k, l]) => `<button class="${k === hqFleetSeg ? 'on' : ''}" data-hfs="${k}">${esc(l)}</button>`).join('')}</div>`;
+  if(hqFleetSeg === 'codes'){
+    h += wrap('FLEET CODES', `<p class="rf-note">Each fleet company gets its own code. With it they use <b>Robotik Fleet Manager</b> free — vehicles, papers, drivers, checks, fuel, tyres, reports — and send their jobs to you. Their jobs show under <b>Orders</b> marked 🚚 Fleet. Set credit with 💳 under Garages after their first job, or here.</p>
+      <div class="grid2"><div class="field"><label for="hfN">Fleet company name</label><input id="hfN" placeholder="e.g. NELRETI Industrial Services"></div><div class="field"><label for="hfP">Fleet manager's WhatsApp (optional)</label><input id="hfP" type="tel"></div></div>
+      <div class="rf-tools"><button class="rf-btn green need-admin" id="hfNew">＋ Create fleet code</button></div>
+      ${keys.map(k => { const link = fleetAppLink(k.code), c = partnerCreditState(k.garage);
+        return `<div class="rf-row"><div class="t"><span>🚚 ${esc(k.garage)}</span><span class="rf-badge ${k.active ? 'green' : ''}">${k.active ? esc(k.code) : 'off'}</span></div>
+          <div class="m" style="word-break:break-all">${esc(link)}</div><div class="m">${N(k.credit_limit) || N(k.credit_days) ? 'Credit ' + money(k.credit_limit) + ' · ' + N(k.credit_days) + ' days' : 'No credit'} · owes ${money(c.owed)}${due.find(d => d.code === k.code) ? ' · shares service reminders' : ''}</div>
+          <div class="acts"><button class="rf-btn wa" data-hfw="${esc(k.code)}">💬 Send invite</button><button class="rf-btn grey" data-hfc="${esc(link)}">Copy link</button><button class="rf-btn need-admin" data-hfcr="${esc(k.garage)}">💳 Credit</button><button class="rf-btn grey need-admin" data-hfa="${esc(k.code)}" data-on="${k.active ? '0' : '1'}">${k.active ? 'Switch off' : 'Switch on'}</button><button class="rf-btn" data-hfq="${esc(k.code)}">📝 Quote</button></div></div>`; }).join('') || '<div class="rf-empty">No fleets yet.</div>'}`, true);
+  } else if(hqFleetSeg === 'quotes'){
+    localStorage.setItem('rf3_fq_seen', nowIso());
+    h += wrap('QUOTES TO FLEETS', `<div class="rf-tools"><button class="rf-btn green" id="hfqNew">＋ New quote</button></div>` + (quotes.map(q => { const d = q.data || {};
+      return `<div class="rf-row"><div class="t"><span>📝 ${esc(nameOf(q.code))} · ${esc(d.title || '')}</span><span class="rf-badge ${q.status === 'approved' ? 'green' : q.status === 'declined' ? 'red' : q.status === 'pending' ? 'amber' : ''}">${esc(q.status)}</span></div>
+        <div class="m">${d.vehicle ? esc(d.vehicle) + ' · ' : ''}<b>${money(d.total)}</b> · sent ${esc(fmtDate(String(q.created_at).slice(0, 10)))}${q.decided_by ? ' · ' + esc(q.status) + ' by <b>' + esc(q.decided_by) + '</b> ' + esc(new Date(q.decided_at).toLocaleString('en-NG', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})) : ''}${q.decision_note ? ' — “' + esc(q.decision_note) + '”' : ''}</div>
+        ${q.status === 'pending' ? `<div class="acts"><button class="rf-btn grey" data-hfqx="${esc(q.id)}">Withdraw</button></div>` : ''}</div>`; }).join('') || '<div class="rf-empty">No quotes yet.</div>'), true);
+  } else {
+    h += wrap('FLEET VEHICLES DUE FOR SERVICE', '<p class="rf-note">Fleets that switched on “share service reminders” show here. Call them or send a quote.</p>' + (due.map(d => `<h3 class="fl-h3">🚚 ${esc(d.fleet || nameOf(d.code))} <span class="rf-note" style="font-weight:normal">· updated ${esc(new Date(d.updated_at).toLocaleString('en-NG', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}))}</span></h3>` + ((d.data || []).map(x => `<div class="rf-row"><div class="t"><span>${x.state === 'overdue' ? '⛔' : '⚠'} ${esc(x.plate || '')} ${esc(x.model || '')}</span><span class="rf-badge ${x.state === 'overdue' ? 'red' : 'amber'}">${esc(x.what || '')}</span></div><div class="m">${esc(x.detail || '')}${x.km ? ' · ' + nf(x.km) + ' km' : ''}</div>
+      <div class="acts"><button class="rf-btn" data-hfq="${esc(d.code)}" data-veh="${esc((x.plate || '') + ' ' + (x.model || ''))}" data-what="${esc(x.what || '')}">📝 Quote</button></div></div>`).join('') || '<p class="rf-note">Nothing due.</p>')).join('') || '<div class="rf-empty">No fleet is sharing reminders yet.</div>'), true);
+  }
+  box.innerHTML = h; applyRoleClass && applyRoleClass();
+  bind(box, '[data-hfs]', 'click', el => { hqFleetSeg = el.dataset.hfs; renderFleetsHQ(); });
+  if($('hfNew')) $('hfNew').onclick = async () => { const g = $('hfN').value.trim(); if(g.length < 2){ toast('Type the fleet company name.', true); return; }
+    if(keys.some(k => lc(k.garage) === lc(g))){ toast('That fleet already has a code.', true); return; }
+    const code = newCode(); try{ await Cloud.rest('POST', 'rf_partner_keys', {code, garage:g, kind:'fleet', created_by:myName()}, 'return=minimal'); toast('Fleet code created.');
+      const ph = $('hfP').value.trim(); if(ph) openWhatsApp(ph, fleetInviteMsg(g, code)); }catch(e){ toast(/kind/.test(e.message) ? 'Run upgrade-7.4-fleet.sql in Supabase first.' : e.message, true); } renderFleetsHQ(); };
+  bind(box, '[data-hfw]', 'click', el => { const k = keys.find(x => x.code === el.dataset.hfw); openWhatsApp('', fleetInviteMsg(k.garage, k.code)); });
+  bind(box, '[data-hfc]', 'click', el => navigator.clipboard && navigator.clipboard.writeText(el.dataset.hfc).then(() => toast('Link copied.')));
+  bind(box, '[data-hfcr]', 'click', el => editPartnerCredit(el.dataset.hfcr));
+  bind(box, '[data-hfa]', 'click', async el => { try{ await Cloud.rest('PATCH', 'rf_partner_keys?code=eq.' + encodeURIComponent(el.dataset.hfa), {active:el.dataset.on === '1'}, 'return=minimal'); }catch(e){ toast(e.message, true); } renderFleetsHQ(); });
+  bind(box, '[data-hfqx]', 'click', async el => { if(!(await askConfirm('Withdraw this quote?'))) return; try{ await Cloud.rest('PATCH', 'rf_partner_quotes?id=eq.' + encodeURIComponent(el.dataset.hfqx), {status:'cancelled'}, 'return=minimal'); }catch(e){ toast(e.message, true); } renderFleetsHQ(); });
+  const newQuote = (code, veh, what) => fleetQuoteForm(keys.filter(k => k.active), code, veh, what);
+  if($('hfqNew')) $('hfqNew').onclick = () => newQuote('');
+  bind(box, '[data-hfq]', 'click', el => newQuote(el.dataset.hfq, el.dataset.veh, el.dataset.what));
+}
+function fleetInviteMsg(name, code){ return `Hello ${name}! Robotik Fix is giving you Robotik Fleet Manager FREE — manage all your vehicles on your phone: papers & expiry alerts, drivers, daily checks, fuel & trips, tyres, service reminders, and daily/weekly/monthly/annual reports with charts.\n\nYou can also send us jobs, follow each job, approve our quotes and see your invoices — all in the app.\n\nOpen this link (your fleet code ${code} is built in), then tap Setup → My Business:\n${fleetAppLink(code)}\n\nAdd it to your home screen to use it like an app. — Robotik Fix, 142 Lekki-Epe Expressway, Ikate`; }
+function fleetQuoteForm(keys, code, veh, what){
+  if(!keys.length){ toast('Create a fleet code first.', true); return; }
+  const orders = pOrders.filter(o => o.code && !['done', 'cancelled'].includes(o.status));
+  const box = modal(`<h2 style="margin-top:0">📝 Quote to a fleet</h2>
+    <div class="field"><label for="fqK">Fleet</label><select id="fqK">${keys.map(k => `<option value="${esc(k.code)}"${k.code === code ? ' selected' : ''}>${esc(k.garage)}</option>`).join('')}</select></div>
+    <div class="field"><label for="fqO">For job (optional)</label><select id="fqO"></select></div>
+    <div class="grid2"><div class="field"><label for="fqT">Title</label><input id="fqT" value="${esc(what ? what + ' — quote' : 'Repair quote')}"></div><div class="field"><label for="fqV">Vehicle</label><input id="fqV" value="${esc(veh || '')}"></div></div>
+    <div id="fqL"></div><button class="rf-btn grey" id="fqAdd">＋ Line</button>
+    <div class="field" style="margin-top:8px"><label for="fqN">Notes</label><textarea id="fqN" rows="2" placeholder="e.g. Parts on order, 2 days' work"></textarea></div>
+    <div class="grid2"><div class="field"><label for="fqD">Valid for (days)</label><input id="fqD" type="number" value="7"></div><div class="field"><label>Total</label><div id="fqTot" style="font-weight:bold;font-size:18px;padding:8px 0">₦0</div></div></div>
+    <div class="rf-tools"><button class="rf-btn green big" id="fqSend">Send to fleet</button><button class="rf-btn grey" id="fqX">Cancel</button></div>`);
+  const lines = [{desc:'', qty:1, price:''}];
+  const fillOrders = () => { const c = box.querySelector('#fqK').value; box.querySelector('#fqO').innerHTML = '<option value="">— not linked —</option>' + orders.filter(o => o.code === c).map(o => `<option value="${esc((o.data || {}).ref)}">${esc((o.track_no || '') + ' · ' + ((o.data || {}).vehicles || '') )}</option>`).join(''); };
+  const tot = () => lines.reduce((s2, l) => s2 + N(l.qty || 1) * N(l.price), 0);
+  const draw = () => { box.querySelector('#fqL').innerHTML = lines.map((l, i) => `<div class="grid2" style="grid-template-columns:2fr .6fr 1fr auto;gap:4px;margin-bottom:4px"><input data-fql="${i}" data-k="desc" placeholder="Part / labour" value="${esc(l.desc)}"><input data-fql="${i}" data-k="qty" type="number" value="${esc(String(l.qty))}"><input data-fql="${i}" data-k="price" type="number" placeholder="Price" value="${esc(String(l.price))}"><button class="rf-btn grey" data-fqr="${i}">✕</button></div>`).join('');
+    box.querySelectorAll('[data-fql]').forEach(inp => inp.oninput = () => { lines[inp.dataset.fql][inp.dataset.k] = inp.value; box.querySelector('#fqTot').textContent = money(tot()); });
+    box.querySelectorAll('[data-fqr]').forEach(b => b.onclick = () => { lines.splice(N(b.dataset.fqr), 1); if(!lines.length) lines.push({desc:'', qty:1, price:''}); draw(); });
+    box.querySelector('#fqTot').textContent = money(tot()); };
+  box.querySelector('#fqK').onchange = fillOrders; fillOrders(); draw();
+  box.querySelector('#fqAdd').onclick = () => { lines.push({desc:'', qty:1, price:''}); draw(); };
+  box.querySelector('#fqX').onclick = closeModal;
+  box.querySelector('#fqSend').onclick = async () => { const L = lines.filter(l => l.desc.trim() && N(l.price) > 0).map(l => ({desc:l.desc.trim(), qty:N(l.qty) || 1, price:N(l.price)}));
+    if(!L.length){ toast('Add at least one line with a price.', true); return; }
+    const data = {title:box.querySelector('#fqT').value.trim() || 'Quote', vehicle:box.querySelector('#fqV').value.trim(), lines:L, total:L.reduce((s2, l) => s2 + l.qty * l.price, 0), notes:box.querySelector('#fqN').value.trim(), validDays:N(box.querySelector('#fqD').value) || 7, by:myName()};
+    try{ await Cloud.rest('POST', 'rf_partner_quotes', {code:box.querySelector('#fqK').value, order_ref:box.querySelector('#fqO').value || null, data, created_by:myName()}, 'return=minimal'); closeModal(); toast('Quote sent — the fleet sees it in their app.'); hqFleetSeg = 'quotes'; renderFleetsHQ(); }
+    catch(e){ toast(e.message, true); } };
+}
+/* ---------- wiring for the fleet edition ---------- */
+if(FLEET){
+  // the Tyres tab reuses the Robotik Fix tyre module: vehicles come from the Vehicles tab
+  editTruck = function(id){ editVehicle(id); };
+  const _rv = renderView;
+  renderView = function(v){ ensureLists();
+    try{ if(v === 'home') return renderFleetHome(); if(v === 'fvehicles') return renderFleetVehicles(); if(v === 'fdrivers') return renderFleetDrivers(); if(v === 'fservice') return renderFleetService();
+      if(v === 'ffuel'){ if(segState.ffuel) ffSeg = segState.ffuel; return renderFleetFuel(); } if(v === 'fchecks') return renderFleetChecks(); if(v === 'freports') return renderFleetReports();
+      if(v === 'frobotik'){ if(segState.frobotik) robSeg = segState.frobotik; segState.frobotik = ''; return renderFleetRobotik(); } }
+    catch(e){ console.error(e); const el = $('view-' + v); if(el) el.innerHTML = '<div class="card"><p>Something went wrong showing this screen: ' + esc(e.message) + '</p></div>'; return; }
+    return _rv.apply(this, arguments); };
+  renderHome = renderFleetHome;
+  // open on the dashboard (or My Business on the very first run)
+  window.addEventListener('load', () => setTimeout(() => { if(!brandSetting()) showTab('sync'); else if(curTab === 'doc') showTab('home'); }, 120));
+  // a code in the invite link (?k=RF-…) links the app straight away
+  try{ const k = new URLSearchParams(location.search).get('k'); if(k && /^[A-Za-z0-9-]{6,40}$/.test(k)){ localStorage.setItem(PCODE_KEY, k.toUpperCase()); history.replaceState(null, '', location.pathname); } }catch(e){}
+  // keep shared reminders current (at most every 30 minutes, only if switched on)
+  listeners.push(kinds => { if(!Store.setting().fleetShareDue) return; if(!(kinds.includes('*') || kinds.some(k => ['truck', 'fservice', 'ffuel', 'fcheck', 'ftrip', 'tyreevent'].includes(k)))) return;
+    const last = Store.setting().fleetShareAt; if(last && Date.now() - new Date(last).getTime() < 30 * 60000) return; clearTimeout(window.__fdT); window.__fdT = setTimeout(() => shareDueNow(false), 3000); });
+}
+Object.assign(window.RF = window.RF || {}, {fleetAlerts, fleetStats, serviceDue, curKm, kmIn, costEntries, periodOf, fleetDueList, loadFleetFeed, dailyCheck});
 
 })();
 </script>
