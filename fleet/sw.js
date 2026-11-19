@@ -1,4 +1,4 @@
-const CACHE_NAME = 'robotik-fleet-v7-4';
+const CACHE_NAME = 'robotik-fleet-v7-5';
 const urlsToCache = [
   './',
   './index.html',
