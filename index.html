@@ -2588,7 +2588,7 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
    database (Supabase) with staff logins and roles (admin / cashier / technician).
    Without the team database everything still works on this device alone, as before.
 =========================================================================================== */
-const RF_VERSION = '7.4';
+const RF_VERSION = '7.5';
 /* Multi-user team database: built, but switched OFF for now. Set to true to turn it back on. */
 const EDITION = 'robotik';      // build script switches this to 'partner' for the partner-garage app
 const TEAM_ENABLED = true; // every edition: each business connects its own team database (partners keep their separate link to Robotik HQ)
@@ -4563,7 +4563,7 @@ function brandVals(){
 }
 function applyBrand(){
   const b = brandSetting();
-  const comps = b && Array.isArray(b.companies) && b.companies.filter(c => c && c.name).length ? b.companies.filter(c => c && c.name) : (GARAGE ? [{name:'YOUR GARAGE NAME', address:'', tel:'', email:'', bankName:'', bankAcctName:'', bankAcctNo:'', currency:GLOBAL ? guessCurrency() : 'NGN', taxName:'VAT', taxRate:GLOBAL ? '' : 7.5}] : ORIGINAL_COMPANIES);
+  const comps = b && Array.isArray(b.companies) && b.companies.filter(c => c && c.name).length ? b.companies.filter(c => c && c.name) : (GARAGE ? [{name:EDITION === 'fleet' ? 'YOUR FLEET COMPANY' : 'YOUR GARAGE NAME', address:'', tel:'', email:'', bankName:'', bankAcctName:'', bankAcctNo:'', currency:GLOBAL ? guessCurrency() : 'NGN', taxName:'VAT', taxRate:GLOBAL ? '' : 7.5}] : ORIGINAL_COMPANIES);
   COMPANIES.length = 0; comps.forEach(c => { const x = Object.assign({name:'', branch:'', address:'', tel:'', email:'', tin:'', bankName:'', bankAcctName:'', bankAcctNo:'', signature:'', currency:'', taxName:'VAT', taxRate:''}, c);
     const orig = ORIGINAL_COMPANIES.find(o => lc(o.name) === lc(x.name));   // fill details added later (TIN, Wema account) into older saved settings
     if(orig){ if(!x.tin) x.tin = orig.tin || ''; if(!x.bankAcctNo && orig.bankAcctNo){ x.bankAcctNo = orig.bankAcctNo; x.bankName = x.bankName || orig.bankName; } }
@@ -4892,18 +4892,10 @@ function editPartnerCredit(g){
 async function setOrderStatus(o, status){
   try{ await Cloud.rest('PATCH', 'rf_partner_orders?id=eq.' + encodeURIComponent(o.id), {status, handled_by:myName(), updated_at:nowIso()}, 'return=minimal'); o.status = status; toast('Marked ' + status + '.'); }
   catch(e){ toast(e.message, true); }
-  renderPartners(true);
+  rerenderPo();
 }
-async function renderPartners(noFetch){
-  const v = $('view-partners'); if(!v) return;
-  if(mode !== 'cloud'){ v.innerHTML = wrap('PARTNER GARAGES', '<p>Partner orders arrive through the team database. Connect it in <b>Setup → Team database</b> first.</p>', true); return; }
-  let h = seg('partners', [['orders', 'Orders' + (pOrders.filter(o => o.status === 'new').length ? ' (' + pOrders.filter(o => o.status === 'new').length + ')' : '')], ['garages', 'Garages'], ['prices', 'Trade prices', 'need-admin'], ['fleets', '🚚 Fleets', 'need-cashier'], ['invite', 'Invite a garage']], segState.partners || 'orders');
-  const s = segState.partners || 'orders';
-  if(!noFetch && s !== 'invite') { v.innerHTML = h + '<div class="rf-empty">Loading…</div>'; try{ await fetchPartnerOrders(); }catch(e){ v.innerHTML = h + wrap('PARTNER GARAGES', '<p>' + esc(e.status === 0 ? 'No internet connection.' : /rf_partner_orders|does not exist|schema cache/i.test(e.message) ? 'Partner orders are not set up yet — run partner-orders.sql in the Supabase SQL Editor (one time).' : e.message) + '</p>'); return; } }
-  if(s === 'orders'){
-    const list = pOrders.filter(o => pFilter === 'all' || (pFilter === 'open' ? !['done', 'cancelled'].includes(o.status) : o.status === pFilter));
-    h += wrap('PARTNER ORDERS', `<div class="rf-seg">${[['open', 'Open'], ['new', 'New'], ['done', 'Done'], ['all', 'All']].map(([k, l]) => `<button class="${k === pFilter ? 'on' : ''}" data-pf="${k}">${l}</button>`).join('')}<button data-pr="1">🔄</button></div>` +
-      (list.map(o => { const d = o.data || {}, st = PO_STATUSES.find(x => x[0] === o.status) || PO_STATUSES[0]; const svc = (PARTNER_SERVICES.find(x => x[0] === d.service) || [])[1] || d.service;
+function rerenderPo(refetch){ if(typeof curTab !== 'undefined' && curTab === 'fleet') renderView('fleet'); else renderPartners(!refetch); }
+function poRowHtml(o){ const d = o.data || {}, st = PO_STATUSES.find(x => x[0] === o.status) || PO_STATUSES[0]; const svc = (PARTNER_SERVICES.find(x => x[0] === d.service) || [])[1] || d.service;
         const next = {new:'accepted', accepted:'picked up', 'picked up':'in progress', 'in progress':'ready', ready:'done'}[o.status], svcN = (FLEET_SERVICES.find(x => x[0] === d.service) || [])[1]; const svc2 = svcN && !(PARTNER_SERVICES.find(x => x[0] === d.service)) ? svcN : svc;
         return `<div class="rf-row"><div class="t"><span>${esc(o.garage)} ${creditBadge(o.garage)}</span><span class="rf-badge ${st[2]}">${esc(st[1])}</span></div>
           <div class="m">${d.fleet ? '🚚 <b>Fleet</b> · ' : ''}<b>${esc(svc2)}</b>${d.vclass ? ' · <b>' + esc(d.vclass) + '</b>' : ''} · qty ${esc(d.qty)} ${d.vehicles ? '· ' + esc(d.vehicles) : ''}</div>
@@ -4911,13 +4903,34 @@ async function renderPartners(noFetch){
           <div class="m">${d.pickup ? '🚚 Pickup: ' + esc(d.pickupAddr || '') + ' · ' : ''}📞 ${esc(d.contact || '')} ${esc(d.contactPhone || '')}${d.when ? ' · ⏰ ' + esc(d.when) : ''}</div>
           ${d.notes ? `<div class="m">📝 ${esc(d.notes)}</div>` : ''}${o.hq_note ? `<div class="m">💬 Our note to them: <b>${esc(o.hq_note)}</b></div>` : ''}
           <div class="m">${esc(new Date(o.created_at).toLocaleString('en-NG', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}))} · ref ${esc(d.ref || '')}${o.handled_by ? ' · ' + esc(o.handled_by) : ''}</div>
-          <div class="acts">${next ? `<button class="rf-btn" data-pn="${esc(o.id)}" data-to="${next}">→ ${next}</button>` : ''}${next && next !== 'done' && o.status !== 'new' ? `<button class="rf-btn grey" data-pn="${esc(o.id)}" data-to="done">✓ done</button>` : ''}<button class="rf-btn grey" data-pnote="${esc(o.id)}">💬 Note</button><button class="rf-btn green" data-pinv="${esc(o.id)}">🧾 Invoice</button><button class="rf-btn wa" data-pwa="${esc(o.id)}">💬 WhatsApp</button>${!['done', 'cancelled'].includes(o.status) ? `<button class="rf-btn grey" data-pn="${esc(o.id)}" data-to="cancelled">Cancel</button>` : ''}</div></div>`; }).join('') || '<div class="rf-empty">No orders here yet. Invite garages from the “Invite a garage” tab.</div>'), true);
+          <div class="acts">${next ? `<button class="rf-btn" data-pn="${esc(o.id)}" data-to="${next}">→ ${next}</button>` : ''}${next && next !== 'done' && o.status !== 'new' ? `<button class="rf-btn grey" data-pn="${esc(o.id)}" data-to="done">✓ done</button>` : ''}<button class="rf-btn grey" data-pnote="${esc(o.id)}">💬 Note</button><button class="rf-btn green" data-pinv="${esc(o.id)}">🧾 Invoice</button><button class="rf-btn wa" data-pwa="${esc(o.id)}">💬 WhatsApp</button>${!['done', 'cancelled'].includes(o.status) ? `<button class="rf-btn grey" data-pn="${esc(o.id)}" data-to="cancelled">Cancel</button>` : ''}</div></div>`; }
+// fleet companies' jobs are handled in the Fleet tab; partner garages' here
+function isFleetOrder(o){ return !!((o.data || {}).fleet) || fleetClientNames().has(o.garage); }
+function fleetClientNames(){ try{ return new Set(JSON.parse(localStorage.getItem('rf3_fleet_names') || '[]')); }catch(e){ return new Set(); } }
+function bindPoActs(v, rerender){
+  bind(v, '[data-pn]', 'click', el => setOrderStatus(pOrders.find(o => o.id === el.dataset.pn), el.dataset.to));
+  bind(v, '[data-pinv]', 'click', async el => { const o = pOrders.find(x => x.id === el.dataset.pinv); if(o.status === 'new') await setOrderStatus(o, 'accepted'); if(await invoiceFromOrder(o) !== false) showTab('quick'); });
+  bind(v, '[data-pnote]', 'click', async el => { const o = pOrders.find(x => x.id === el.dataset.pnote); const t = await promptText('Note the customer sees (e.g. "Waiting for brake pads, ready Thursday")', o.hq_note || ''); if(t === null) return;
+    try{ await Cloud.rest('PATCH', 'rf_partner_orders?id=eq.' + encodeURIComponent(o.id), {hq_note:t || null, updated_at:nowIso()}, 'return=minimal'); o.hq_note = t; toast('Note saved — they see it in their app.'); }catch(e){ toast(/hq_note/.test(e.message) ? 'Run upgrade-7.4-fleet.sql in Supabase first.' : e.message, true); } rerender(); });
+  bind(v, '[data-pwa]', 'click', el => { const o = pOrders.find(x => x.id === el.dataset.pwa), d = o.data || {}; openWhatsApp(d.contactPhone, `Hello ${d.contact || o.garage}, this is Robotik Fix about your ${d.fleet ? 'job' : 'order'} ${o.track_no || d.ref || ''} (${((d.fleet ? FLEET_SERVICES : PARTNER_SERVICES).find(x => x[0] === d.service) || [])[1] || d.service}). `); });
+}
+async function renderPartners(noFetch){
+  const v = $('view-partners'); if(!v) return;
+  if(mode !== 'cloud'){ v.innerHTML = wrap('PARTNER GARAGES', '<p>Partner orders arrive through the team database. Connect it in <b>Setup → Team database</b> first.</p>', true); return; }
+  const pNew = pOrders.filter(o => o.status === 'new' && !isFleetOrder(o)).length;
+  let h = seg('partners', [['orders', 'Orders' + (pNew ? ' (' + pNew + ')' : '')], ['garages', 'Garages'], ['prices', 'Trade prices', 'need-admin'], ['invite', 'Invite a garage']], segState.partners || 'orders');
+  const s = segState.partners || 'orders';
+  if(!noFetch && s !== 'invite') { v.innerHTML = h + '<div class="rf-empty">Loading…</div>'; try{ await fetchPartnerOrders(); }catch(e){ v.innerHTML = h + wrap('PARTNER GARAGES', '<p>' + esc(e.status === 0 ? 'No internet connection.' : /rf_partner_orders|does not exist|schema cache/i.test(e.message) ? 'Partner orders are not set up yet — run partner-orders.sql in the Supabase SQL Editor (one time).' : e.message) + '</p>'); return; } }
+  if(s === 'orders'){
+    const list = pOrders.filter(o => !isFleetOrder(o)).filter(o => pFilter === 'all' || (pFilter === 'open' ? !['done', 'cancelled'].includes(o.status) : o.status === pFilter));
+    h += wrap('PARTNER ORDERS', `<div class="rf-seg">${[['open', 'Open'], ['new', 'New'], ['done', 'Done'], ['all', 'All']].map(([k, l]) => `<button class="${k === pFilter ? 'on' : ''}" data-pf="${k}">${l}</button>`).join('')}<button data-pr="1">🔄</button></div>` +
+      (list.map(poRowHtml).join('') || '<div class="rf-empty">No orders here yet. Invite garages from the “Invite a garage” tab.</div>'), true);
   } else if(s === 'garages'){
     const m0 = today().slice(0, 8) + '01', g = {};
-    pOrders.forEach(o => { const x = g[o.garage] || (g[o.garage] = {orders:0, month:0, last:'', phone:(o.data || {}).contactPhone}); x.orders++; if(o.created_at.slice(0, 10) >= m0) x.month++; if(o.created_at > x.last) x.last = o.created_at; });
+    pOrders.filter(o => !isFleetOrder(o)).forEach(o => { const x = g[o.garage] || (g[o.garage] = {orders:0, month:0, last:'', phone:(o.data || {}).contactPhone}); x.orders++; if(o.created_at.slice(0, 10) >= m0) x.month++; if(o.created_at > x.last) x.last = o.created_at; });
     const docs = Store.list('doc').filter(d => (d.type || '').toUpperCase() === 'INVOICE' && d.status !== 'Cancelled');
     Object.keys(g).forEach(k => { const mine = docs.filter(d => d.partner === k || lc(d.custName) === lc(k)); g[k].billed = mine.filter(d => (d.date || '') >= m0).reduce((s, d) => s + N(d.grand), 0); g[k].owed = mine.reduce((s, d) => s + Math.max(0, N(d.grand) - (d.paymentEntries || []).reduce((t, p) => t + N(p.amount), 0)), 0); });
-    Store.list('pcredit').forEach(t => { if(t.garage && !g[t.garage]) g[t.garage] = {orders:0, month:0, last:'', billed:0, owed:0}; });
+    Store.list('pcredit').forEach(t => { if(t.garage && !g[t.garage] && !fleetClientNames().has(t.garage)) g[t.garage] = {orders:0, month:0, last:'', billed:0, owed:0}; });
     h += wrap('PARTNER GARAGES', Object.entries(g).sort((a, b) => b[1].month - a[1].month || b[1].orders - a[1].orders).map(([k, x]) => { const c = partnerCreditState(k), t = c.terms;
       return `<div class="rf-row"><div class="t"><span>${esc(k)}</span>${creditBadge(k)}</div>
         <div class="m">Orders ${x.month} this month / ${x.orders} in all${x.last ? ' · last ' + esc(fmtDate(x.last)) : ''} · billed this month ${money(x.billed)}</div>
@@ -4926,8 +4939,6 @@ async function renderPartners(noFetch){
         <div class="acts"><button class="rf-btn need-admin" data-pcr="${esc(k)}">💳 ${t ? 'Change credit' : 'Give credit'}</button></div></div>`; }).join('')
       + (Object.keys(g).length ? '' : '<div class="rf-empty">No partner orders yet.</div>')
       + '<p class="rf-note">Owed amounts count invoices made from partner orders, or invoices whose customer name matches the garage. With credit, each invoice made from an order says when it must be paid; the app warns you before invoicing a garage that is over its limit or has overdue invoices.</p>', true);
-  } else if(s === 'fleets'){
-    h += '<div id="flHQ"><div class="rf-empty">Loading…</div></div>';
   } else if(s === 'prices'){
     h += wrap('TRADE PRICES (SHOWN IN PARTNER APPS)', '<p class="rf-note">Partner garages see these prices in their app. Leave a price empty to hide that line.</p><div id="tpBox" class="rf-empty">Loading…</div>', true);
   } else {
@@ -4939,13 +4950,8 @@ async function renderPartners(noFetch){
   v.innerHTML = h;
   bind(v, '[data-pf]', 'click', el => { pFilter = el.dataset.pf; renderPartners(true); });
   bind(v, '[data-pr]', 'click', () => renderPartners());
-  bind(v, '[data-pn]', 'click', el => setOrderStatus(pOrders.find(o => o.id === el.dataset.pn), el.dataset.to));
-  bind(v, '[data-pinv]', 'click', async el => { const o = pOrders.find(x => x.id === el.dataset.pinv); if(o.status === 'new') await setOrderStatus(o, 'accepted'); if(await invoiceFromOrder(o) !== false) showTab('quick'); });
+  bindPoActs(v, () => renderPartners(true));
   bind(v, '[data-pcr]', 'click', el => editPartnerCredit(el.dataset.pcr));
-  bind(v, '[data-pnote]', 'click', async el => { const o = pOrders.find(x => x.id === el.dataset.pnote); const t = await promptText('Note the customer sees (e.g. "Waiting for brake pads, ready Thursday")', o.hq_note || ''); if(t === null) return;
-    try{ await Cloud.rest('PATCH', 'rf_partner_orders?id=eq.' + encodeURIComponent(o.id), {hq_note:t || null, updated_at:nowIso()}, 'return=minimal'); o.hq_note = t; toast('Note saved — they see it in their app.'); }catch(e){ toast(/hq_note/.test(e.message) ? 'Run upgrade-7.4-fleet.sql in Supabase first.' : e.message, true); } renderPartners(true); });
-  if(s === 'fleets') renderFleetsHQ();
-  bind(v, '[data-pwa]', 'click', el => { const o = pOrders.find(x => x.id === el.dataset.pwa), d = o.data || {}; openWhatsApp(d.contactPhone, `Hello ${d.contact || o.garage}, this is Robotik Fix about your order ${d.ref || ''} (${(PARTNER_SERVICES.find(x => x[0] === d.service) || [])[1] || d.service}, qty ${d.qty}). `); });
   if($('pInvWa')) $('pInvWa').onclick = () => openWhatsApp('', $('pInvMsg').value);
   if($('pInvCopy')) $('pInvCopy').onclick = () => navigator.clipboard && navigator.clipboard.writeText(partnerAppLink()).then(() => toast('Link copied.'));
   if(s === 'prices') loadPriceEditor();
@@ -4993,7 +4999,7 @@ async function loadPriceEditor(){
 
 /* ---------- start-up ---------- */
 window.addEventListener('load', () => applyBrand());
-if(GARAGE) window.addEventListener('load', () => { setTimeout(() => { if(!brandSetting()) { showTab('sync'); toast('Welcome! Please enter your garage details first.'); } }, 300); });
+if(GARAGE) window.addEventListener('load', () => { setTimeout(() => { if(!brandSetting()) { showTab('sync'); toast(EDITION === 'fleet' ? 'Welcome! Please enter your fleet company details first.' : 'Welcome! Please enter your garage details first.'); } }, 300); });
 
 /* ===================== BOOKKEEPING: cash book + activity reports ===================== */
 const pad2 = n => String(n).padStart(2, '0');
@@ -5921,7 +5927,7 @@ const TONES = {blue:['#eef2ff', '#4f46e5'], purple:['#f3eefe', '#7c3aed'], green
 const CO_KEY = 'rf_co_' + EDITION;
 let homeCo = (() => { try{ const v = sessionStorage.getItem(CO_KEY); return v == null ? null : N(v); }catch(e){ return null; } })();
 const curCoIdx = () => homeCo != null && COMPANIES[homeCo] ? homeCo : 0;
-function landingCompanies(){ return COMPANIES.map((c, i) => ({c, i})).filter(x => x.c && String(x.c.name || '').trim() && !/YOUR GARAGE NAME/i.test(x.c.name)); }
+function landingCompanies(){ return COMPANIES.map((c, i) => ({c, i})).filter(x => x.c && String(x.c.name || '').trim() && !/YOUR GARAGE NAME|YOUR FLEET COMPANY/i.test(x.c.name)); }
 function setDocCompany(i){ const sel = $('companySelect'); if(!sel || $('docNo').dataset.savedId) return; if(sel.querySelector(`option[value="${i}"]`)){ sel.value = String(i); try{ window.applyCompany(i); }catch(e){} } }
 function showLanding(force){
   const list = landingCompanies();
@@ -6005,7 +6011,7 @@ function homeTiles(){
     t('track', 'Packages', 'bundle', 'teal', 'stock', goSeg('stock', 'stock', 'bundles')),
     t('track', 'Purchase Orders', 'po', 'orange', 'stock', goSeg('stock', 'stock', 'po'), 'need-cashier'),
     t('track', 'Service Reminders', 'bell', 'yellow', 'book', goSeg('book', 'book', 'rem'), '', remDue),
-    t('track', 'Fleet Tyres', 'fleet', 'slate', 'fleet', goSeg('fleet')),
+    t('track', 'Fleet Tyres', 'fleet', 'slate', 'fleet', goSeg('fleet', 'fleet', 'tyres')),
     t('track', 'Tools, Equipment & Assets', 'tools', 'cyan', 'assets', () => { showTab('assets'); window.scrollTo({top:0}); }, '', toolsOver + assetDue),
     t('track', 'Time Clock', 'clock', 'slate', 'team', goSeg('team', 'team', 'clock')),
     t('track', 'Hours Report', 'hours', 'purple', 'team', goSeg('team', 'team', 'hours'), 'need-cashier'),
@@ -7764,7 +7770,7 @@ function pickupModal(o){
   box.querySelector('#puX').onclick = closeModal;
   box.querySelector('#puOk').onclick = async () => { const at = new Date(box.querySelector('#puD').value + 'T' + (box.querySelector('#puT').value || '10:00')); const note = box.querySelector('#puN').value.trim();
     try{ await Cloud.rest('PATCH', 'rf_partner_orders?id=eq.' + encodeURIComponent(o.id), Object.assign({pickup_at:at.toISOString(), pickup_note:note, handled_by:myName(), updated_at:nowIso()}, o.status === 'new' ? {status:'accepted'} : {}), 'return=minimal'); closeModal(); toast('Pickup scheduled.');
-      const d = o.data || {}; openWhatsApp(d.contactPhone, `Hello ${d.contact || o.garage}, Robotik Fix will pick up order ${o.track_no || d.ref} on ${fmtDate(at.toISOString().slice(0, 10))} at ${at.toLocaleTimeString('en-NG', {hour:'2-digit', minute:'2-digit'})}.${note ? '\n' + note : ''}`); renderPartners(); }
+      const d = o.data || {}; openWhatsApp(d.contactPhone, `Hello ${d.contact || o.garage}, Robotik Fix will pick up order ${o.track_no || d.ref} on ${fmtDate(at.toISOString().slice(0, 10))} at ${at.toLocaleTimeString('en-NG', {hour:'2-digit', minute:'2-digit'})}.${note ? '\n' + note : ''}`); rerenderPo(true); }
     catch(e){ toast(e.message, true); } };
 }
 function collectModal(o){
@@ -7777,14 +7783,16 @@ function collectModal(o){
   box.querySelector('#ceP').onchange = async e => { const f = e.target.files[0]; if(!f) return; try{ photo = await resizeImage(f, 900); box.querySelector('#ceImg').innerHTML = `<img src="${photo}" style="max-width:100%;max-height:180px;border-radius:6px">`; }catch(er){ toast('Could not read that photo.', true); } };
   box.querySelector('#ceOk').onclick = async () => { const by = box.querySelector('#ceBy').value.trim(), n = N(box.querySelector('#ceN').value);
     if(!by){ toast('Enter who handed the items over.', true); return; } if(!photo && !(await askConfirm('No photo — save without evidence photo?'))) return;
-    try{ await Cloud.rest('PATCH', 'rf_partner_orders?id=eq.' + encodeURIComponent(o.id), {status:'picked up', collected_at:nowIso(), collected_from:by, collected_items:n || null, collection_photo:photo || null, handled_by:myName(), updated_at:nowIso()}, 'return=minimal'); closeModal(); toast('Collection recorded.'); renderPartners(); }
+    try{ await Cloud.rest('PATCH', 'rf_partner_orders?id=eq.' + encodeURIComponent(o.id), {status:'picked up', collected_at:nowIso(), collected_from:by, collected_items:n || null, collection_photo:photo || null, handled_by:myName(), updated_at:nowIso()}, 'return=minimal'); closeModal(); toast('Collection recorded.'); rerenderPo(true); }
     catch(e){ toast(e.message, true); } };
 }
 if(EDITION === 'robotik'){
   const prevRenderPartners51 = renderPartners;
   renderPartners = async function(noFetch){
     await prevRenderPartners51.apply(this, arguments);
-    const v = $('view-partners'); if(!v || mode !== 'cloud') return;
+    const v = $('view-partners'); if(!v || mode !== 'cloud') return; decoratePoRows(v); };
+}
+function decoratePoRows(v){ {
     v.querySelectorAll('[data-pinv]').forEach(btn => { const o = pOrders.find(x => x.id === btn.dataset.pinv), row = btn.closest('.rf-row'); if(!o || !row || row.querySelector('.rf-po51')) return;
       const info = [o.track_no ? '<b>' + esc(o.track_no) + '</b>' : '', o.pickup_at ? '📅 pickup ' + esc(fmtDate(o.pickup_at.slice(0, 10))) + ' ' + esc(new Date(o.pickup_at).toLocaleTimeString('en-NG', {hour:'2-digit', minute:'2-digit'})) : '', o.collected_at ? '📦 collected from ' + esc(o.collected_from || '?') + (o.collected_items ? ' (' + esc(o.collected_items) + ')' : '') + (o.collection_photo ? ' 📸' : '') : '', o.returned_at ? '↩ returned ' + esc(fmtDate(o.returned_at.slice(0, 10))) : '', o.invoice_no ? '🧾 ' + esc(o.invoice_no) + ' · ' + money(o.invoice_total) + (N(o.invoice_total) > N(o.invoice_paid) ? ' · owes ' + money(N(o.invoice_total) - N(o.invoice_paid)) : ' · paid') : ''].filter(Boolean).join(' · ');
       row.insertAdjacentHTML('beforeend', `<div class="m rf-po51">${info}</div>`);
@@ -7793,10 +7801,10 @@ if(EDITION === 'robotik'){
     bind(v, '[data-pup]', 'click', el => pickupModal(pOrders.find(x => x.id === el.dataset.pup)));
     bind(v, '[data-pce]', 'click', el => collectModal(pOrders.find(x => x.id === el.dataset.pce)));
     bind(v, '[data-pph]', 'click', el => { const o = pOrders.find(x => x.id === el.dataset.pph); modal(`<h3>${esc(o.track_no || '')} — collected ${esc(fmtDate((o.collected_at || '').slice(0, 10)))}</h3><img src="${esc(o.collection_photo)}" style="max-width:100%"><div class="rf-tools"><button class="rf-btn grey" onclick="document.getElementById('rfModal').classList.remove('on')">Close</button></div>`); });
-    bind(v, '[data-pret]', 'click', async el => { const o = pOrders.find(x => x.id === el.dataset.pret); try{ await Cloud.rest('PATCH', 'rf_partner_orders?id=eq.' + encodeURIComponent(o.id), {returned_at:nowIso(), status:'done', handled_by:myName(), updated_at:nowIso()}, 'return=minimal'); toast('Marked returned to the garage.'); renderPartners(); }catch(e){ toast(e.message, true); } });
-  };
+    bind(v, '[data-pret]', 'click', async el => { const o = pOrders.find(x => x.id === el.dataset.pret); try{ await Cloud.rest('PATCH', 'rf_partner_orders?id=eq.' + encodeURIComponent(o.id), {returned_at:nowIso(), status:'done', handled_by:myName(), updated_at:nowIso()}, 'return=minimal'); toast('Marked returned to the garage.'); rerenderPo(true); }catch(e){ toast(e.message, true); } });
+  }
 }
-const PO_STAGE_TXT = {'new':'Received by Robotik Fix', 'accepted':'Accepted', 'picked up':'Picked up — in our workshop', 'done':'Done', 'cancelled':'Cancelled'};
+const PO_STAGE_TXT = {'new':'Received by Robotik Fix', 'accepted':'Accepted', 'picked up':'Picked up — in our workshop', 'in progress':'Work in progress', 'ready':'Ready', 'done':'Done', 'cancelled':'Cancelled'};
 async function partnerTracking(){
   const mine = Store.list('porder').filter(o => o.delivered), code = typeof partnerCode === 'function' ? partnerCode() : '';
   if(!mine.length && !code) return null;
@@ -10327,21 +10335,38 @@ function promptText(title, def){
   return new Promise(ok => { const box = modal(`<h2 style="margin-top:0">${esc(title)}</h2><input id="ptIn" value="${esc(def || '')}" style="width:100%"><div class="rf-tools" style="margin-top:10px"><button class="rf-btn green" id="ptOk">OK</button><button class="rf-btn grey" id="ptX">Cancel</button></div>`);
     box.querySelector('#ptOk').onclick = () => { const v = box.querySelector('#ptIn').value.trim(); closeModal(); ok(v); }; box.querySelector('#ptX').onclick = () => { closeModal(); ok(null); }; setTimeout(() => box.querySelector('#ptIn').focus(), 50); });
 }
-/* ---------- Robotik Fix HQ: Partners → Fleets ---------- */
+/* ---------- Robotik Fix HQ: the Fleet tab (fleet jobs, fleet clients, quotes, service due, tyres) ---------- */
 function fleetAppLink(code){ let u; try{ u = new URL('fleet/', HQ.appUrl).href; }catch(e){ u = HQ.appUrl + 'fleet/'; } return code ? u + '?k=' + encodeURIComponent(code) : u; }
-let hqFleetSeg = 'codes';
-async function renderFleetsHQ(){
+const HQ_FLEET_SEGS = [['jobs', 'Fleet jobs'], ['clients', 'Fleet clients'], ['quotes', 'Quotes'], ['due', 'Due for service'], ['tyres', '🛞 Tyres']];
+let fjFilter = 'open';
+async function renderFleetTabHQ(){
+  const v = $('view-fleet'); if(!v) return;
+  const cur = HQ_FLEET_SEGS.some(x => x[0] === segState.fleet) ? segState.fleet : (mode === 'cloud' && can('cashier') ? 'jobs' : 'tyres');
+  const bar = seg('fleet', HQ_FLEET_SEGS.map(x => x[0] === 'tyres' ? x : x.concat(['need-cashier'])), cur);
+  if(cur === 'tyres'){ renderFleet(); v.insertAdjacentHTML('afterbegin', bar); return; }
+  if(mode !== 'cloud'){ v.innerHTML = bar + wrap('FLEET COMPANIES', '<p>Fleet companies reach you through the team database. Connect it in <b>Setup → Team database</b> first.</p>', true); return; }
+  v.innerHTML = bar + '<div id="flHQ"><div class="rf-empty">Loading…</div></div>';
+  if(cur !== 'jobs') return renderFleetsHQ(cur);
+  try{ await fetchPartnerOrders(); }catch(e){ $('flHQ').innerHTML = wrap('FLEET JOBS', '<p>' + esc(e.status === 0 ? 'No internet connection.' : e.message) + '</p>', true); return; }
+  const all = pOrders.filter(isFleetOrder), list = all.filter(o => fjFilter === 'all' || (fjFilter === 'open' ? !['done', 'cancelled'].includes(o.status) : o.status === fjFilter)), nNew = all.filter(o => o.status === 'new').length;
+  const box = $('flHQ'); if(!box) return;
+  box.innerHTML = wrap('FLEET JOBS' + (nNew ? ' — ' + nNew + ' NEW' : ''), `<div class="rf-seg">${[['open', 'Open'], ['new', 'New'], ['done', 'Done'], ['all', 'All']].map(([k, l]) => `<button class="${k === fjFilter ? 'on' : ''}" data-fjf="${k}">${l}</button>`).join('')}<button data-fjr="1">🔄</button></div>`
+    + (list.map(poRowHtml).join('') || '<div class="rf-empty">No fleet jobs here yet. Invite fleet companies under “Fleet clients”.</div>'), true);
+  decoratePoRows(box); bindPoActs(box, rerenderPo);
+  bind(box, '[data-fjf]', 'click', el => { fjFilter = el.dataset.fjf; renderFleetTabHQ(); }); bind(box, '[data-fjr]', 'click', () => renderFleetTabHQ());
+}
+async function renderFleetsHQ(hqFleetSeg){
   const box = $('flHQ'); if(!box) return;
   let keys = [], quotes = [], due = [];
   try{ [keys, quotes, due] = await Promise.all([Cloud.rest('GET', 'rf_partner_keys?select=*&kind=eq.fleet&order=created_at.desc'), Cloud.rest('GET', 'rf_partner_quotes?select=*&order=created_at.desc&limit=200'), Cloud.rest('GET', 'rf_fleet_due?select=*&order=updated_at.desc')]); }
   catch(e){ box.innerHTML = wrap('FLEETS', '<p>' + esc(/kind|rf_partner_quotes|rf_fleet_due|404|does not exist/.test(e.message + e.status) ? 'Run upgrade-7.4-fleet.sql in Supabase first (SQL Editor → paste → Run).' : e.message) + '</p>', true); return; }
-  keys = keys || []; quotes = quotes || []; due = due || [];
+  keys = keys || []; quotes = quotes || []; due = due || []; try{ localStorage.setItem('rf3_fleet_names', JSON.stringify(keys.map(k => k.garage))); }catch(e){}
   // keep each fleet's credit (set with 💳, same as partner garages) visible in its app
   if(can('admin')) for(const k of keys){ const t = partnerTerms(k.garage), L = t ? N(t.limit) : 0, D = t ? N(t.days) : 0; if(L !== N(k.credit_limit) || D !== N(k.credit_days)){ try{ await Cloud.rest('PATCH', 'rf_partner_keys?code=eq.' + encodeURIComponent(k.code), {credit_limit:L, credit_days:D}, 'return=minimal'); k.credit_limit = L; k.credit_days = D; }catch(e){} } }
   const nameOf = c => (keys.find(k => k.code === c) || {}).garage || c, openQ = quotes.filter(q => q.status === 'pending').length, newDec = quotes.filter(q => q.status !== 'pending' && q.decided_at && q.decided_at > (localStorage.getItem('rf3_fq_seen') || '')).length;
-  let h = `<div class="rf-seg">${[['codes', 'Fleet codes (' + keys.length + ')'], ['quotes', 'Quotes' + (newDec ? ' (' + newDec + ' answered)' : openQ ? ' (' + openQ + ' waiting)' : '')], ['due', 'Due for service (' + due.reduce((s2, d) => s2 + ((d.data || []).length), 0) + ')']].map(([k, l]) => `<button class="${k === hqFleetSeg ? 'on' : ''}" data-hfs="${k}">${esc(l)}</button>`).join('')}</div>`;
-  if(hqFleetSeg === 'codes'){
-    h += wrap('FLEET CODES', `<p class="rf-note">Each fleet company gets its own code. With it they use <b>Robotik Fleet Manager</b> free — vehicles, papers, drivers, checks, fuel, tyres, reports — and send their jobs to you. Their jobs show under <b>Orders</b> marked 🚚 Fleet. Set credit with 💳 under Garages after their first job, or here.</p>
+  let h = '';
+  if(hqFleetSeg === 'clients'){
+    h += wrap('FLEET CODES', `<p class="rf-note">Each fleet company gets its own code. With it they use <b>Robotik Fleet Manager</b> free — vehicles, papers, drivers, checks, fuel, tyres, reports — and send their jobs to you. Their jobs show under <b>Fleet jobs</b>. Set credit with 💳 under Garages after their first job, or here.</p>
       <div class="grid2"><div class="field"><label for="hfN">Fleet company name</label><input id="hfN" placeholder="e.g. NELRETI Industrial Services"></div><div class="field"><label for="hfP">Fleet manager's WhatsApp (optional)</label><input id="hfP" type="tel"></div></div>
       <div class="rf-tools"><button class="rf-btn green need-admin" id="hfNew">＋ Create fleet code</button></div>
       ${keys.map(k => { const link = fleetAppLink(k.code), c = partnerCreditState(k.garage);
@@ -10358,17 +10383,16 @@ async function renderFleetsHQ(){
     h += wrap('FLEET VEHICLES DUE FOR SERVICE', '<p class="rf-note">Fleets that switched on “share service reminders” show here. Call them or send a quote.</p>' + (due.map(d => `<h3 class="fl-h3">🚚 ${esc(d.fleet || nameOf(d.code))} <span class="rf-note" style="font-weight:normal">· updated ${esc(new Date(d.updated_at).toLocaleString('en-NG', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}))}</span></h3>` + ((d.data || []).map(x => `<div class="rf-row"><div class="t"><span>${x.state === 'overdue' ? '⛔' : '⚠'} ${esc(x.plate || '')} ${esc(x.model || '')}</span><span class="rf-badge ${x.state === 'overdue' ? 'red' : 'amber'}">${esc(x.what || '')}</span></div><div class="m">${esc(x.detail || '')}${x.km ? ' · ' + nf(x.km) + ' km' : ''}</div>
       <div class="acts"><button class="rf-btn" data-hfq="${esc(d.code)}" data-veh="${esc((x.plate || '') + ' ' + (x.model || ''))}" data-what="${esc(x.what || '')}">📝 Quote</button></div></div>`).join('') || '<p class="rf-note">Nothing due.</p>')).join('') || '<div class="rf-empty">No fleet is sharing reminders yet.</div>'), true);
   }
-  box.innerHTML = h; applyRoleClass && applyRoleClass();
-  bind(box, '[data-hfs]', 'click', el => { hqFleetSeg = el.dataset.hfs; renderFleetsHQ(); });
+  box.innerHTML = h; try{ applyRoleClass(); }catch(e){}
   if($('hfNew')) $('hfNew').onclick = async () => { const g = $('hfN').value.trim(); if(g.length < 2){ toast('Type the fleet company name.', true); return; }
     if(keys.some(k => lc(k.garage) === lc(g))){ toast('That fleet already has a code.', true); return; }
     const code = newCode(); try{ await Cloud.rest('POST', 'rf_partner_keys', {code, garage:g, kind:'fleet', created_by:myName()}, 'return=minimal'); toast('Fleet code created.');
-      const ph = $('hfP').value.trim(); if(ph) openWhatsApp(ph, fleetInviteMsg(g, code)); }catch(e){ toast(/kind/.test(e.message) ? 'Run upgrade-7.4-fleet.sql in Supabase first.' : e.message, true); } renderFleetsHQ(); };
+      const ph = $('hfP').value.trim(); if(ph) openWhatsApp(ph, fleetInviteMsg(g, code)); }catch(e){ toast(/kind/.test(e.message) ? 'Run upgrade-7.4-fleet.sql in Supabase first.' : e.message, true); } renderView('fleet'); };
   bind(box, '[data-hfw]', 'click', el => { const k = keys.find(x => x.code === el.dataset.hfw); openWhatsApp('', fleetInviteMsg(k.garage, k.code)); });
   bind(box, '[data-hfc]', 'click', el => navigator.clipboard && navigator.clipboard.writeText(el.dataset.hfc).then(() => toast('Link copied.')));
   bind(box, '[data-hfcr]', 'click', el => editPartnerCredit(el.dataset.hfcr));
-  bind(box, '[data-hfa]', 'click', async el => { try{ await Cloud.rest('PATCH', 'rf_partner_keys?code=eq.' + encodeURIComponent(el.dataset.hfa), {active:el.dataset.on === '1'}, 'return=minimal'); }catch(e){ toast(e.message, true); } renderFleetsHQ(); });
-  bind(box, '[data-hfqx]', 'click', async el => { if(!(await askConfirm('Withdraw this quote?'))) return; try{ await Cloud.rest('PATCH', 'rf_partner_quotes?id=eq.' + encodeURIComponent(el.dataset.hfqx), {status:'cancelled'}, 'return=minimal'); }catch(e){ toast(e.message, true); } renderFleetsHQ(); });
+  bind(box, '[data-hfa]', 'click', async el => { try{ await Cloud.rest('PATCH', 'rf_partner_keys?code=eq.' + encodeURIComponent(el.dataset.hfa), {active:el.dataset.on === '1'}, 'return=minimal'); }catch(e){ toast(e.message, true); } renderView('fleet'); });
+  bind(box, '[data-hfqx]', 'click', async el => { if(!(await askConfirm('Withdraw this quote?'))) return; try{ await Cloud.rest('PATCH', 'rf_partner_quotes?id=eq.' + encodeURIComponent(el.dataset.hfqx), {status:'cancelled'}, 'return=minimal'); }catch(e){ toast(e.message, true); } renderView('fleet'); });
   const newQuote = (code, veh, what) => fleetQuoteForm(keys.filter(k => k.active), code, veh, what);
   if($('hfqNew')) $('hfqNew').onclick = () => newQuote('');
   bind(box, '[data-hfq]', 'click', el => newQuote(el.dataset.hfq, el.dataset.veh, el.dataset.what));
@@ -10420,6 +10444,63 @@ if(FLEET){
   // keep shared reminders current (at most every 30 minutes, only if switched on)
   listeners.push(kinds => { if(!Store.setting().fleetShareDue) return; if(!(kinds.includes('*') || kinds.some(k => ['truck', 'fservice', 'ffuel', 'fcheck', 'ftrip', 'tyreevent'].includes(k)))) return;
     const last = Store.setting().fleetShareAt; if(last && Date.now() - new Date(last).getTime() < 30 * 60000) return; clearTimeout(window.__fdT); window.__fdT = setTimeout(() => shareDueNow(false), 3000); });
+}
+
+/* ---------- the fleet-tyre module in the partner and global garage apps: off unless switched on ---------- */
+function fleetModuleOff(){ return GARAGE && EDITION !== 'fleet' && !Store.setting().fleetModule; }
+tabAllowed = (orig => function(k){ if(k === 'fleet' && fleetModuleOff()) return false; return orig.apply(this, arguments); })(tabAllowed);
+tileAllowed = (orig => function(x){ if(x && x.tab === 'fleet' && fleetModuleOff()) return false; return orig.apply(this, arguments); })(tileAllowed);
+if(GARAGE && EDITION !== 'fleet'){
+  listeners.push(kinds => { if(!kinds || kinds.includes('setting') || kinds.includes('*')) try{ applyProfileUI(); }catch(e){} });
+  window.addEventListener('load', () => setTimeout(() => { try{ applyProfileUI(); }catch(e){} }, 50));
+  renderSetup = (orig => function(){ const r = orig.apply(this, arguments); const box = $('rfSetupCards');
+    if(box && !(mode === 'cloud' && !can('admin'))){ const c = document.createElement('div'); c.className = 'card'; c.id = 'rfModules';
+      c.innerHTML = `<h2>OPTIONAL MODULES</h2><label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="rfModFleet"${Store.setting().fleetModule ? ' checked' : ''} style="width:20px;height:20px;flex:none;margin-top:2px"> <span><b>🛞 Fleet tyre management</b> — for garages that look after company trucks: tyres by position, tread checks and tyre history. Off by default; switch on when you need it.</span></label>`;
+      const team = [...box.querySelectorAll('.card')].find(x => /TEAM DATABASE|ABOUT THIS APP/.test(x.textContent)); if(team) team.before(c); else box.append(c);
+      $('rfModFleet').onchange = e => { Store.saveSetting({fleetModule:e.target.checked}); try{ applyProfileUI(); }catch(err){} toast(e.target.checked ? 'Fleet tab switched on.' : 'Fleet tab switched off.'); }; }
+    return r; })(renderSetup);
+}
+/* ---------- fleet edition Setup: company information only (no document styles, letterheads or workshop settings) ---------- */
+let fcLogo = null;
+function fleetCompanyHtml(){
+  if(mode === 'cloud' && !can('admin')) return '';
+  const b = brandSetting() || {}, c = (b.companies || [])[0] || {}, logo = fcLogo || b.logo || '', cur = CURRENCIES[c.currency] ? c.currency : 'NGN';
+  const f = (id, label, v, ph, type) => `<div class="field"><label for="${id}">${label}</label><input id="${id}"${type ? ' type="' + type + '"' : ''} value="${esc(v == null ? '' : v)}" placeholder="${esc(ph || '')}"></div>`;
+  return `<div class="card" id="rfFleetCo"><h2 class="red">COMPANY INFORMATION</h2>
+    ${brandSetting() ? '' : '<div class="banner">Welcome to Robotik Fleet Manager! Enter your fleet company details once. Everything you record stays inside your company — only jobs you send to Robotik Fix leave the app.</div>'}
+    <div class="rf-tools"><img id="fcLogoPrev" src="${esc(logo)}" alt="" style="height:64px;max-width:120px;border:1px solid #ddd;border-radius:6px;background:#fff;${logo ? '' : 'display:none'}"><label class="rf-btn grey" style="cursor:pointer">📷 ${logo ? 'Change logo' : 'Upload logo (optional)'}<input type="file" id="fcLogo" accept="image/*" style="display:none"></label>${logo ? '<button class="rf-btn grey" type="button" id="fcLogoDel">Remove</button>' : ''}</div>
+    ${f('fcName', 'Fleet company name *', c.name, 'e.g. Lagos Haulage Ltd')}
+    ${f('fcAddr', 'Address *', c.address, 'Street, area, city')}
+    <div class="grid2">${f('fcTel', 'Phone', c.tel, '', 'tel')}${f('fcEmail', 'Email', c.email, '', 'email')}</div>
+    <div class="grid2"><div class="field"><label for="fcCur">Currency</label><select id="fcCur">${Object.entries(CURRENCIES).map(([k, [sym, nm]]) => `<option value="${k}"${k === cur ? ' selected' : ''}>${esc(k + ' · ' + sym + ' · ' + nm)}</option>`).join('')}</select></div>
+      ${f('fcTread', 'Tyre wear alert at (mm tread)', Store.setting().lowTread || 4, '', 'number')}</div>
+    <button class="addrow" id="fcSave">Save company information</button></div>`;
+}
+function bindFleetCompany(){
+  if(!$('fcSave')) return;
+  $('fcLogo').onchange = async e => { const file = e.target.files[0]; if(!file) return; try{ fcLogo = await resizeImage(file, 400); $('fcLogoPrev').src = fcLogo; $('fcLogoPrev').style.display = ''; }catch(err){ toast('Could not read that image.', true); } };
+  if($('fcLogoDel')) $('fcLogoDel').onclick = () => { fcLogo = ''; $('fcLogoPrev').style.display = 'none'; toast('Logo will be removed when you save.'); };
+  $('fcSave').onclick = () => {
+    const v = id => ($(id).value || '').trim(), name = v('fcName'), addr = v('fcAddr');
+    if(name.length < 2){ toast('Enter the fleet company name.', true); return; } if(!addr){ toast('Enter the company address.', true); return; }
+    const prev = brandSetting() || {}, c0 = (prev.companies || [])[0] || {};
+    Store.saveSetting({lowTread:N(v('fcTread')) || 4, brand:Object.assign({}, prev, {short:name, logo:fcLogo !== null ? fcLogo : (prev.logo || ''), companies:[Object.assign({}, c0, {name, address:addr, tel:v('fcTel'), email:v('fcEmail'), currency:v('fcCur') || 'NGN', taxName:c0.taxName || 'VAT', taxRate:''})]})});
+    const first = !prev.companies; fcLogo = null; applyBrand(); try{ refreshCurrency(); }catch(e){} toast('Company information saved.');
+    if(first) showTab('home'); else renderSetup();
+  };
+}
+if(FLEET){
+  myBusinessHtml = fleetCompanyHtml;
+  window.addEventListener('load', () => { document.querySelectorAll('.topbar button').forEach(b => { if(/showTab\('search'\)/.test(b.getAttribute('onclick') || '')) b.style.display = 'none'; }); });
+  renderSetup = (orig => function(){ const r = orig.apply(this, arguments); const box = $('rfSetupCards');
+    bindFleetCompany();
+    document.querySelectorAll('#view-sync .rf-note').forEach(n => { n.innerHTML = n.innerHTML.replace('share the same documents, stock, bookings and money records', 'share the same vehicles, drivers, checks, fuel, trips and costs').replace(/\s*Follow the setup guide[^<]*/, ' Ask Robotik Fix for the database setup files.'); });
+    document.querySelectorAll('#view-sync .card').forEach(c => { const t = ((c.querySelector('h2') || {}).textContent || ''); if(/DOCUMENT STYLE|BUSINESS SETTINGS|GOOGLE SHEETS|ADMIN PIN|LOGO/.test(t)) c.style.display = 'none'; });
+    return r; })(renderSetup);
+}
+if(EDITION === 'robotik'){
+  const _rv0 = renderView;
+  renderView = function(v){ if(v === 'fleet'){ ensureLists(); try{ return renderFleetTabHQ(); }catch(e){ console.error(e); return renderFleet(); } } return _rv0.apply(this, arguments); };
 }
 Object.assign(window.RF = window.RF || {}, {fleetAlerts, fleetStats, serviceDue, curKm, kmIn, costEntries, periodOf, fleetDueList, loadFleetFeed, dailyCheck});
 
