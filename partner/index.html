@@ -2629,7 +2629,7 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
    database (Supabase) with staff logins and roles (admin / cashier / technician).
    Without the team database everything still works on this device alone, as before.
 =========================================================================================== */
-const RF_VERSION = '8.2';
+const RF_VERSION = '8.3';
 /* Multi-user team database: built, but switched OFF for now. Set to true to turn it back on. */
 const EDITION = 'partner';      // build script switches this to 'partner' for the partner-garage app
 const TEAM_ENABLED = true; // every edition: each business connects its own team database (partners keep their separate link to Robotik HQ)
@@ -11973,7 +11973,7 @@ function fleetCloudCardHtml(){
     `<div id="fcNew">${code ? `<div class="rf-note">Fleet code: <b>${esc(code)}</b></div>` : '<div class="field"><label for="fcCode">Fleet code from Robotik Fix</label><input id="fcCode" placeholder="e.g. RF-7KQ2M9XA"></div>'}
       <div class="field"><label for="fcCo">Fleet company name</label><input id="fcCo" value="${esc(co)}"></div>
       <div class="field"><label for="fcYou">Your name</label><input id="fcYou" autocomplete="name" value="${esc(myName() || '')}"></div>
-      <div class="field"><label for="fcEmail">Email</label><input id="fcEmail" type="email" autocomplete="username"></div>
+      <div class="field"><label for="fcLogin">Email</label><input id="fcLogin" type="email" autocomplete="username"></div>
       <div class="grid2"><div class="field"><label for="fcPw">Password (6+ characters)</label><input id="fcPw" type="password" autocomplete="new-password"></div><div class="field"><label for="fcPw2">Password again</label><input id="fcPw2" type="password" autocomplete="new-password"></div></div>
       <label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="checkbox" id="fcAgree" style="width:20px;height:20px;flex:none"> <span>I understand our fleet records will be kept by Robotik Fix in the Robotik Fleet Cloud, visible only to people we add to our fleet.</span></label>
       <button class="rf-btn green big" id="fcCreate" style="width:100%">Create my fleet account</button></div>`}
@@ -11981,7 +11981,7 @@ function fleetCloudCardHtml(){
 }
 async function fcCreateAccount(){
   const cfg = fcCfg(), msg = t => { const m = $('fcMsg'); if(m) m.innerHTML = t; };
-  const code = (partnerCode() || ($('fcCode') ? $('fcCode').value : '')).trim().toUpperCase(), co = $('fcCo').value.trim(), name = $('fcYou').value.trim(), email = $('fcEmail').value.trim(), pw = $('fcPw').value;
+  const code = (partnerCode() || ($('fcCode') ? $('fcCode').value : '')).trim().toUpperCase(), co = $('fcCo').value.trim(), name = $('fcYou').value.trim(), email = $('fcLogin').value.trim(), pw = $('fcPw').value;
   if(!/^[A-Z0-9-]{6,40}$/.test(code)) return msg('Enter the fleet code Robotik Fix gave you.');
   if(co.length < 2 || name.length < 2) return msg('Enter the fleet company name and your name.');
   if(!/^\S+@\S+\.\S+$/.test(email)) return msg('Enter a valid email.');
