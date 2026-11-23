@@ -2616,6 +2616,9 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
 .fl-tw-list{margin:12px 0;padding-left:20px;font-size:14px;line-height:1.6}
 #flTrialBar{background:#fef3c7;color:#78350f;padding:7px 10px;font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 #flTrialBar button{border:1px solid #b45309;background:#fff;color:#92400e;border-radius:6px;padding:3px 8px;font-weight:700;font-size:12px}
+.fl-duty{border-radius:12px;padding:12px 14px;margin:8px 0;border:1px solid #e3e7ee;background:#f8fafc;line-height:1.5}
+.fl-duty.on{background:#ecfdf5;border-color:#86efac}.fl-duty.brk{background:#fffbeb;border-color:#fcd34d}.fl-duty.stop{background:#fef2f2;border-color:#fca5a5;color:#991b1b}
+.fl-duty .big{font-size:20px;font-weight:800;color:#1F3864}.fl-duty .warn{margin-top:6px;color:#b91c1c;font-weight:700}
 </style>
 <script>
 (function(){
@@ -2627,7 +2630,7 @@ body.role-technician .price-col,body.role-technician #totalsCard,body.role-techn
    database (Supabase) with staff logins and roles (admin / cashier / technician).
    Without the team database everything still works on this device alone, as before.
 =========================================================================================== */
-const RF_VERSION = '8.3';
+const RF_VERSION = '8.5';
 /* Multi-user team database: built, but switched OFF for now. Set to true to turn it back on. */
 const EDITION = 'robotik';      // build script switches this to 'partner' for the partner-garage app
 const TEAM_ENABLED = true; // every edition: each business connects its own team database (partners keep their separate link to Robotik HQ)
@@ -2717,7 +2720,7 @@ window.rfFitImages = async function(root){
   });
   return () => undo.reverse().forEach(f => f());
 };
-const LOCAL_KINDS = ['freq', 'ftyre', 'fassign', 'fhealth', 'fincident', 'fplan', 'fdown', 'fdriver', 'fservice', 'ffuel', 'ftrip', 'fcheck', 'fcost', 'role', 'staffrole', 'pcredit', 'sale', 'jobupdate', 'letter', 'receipt', 'customer', 'crmtask', 'crmnote', 'deal', 'consent', 'porder', 'income', 'transfer', 'item','stockmove','labour','bundle','po','expense','appt','reminder','truck','tyreevent','timelog','payconfirm','setting','counter','joblink','jobpart','comeback','tow','supplier','supbill','suppay','worker','staffpay','tool','toolmove','corp','jobtrack','assetlog','msglog','diag','vehspec'];
+const LOCAL_KINDS = ['fduty', 'freq', 'ftyre', 'fassign', 'fhealth', 'fincident', 'fplan', 'fdown', 'fdriver', 'fservice', 'ffuel', 'ftrip', 'fcheck', 'fcost', 'role', 'staffrole', 'pcredit', 'sale', 'jobupdate', 'letter', 'receipt', 'customer', 'crmtask', 'crmnote', 'deal', 'consent', 'porder', 'income', 'transfer', 'item','stockmove','labour','bundle','po','expense','appt','reminder','truck','tyreevent','timelog','payconfirm','setting','counter','joblink','jobpart','comeback','tow','supplier','supbill','suppay','worker','staffpay','tool','toolmove','corp','jobtrack','assetlog','msglog','diag','vehspec'];
 function loadLocal(){
   LOCAL_KINDS.forEach(k => {
     const b = bucket(k); b.clear();
@@ -12198,6 +12201,249 @@ if(EDITION === 'robotik'){
   poRowHtml = function(o){ const h = _prh.apply(this, arguments); return (o.data || {}).trial ? h.replace('🚚 <b>Fleet</b>', '🧪 <b>Test drive sign-up</b>') : h; };
 }
 Object.assign(window.RF = window.RF || {}, {trialState, loadDemoFleet, removeDemoFleet, trialGate});
+/* ===================== FLEET TEAM (v8.4) =====================
+   The fleet app's Team tab has no workshop time clock, technician hours or workshop Home tiles
+   (the driver time clock and hours report are in ops-37). Access levels are named for a fleet: Driver / Fleet manager / Fleet admin
+   (the server still stores technician / cashier / admin). The status bar says "Fleet Cloud". */
+const FL_LEVEL = {technician:'Driver', cashier:'Fleet manager', admin:'Fleet admin'};
+function flLevel(r){ return FL_LEVEL[r] || r; }
+if(FLEET){
+  ROLE_BASES[0][1] = 'Driver (daily checks, fuel and trips)';
+  ROLE_BASES[1][1] = 'Fleet manager (vehicles, service, fuel, tyres, reports)';
+  ROLE_BASES[2][1] = 'Fleet admin (everything, incl. users & settings)';
+  ROLE_SAMPLES.splice(0, ROLE_SAMPLES.length,
+    {name:'Driver', base:'technician', tabs:['fchecks', 'ffuel', 'team']},
+    {name:'Fleet officer', base:'cashier', tabs:['fvehicles', 'fdrivers', 'fchecks', 'fhealth', 'fincidents', 'ffuel', 'fservice', 'fleet']},
+    {name:'Maintenance supervisor', base:'cashier', tabs:['fvehicles', 'fchecks', 'fhealth', 'fincidents', 'fservice', 'fleet', 'frobotik']},
+    {name:'Fleet manager', base:'cashier', tabs:['fvehicles', 'fdrivers', 'fchecks', 'fhealth', 'fincidents', 'ffuel', 'fservice', 'fleet', 'freports', 'frobotik']});
+
+  usersToolsHtml = (orig => function(){ return orig.apply(this, arguments)
+    .replace('Its <b>access level</b> (Admin, Cashier or Technician) is what the team database enforces', 'Its <b>access level</b> (Driver, Fleet manager or Fleet admin) is what the Fleet Cloud enforces')
+    .replace('they sign in on their phone or the office laptop and change nothing else', 'they open the fleet app on their phone and tap Sign in')
+    .replace('A role decides which <b>tabs and Home tiles</b> a person sees', 'A role decides which <b>tabs</b> a person sees'); })(usersToolsHtml);
+  userRoleSelect = (orig => function(u){ return orig.apply(this, arguments).replace(/Standard (\w+) \(no extra limits\)/, (m, r) => 'Standard ' + flLevel(r) + ' (no extra limits)'); })(userRoleSelect);
+  loadUsers = (orig => async function(){ await orig.apply(this, arguments);
+    const box = $('rfUsers'); if(!box) return;
+    box.querySelectorAll('select[data-ur] option').forEach(o => { o.textContent = flLevel(o.value || o.textContent); });
+    const tools = $('rfUsersTools'); if(tools) tools.querySelectorAll('.rf-badge').forEach(b => { if(FL_LEVEL[b.textContent]) b.textContent = FL_LEVEL[b.textContent]; });
+  })(loadUsers);
+
+  // role editor: fleet tabs only, no Home tiles (the fleet Home is the dashboard)
+  roleEditor = (orig => function(r){
+    orig.call(this, r || {name:'', base:'technician', tabs:['fchecks', 'ffuel', 'team'], tiles:null});
+    const all = $('rlAllTiles'), lab = all && all.closest('label');
+    if(lab){ const note = lab.previousElementSibling; if(note && /Home tiles/.test(note.textContent)) note.remove(); const keep = document.createElement('input'); keep.type = 'checkbox'; keep.id = 'rlAllTiles'; keep.checked = true; keep.hidden = true; lab.replaceWith(keep); }
+    const t = $('rlTiles'); if(t) t.remove();
+    const n = $('rlName'); if(n) n.placeholder = 'e.g. Driver, Fleet officer, Maintenance supervisor';
+    const base = $('rlBase'); if(base && base.previousElementSibling) base.previousElementSibling.textContent = 'Access level (enforced by the Fleet Cloud)';
+  })(roleEditor);
+
+  // create user: fleet names for the access levels
+  newUserModal = (orig => function(){ orig.apply(this, arguments);
+    document.querySelectorAll('.rf-modal select option, #rfModal select option').forEach(o => {
+      if(o.value === '@cashier') o.textContent = 'Standard fleet manager'; else if(o.value === '@technician') o.textContent = 'Standard driver'; else if(o.value === '@admin') o.textContent = 'Fleet admin (full access)';
+      else o.textContent = o.textContent.replace(/\((technician|cashier|admin)\)$/, (m, r) => '(' + flLevel(r) + ')'); });
+  })(newUserModal);
+
+  // status bar: "Fleet Cloud · name · Fleet admin"
+  updateStatusBadge = (orig => function(){ const r = orig.apply(this, arguments); const el = $('syncStatus');
+    if(el && mode === 'cloud'){ let t = el.textContent; if(typeof fcOn === 'function' && fcOn()) t = t.replace('Team database', 'Fleet Cloud'); if(me && me.role) t = t.replace(new RegExp('· ' + me.role + '$'), '· ' + flLevel(me.role)); el.textContent = t; }
+    return r; })(updateStatusBadge);
+}
+/* ===================== FLEET DRIVER TIME CLOCK & HOURS (v8.5) =====================
+   Team tab of the fleet app:
+   ⏱ Driver time clock — a driver clocks ON duty (vehicle + odometer), takes breaks, clocks OFF (odometer).
+   Driver hours report — duty hours, breaks, km per driver and per vehicle, with fatigue alerts
+   (shift too long, rest too short, too many hours in 7 days). Managers can correct a shift (reason kept).
+   Users & roles — fleet admin only.
+   Records: kind 'fduty' {driverId, driverName, userId, vehicleId, plate, start, end, odoStart, odoEnd, breaks:[{s,e}], note, adjusted, adjustNote, adjustBy} */
+if(FLEET){
+  const DUTY_DEF = {shift:12, rest:11, week:60};
+  const dutyRules = () => Object.assign({}, DUTY_DEF, (Store.get('setting', 'business') || {}).dutyRules || {});
+  const tm = iso => iso ? new Date(iso).toLocaleTimeString('en-NG', {hour:'2-digit', minute:'2-digit'}) : '';
+  const dtm = iso => iso ? fmtDate(String(localIso(iso)).slice(0, 10)) + ' ' + tm(iso) : '';
+  const localIso = iso => { const d = new Date(iso); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 16); };
+  const fromLocal = v => v ? new Date(v).toISOString() : '';
+  const breakMin = x => (x.breaks || []).reduce((s, b) => s + Math.max(0, ((b.e ? new Date(b.e) : new Date()) - new Date(b.s)) / 6e4), 0);
+  const spanMin = x => Math.max(0, ((x.end ? new Date(x.end) : new Date()) - new Date(x.start)) / 6e4);
+  const dutyMin = x => Math.max(0, spanMin(x) - breakMin(x));
+  const dutyKm = x => N(x.odoEnd) > N(x.odoStart) && N(x.odoStart) ? N(x.odoEnd) - N(x.odoStart) : 0;
+  const onBreak = x => (x.breaks || []).some(b => !b.e);
+  const openDuty = did => Store.list('fduty').find(x => !x.end && x.driverId === did);
+  const allOpen = () => Store.list('fduty').filter(x => !x.end).sort((a, b) => a.start.localeCompare(b.start));
+  const myDriver = () => { if(mode !== 'cloud' || !me) return null; const n = lc(me.name || ''), e = lc(me.email || '');
+    return fdList().find(d => (e && lc(d.email || '') === e) || (n && lc(d.name || '') === n)) || null; };
+  let dutyDriver = '', dutyPeriod = 'week';
+
+  // odometer readings from shifts count like any other reading
+  readings = (orig => function(id){ const r = orig.apply(this, arguments);
+    Store.list('fduty').forEach(x => { if(x.vehicleId === id){ const d = String(x.start || '').slice(0, 10); if(N(x.odoStart)) r.push([d, N(x.odoStart)]); if(N(x.odoEnd)) r.push([String(x.end || x.start).slice(0, 10), N(x.odoEnd)]); } });
+    return r.sort((a, b) => String(a[0]).localeCompare(String(b[0])) || a[1] - b[1]); })(readings);
+  odoPoints = (orig => function(vid, exId){ const p = orig.apply(this, arguments);
+    Store.list('fduty').forEach(x => { if(x.vehicleId === vid && x.id !== exId){ if(N(x.odoStart)) p.push({date:String(x.start).slice(0, 10), km:N(x.odoStart), src:'clock-on'}); if(N(x.odoEnd)) p.push({date:String(x.end || x.start).slice(0, 10), km:N(x.odoEnd), src:'clock-off'}); } });
+    return p; })(odoPoints);
+
+  function driverBlock(d){
+    if(!d) return 'Choose the driver.';
+    if(d.licExp && daysTo(d.licExp) < 0) return '⛔ ' + d.name + '\'s driving licence expired on ' + fmtDate(d.licExp) + '. This driver must not drive.';
+    if(d.licVerified === 'Failed / invalid') return '⛔ ' + d.name + '\'s licence failed verification. This driver must not drive.';
+    return '';
+  }
+  function restBefore(did, startIso, exId){
+    const prev = Store.list('fduty').filter(x => x.driverId === did && x.end && x.id !== exId && x.end <= startIso).sort((a, b) => b.end.localeCompare(a.end))[0];
+    return prev ? (new Date(startIso) - new Date(prev.end)) / 6e4 : null;
+  }
+
+  /* ---------- ⏱ clock screen ---------- */
+  function dutyHtml(){
+    const mine = myDriver(); if(mine && !dutyDriver) dutyDriver = mine.id;
+    const ds = fdList(), d = fd(dutyDriver), open = d ? openDuty(d.id) : null, R = dutyRules();
+    let h = '';
+    if(!ds.length) return wrap('⏱ DRIVER TIME CLOCK', '<p>Add your drivers first under <b>Drivers</b>. Each driver then clocks on and off duty here.</p>', true);
+    h += `<div class="grid2"><div class="field"><label for="duD">Driver *</label><select id="duD"><option value="">— who is clocking? —</option>${ds.map(x => `<option value="${esc(x.id)}"${x.id === dutyDriver ? ' selected' : ''}>${esc(x.name)}${openDuty(x.id) ? ' · on duty' : ''}</option>`).join('')}</select></div>
+      <div class="field" id="duPinBox" style="${d && d.pin && !(mine && mine.id === d.id) ? '' : 'display:none'}"><label for="duPin">Driver PIN *</label><input id="duPin" type="password" inputmode="numeric" maxlength="6" autocomplete="off"></div></div>`;
+    if(d && open){
+      const v = fv(open.vehicleId), m = dutyMin(open), long = m > R.shift * 60;
+      h += `<div class="fl-duty ${onBreak(open) ? 'brk' : 'on'}"><div class="big">${onBreak(open) ? '☕ ON BREAK' : '🟢 ON DUTY'}</div>
+        <div>${esc(d.name)} · since <b>${esc(tm(open.start))}</b>${String(open.start).slice(0, 10) !== today() ? ' (' + esc(fmtDate(String(open.start).slice(0, 10))) + ')' : ''}${v ? ' · ' + esc(fvShort(v)) : ' · no vehicle'}${N(open.odoStart) ? ' · start ' + nf(open.odoStart) + ' km' : ''}</div>
+        <div>Duty time <b>${fmtHrs(m)}</b>${breakMin(open) ? ' · breaks ' + fmtHrs(breakMin(open)) : ''}</div>
+        ${long ? `<div class="warn">⚠ Over ${R.shift} hours on duty. Stop driving and clock off as soon as it is safe.</div>` : ''}</div>
+        <div class="rf-tools">${onBreak(open) ? '<button class="rf-btn green big" id="duBrkEnd">End break</button>' : '<button class="rf-btn grey big" id="duBrk">☕ Start break</button>'}<button class="rf-btn red big" id="duOff">Clock OFF duty</button></div>`;
+    } else if(d){
+      const block = driverBlock(d), rest = restBefore(d.id, nowIso());
+      h += `<div class="field"><label for="duV">Vehicle</label><select id="duV">${vehOpts('No vehicle (yard work / standby)').map(([k, l]) => `<option value="${esc(k)}"${k && fv(k) && fv(k).driverId === d.id ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+        <div class="field" id="duKBox"><label for="duK">Odometer now (km) *</label><input id="duK" type="number" inputmode="numeric" placeholder="Read it from the dashboard"><div class="rf-note" id="duKn"></div></div>
+        <div id="duWarn"></div>
+        ${block ? `<div class="fl-duty stop"><b>${esc(block)}</b></div>` : ''}
+        ${rest !== null && rest < R.rest * 60 ? `<div class="fl-duty brk">⚠ Only <b>${fmtHrs(rest)}</b> rest since the last shift (minimum ${R.rest} hours). Clocking on will be flagged in the hours report.</div>` : ''}
+        <div class="rf-tools"><button class="rf-btn green big" id="duOn"${block ? ' disabled' : ''}>Clock ON duty</button></div>`;
+    }
+    if(d){
+      const last = Store.list('fduty').filter(x => x.driverId === d.id && x.end && x.start >= addDays(today(), -7)).sort((a, b) => b.start.localeCompare(a.start));
+      h += `<p class="rf-note" style="margin-top:12px">${esc(d.name)} · last 7 days: <b>${fmtHrs(last.reduce((s, x) => s + dutyMin(x), 0))}</b> on duty · ${nf(last.reduce((s, x) => s + dutyKm(x), 0))} km</p>` +
+        last.slice(0, 10).map(x => `<div class="rf-row"><div class="t"><span>${esc(dtm(x.start))} – ${esc(tm(x.end))}</span><span>${fmtHrs(dutyMin(x))}</span></div><div class="m">${esc(x.plate || 'No vehicle')}${dutyKm(x) ? ' · ' + nf(dutyKm(x)) + ' km' : ''}${x.adjusted ? ' · ✎ corrected' : ''}</div></div>`).join('');
+    }
+    const others = allOpen();
+    if(others.length && (mode !== 'cloud' || can('cashier'))) h += '<h3 style="font-size:12px;color:#1F3864;margin-top:14px">On duty now</h3>' + others.map(x => { const m = dutyMin(x); return `<div class="rf-row"><div class="t"><span>${esc(x.driverName)}</span><span class="rf-badge ${m > R.shift * 60 ? 'red' : onBreak(x) ? 'amber' : 'green'}">${onBreak(x) ? 'break · ' : ''}${fmtHrs(m)}</span></div><div class="m">since ${esc(tm(x.start))} · ${esc(x.plate || 'no vehicle')}</div></div>`; }).join('');
+    return wrap('⏱ DRIVER TIME CLOCK', h, true);
+  }
+  function pinOk(d){ const mine = myDriver(); if(!d.pin || (mine && mine.id === d.id)) return true; const p = $('duPin'); if(p && p.value === String(d.pin)) return true; toast('Enter ' + d.name + '\'s PIN.', true); return false; }
+  function bindDuty(v){
+    const q = s => v.querySelector(s);
+    if(q('#duD')) q('#duD').onchange = e => { dutyDriver = e.target.value; renderTeam(); };
+    const d = fd(dutyDriver);
+    const vNote = () => { const vid = q('#duV') && q('#duV').value; if(q('#duKBox')) q('#duKBox').style.display = vid ? '' : 'none';
+      const km = N(q('#duK') && q('#duK').value), r = vid && km ? validateOdo(vid, km, today()) : {}, last = vid ? curKm(vid) : 0;
+      if(q('#duKn')) q('#duKn').innerHTML = r.error ? '<b style="color:#b91c1c">' + esc(r.error) + '</b>' : r.warn ? '<b style="color:#b45309">⚠ ' + esc(r.warn) + '</b>' : last ? 'Last recorded: ' + nf(last) + ' km' : '';
+      let w = '';
+      if(vid && isGrounded(vid)) w = '<div class="fl-duty stop"><b>⛔ This vehicle is grounded (safety defect or off the road). It must not be driven.</b></div>';
+      else if(vid && !Store.list('fcheck').some(c => c.vehicleId === vid && c.date === today())) w = '<div class="fl-duty brk">📋 No daily inspection for this vehicle today. <button class="rf-btn sm" id="duChk" type="button">Do the daily check</button></div>';
+      if(q('#duWarn')) q('#duWarn').innerHTML = w; if(q('#duChk')) q('#duChk').onclick = () => dailyCheck(vid);
+      if(q('#duOn') && d) q('#duOn').disabled = !!driverBlock(d) || !!(vid && isGrounded(vid)); };
+    if(q('#duV')){ q('#duV').onchange = vNote; q('#duK').oninput = vNote; vNote(); }
+    if(q('#duOn')) q('#duOn').onclick = () => {
+      if(!d || driverBlock(d)){ toast(driverBlock(d) || 'Choose the driver.', true); return; } if(!pinOk(d)) return;
+      if(openDuty(d.id)){ toast(d.name + ' is already on duty.', true); renderTeam(); return; }
+      const vid = q('#duV').value, km = N(q('#duK').value), t = fv(vid);
+      if(vid){ if(isGrounded(vid)){ toast('This vehicle is grounded and must not be driven.', true); return; }
+        const other = Store.list('fduty').find(x => !x.end && x.vehicleId === vid); if(other){ toast(fvShort(t) + ' is already in use by ' + other.driverName + ' (on duty since ' + tm(other.start) + ').', true); return; }
+        if(!km){ toast('Enter the odometer reading.', true); return; }
+        let r; try{ r = checkOdo(vid, km, today()); }catch(e){ toast(e.message, true); return; } if(r === false) return; }
+      const rest = restBefore(d.id, nowIso());
+      Store.put('fduty', {driverId:d.id, driverName:d.name, userId:myId(), vehicleId:vid || '', plate:t ? fvShort(t) : '', start:nowIso(), end:'', odoStart:vid ? km : 0, odoEnd:0, breaks:[], shortRest:rest !== null && rest < dutyRules().rest * 60});
+      toast('🟢 ' + d.name + ' is ON duty.'); renderTeam(); };
+    const open = d && openDuty(d.id);
+    if(q('#duBrk')) q('#duBrk').onclick = () => { if(!pinOk(d)) return; Store.put('fduty', Object.assign({}, open, {breaks:(open.breaks || []).concat([{s:nowIso(), e:''}])})); toast('☕ Break started.'); renderTeam(); };
+    if(q('#duBrkEnd')) q('#duBrkEnd').onclick = () => { if(!pinOk(d)) return; Store.put('fduty', Object.assign({}, open, {breaks:(open.breaks || []).map(b => b.e ? b : Object.assign({}, b, {e:nowIso()}))})); toast('Back on duty.'); renderTeam(); };
+    if(q('#duOff')) q('#duOff').onclick = () => { if(!pinOk(d)) return; clockOff(open); };
+  }
+  function clockOff(open){
+    const v = fv(open.vehicleId);
+    const box = modal(`<h2 style="margin-top:0">Clock OFF duty</h2><p>${esc(open.driverName)} · on duty since ${esc(dtm(open.start))} · <b>${fmtHrs(dutyMin(open))}</b></p>
+      ${v ? `<div class="field"><label for="dfK">Odometer now (km) *</label><input id="dfK" type="number" inputmode="numeric" placeholder="Started at ${nf(open.odoStart)} km"><div class="rf-note" id="dfKn"></div></div>` : ''}
+      <div class="field"><label for="dfN">Notes (trips done, problems with the vehicle…)</label><textarea id="dfN" rows="2"></textarea></div>
+      <div class="rf-tools"><button class="rf-btn red big" id="dfGo">Clock OFF</button><button class="rf-btn grey" id="dfX">Cancel</button></div>`);
+    const q = s => box.querySelector(s);
+    if(q('#dfK')) q('#dfK').oninput = () => { const km = N(q('#dfK').value); q('#dfKn').textContent = km > N(open.odoStart) ? nf(km - N(open.odoStart)) + ' km this shift' : ''; };
+    q('#dfX').onclick = closeModal;
+    q('#dfGo').onclick = () => {
+      const end = nowIso(); let km = 0;
+      if(v){ km = N(q('#dfK').value); if(!km){ toast('Enter the odometer reading.', true); return; }
+        if(km < N(open.odoStart)){ toast('The odometer (' + nf(km) + ' km) cannot be lower than at clock-on (' + nf(open.odoStart) + ' km).', true); return; }
+        let r; try{ r = checkOdo(open.vehicleId, km, today(), open.id); }catch(e){ toast(e.message, true); return; } if(r === false) return; }
+      Store.put('fduty', Object.assign({}, open, {end, odoEnd:km, note:q('#dfN').value.trim(), breaks:(open.breaks || []).map(b => b.e ? b : Object.assign({}, b, {e:end}))}));
+      closeModal(); toast('Clocked off · ' + fmtHrs(dutyMin(Object.assign({}, open, {end}))) + ' on duty.'); renderTeam(); };
+  }
+
+  /* ---------- driver hours report ---------- */
+  function dutyRange(){ const t = today(); return dutyPeriod === 'today' ? [t, t] : dutyPeriod === 'week' ? [addDays(t, -6), t] : dutyPeriod === 'month' ? [t.slice(0, 8) + '01', t] : [addDays(t, -29), t]; }
+  function dutyIn(){ const [f, t] = dutyRange(); return Store.list('fduty').filter(x => { const d = String(x.start).slice(0, 10); return d >= f && d <= t; }).sort((a, b) => b.start.localeCompare(a.start)); }
+  function dutyAlerts(x){ const R = dutyRules(), a = [];
+    if(dutyMin(x) > R.shift * 60) a.push('Shift over ' + R.shift + 'h');
+    const rest = restBefore(x.driverId, x.start, x.id); if(rest !== null && rest < R.rest * 60) a.push('Rest only ' + fmtHrs(rest));
+    const wk = Store.list('fduty').filter(y => y.driverId === x.driverId && y.start <= x.start && y.start >= new Date(new Date(x.start) - 7 * 864e5).toISOString()).reduce((s, y) => s + dutyMin(y), 0);
+    if(wk > R.week * 60) a.push(fmtHrs(wk) + ' in 7 days');
+    return a; }
+  function dutyHoursHtml(){
+    const R = dutyRules(), rows = dutyIn(), by = {}, byV = {};
+    rows.forEach(x => { const b = by[x.driverId] = by[x.driverId] || {name:x.driverName, n:0, m:0, br:0, km:0, max:0, al:0};
+      b.n++; b.m += dutyMin(x); b.br += breakMin(x); b.km += dutyKm(x); b.max = Math.max(b.max, dutyMin(x)); b.al += dutyAlerts(x).length;
+      if(x.vehicleId){ const c = byV[x.vehicleId] = byV[x.vehicleId] || {plate:x.plate, m:0, km:0, n:0}; c.m += dutyMin(x); c.km += dutyKm(x); c.n++; } });
+    const drv = Object.values(by).sort((a, b) => b.m - a.m), tot = drv.reduce((s, b) => s + b.m, 0), totKm = drv.reduce((s, b) => s + b.km, 0);
+    let h = `<div class="rf-tools"><select id="duP" style="flex:1">${[['today', 'Today'], ['week', 'Last 7 days'], ['month', 'This month'], ['30', 'Last 30 days']].map(([k, l]) => `<option value="${k}"${k === dutyPeriod ? ' selected' : ''}>${l}</option>`).join('')}</select><button class="rf-btn grey" id="duCsv">⇣ CSV</button></div>
+      <p class="rf-note">Alerts: a shift over <b>${R.shift} h</b>, less than <b>${R.rest} h</b> rest between shifts, or more than <b>${R.week} h</b> in 7 days.${can('admin') || mode !== 'cloud' ? ' <a href="#" id="duRules">Change the limits</a>' : ''}</p>
+      <table class="rf-table"><tr><th>Driver</th><th>Shifts</th><th>On duty</th><th>Km</th><th>Longest</th><th>Alerts</th></tr>${drv.map(b => `<tr><td>${esc(b.name)}</td><td>${b.n}</td><td>${fmtHrs(b.m)}</td><td>${nf(b.km)}</td><td>${fmtHrs(b.max)}</td><td>${b.al ? '<b style="color:#b91c1c">⚠ ' + b.al + '</b>' : '✓'}</td></tr>`).join('')}
+      <tr><td><b>Total</b></td><td>${rows.length}</td><td><b>${fmtHrs(tot)}</b></td><td><b>${nf(totKm)}</b></td><td></td><td></td></tr></table>`;
+    const vs = Object.values(byV).sort((a, b) => b.m - a.m);
+    if(vs.length) h += `<table class="rf-table" style="margin-top:10px"><tr><th>Vehicle</th><th>Shifts</th><th>Hours in use</th><th>Km</th></tr>${vs.map(c => `<tr><td>${esc(c.plate)}</td><td>${c.n}</td><td>${fmtHrs(c.m)}</td><td>${nf(c.km)}</td></tr>`).join('')}</table>`;
+    h += '<h3 style="font-size:13px;color:#1F3864;margin-top:14px">Shifts</h3>' + (rows.length ? rows.map(x => { const a = dutyAlerts(x); return `<div class="rf-row" data-du="${esc(x.id)}" style="cursor:pointer"><div class="t"><span>${esc(x.driverName)} · ${esc(dtm(x.start))} – ${x.end ? esc(tm(x.end)) : '<b>on duty</b>'}</span><span>${fmtHrs(dutyMin(x))}</span></div><div class="m">${esc(x.plate || 'No vehicle')}${dutyKm(x) ? ' · ' + nf(dutyKm(x)) + ' km' : ''}${breakMin(x) ? ' · breaks ' + fmtHrs(breakMin(x)) : ''}${x.adjusted ? ' · ✎ corrected: ' + esc(x.adjustNote || '') : ''}${a.length ? ' · <b style="color:#b91c1c">⚠ ' + esc(a.join(', ')) + '</b>' : ''}${x.note ? ' · ' + esc(x.note) : ''}</div></div>`; }).join('') : '<div class="rf-empty">No shifts in this period.</div>');
+    return wrap('DRIVER HOURS REPORT', h, true);
+  }
+  function bindHours(v){
+    $('duP').onchange = e => { dutyPeriod = e.target.value; renderTeam(); };
+    $('duCsv').onclick = () => { const [f, t] = dutyRange(); downloadCsv('driver_hours_' + f + '_' + t + '.csv', [['Driver', 'Vehicle', 'Clock on', 'Clock off', 'Break minutes', 'Duty minutes', 'Odometer start', 'Odometer end', 'Km', 'Alerts', 'Corrected', 'Notes']].concat(dutyIn().map(x => [x.driverName, x.plate || '', localIso(x.start).replace('T', ' '), x.end ? localIso(x.end).replace('T', ' ') : '', Math.round(breakMin(x)), Math.round(dutyMin(x)), N(x.odoStart) || '', N(x.odoEnd) || '', dutyKm(x) || '', dutyAlerts(x).join('; '), x.adjusted ? x.adjustNote || 'yes' : '', x.note || '']))); };
+    if($('duRules')) $('duRules').onclick = e => { e.preventDefault(); const R = dutyRules();
+      formModal('Driver hours limits', [{k:'shift', label:'Longest shift (hours)', type:'number', half:true}, {k:'rest', label:'Shortest rest between shifts (hours)', type:'number', half:true}, {k:'week', label:'Most hours in 7 days', type:'number', half:true}], R,
+        vals => { const r = {shift:N(vals.shift) || DUTY_DEF.shift, rest:N(vals.rest) || DUTY_DEF.rest, week:N(vals.week) || DUTY_DEF.week}; Store.saveSetting({dutyRules:r}); toast('Limits saved.'); renderTeam(); }); };
+    bind(v, '[data-du]', 'click', el => editDuty(Store.get('fduty', el.dataset.du)));
+  }
+  function editDuty(x){
+    if(!x) return; if(mode === 'cloud' && !can('cashier')){ toast('Only a fleet manager can correct a shift.', true); return; }
+    const box = modal(`<h2 style="margin-top:0">Correct a shift</h2><p>${esc(x.driverName)} · ${esc(x.plate || 'No vehicle')}</p>
+      <div class="grid2"><div class="field"><label for="deS">Clock on</label><input id="deS" type="datetime-local" value="${esc(localIso(x.start))}"></div><div class="field"><label for="deE">Clock off</label><input id="deE" type="datetime-local" value="${x.end ? esc(localIso(x.end)) : ''}"></div></div>
+      ${x.vehicleId ? `<div class="grid2"><div class="field"><label for="deKs">Odometer at clock on</label><input id="deKs" type="number" value="${N(x.odoStart) || ''}"></div><div class="field"><label for="deKe">Odometer at clock off</label><input id="deKe" type="number" value="${N(x.odoEnd) || ''}"></div></div>` : ''}
+      <div class="field"><label for="deR">Reason for the correction *</label><input id="deR" value="" placeholder="e.g. forgot to clock off at 18:30"></div>
+      <div class="rf-tools"><button class="rf-btn green" id="deGo">Save correction</button><button class="rf-btn grey" id="deX">Cancel</button>${mode !== 'cloud' || can('admin') ? '<button class="rf-btn red" id="deDel">Delete shift</button>' : ''}</div>`);
+    const q = s => box.querySelector(s); q('#deX').onclick = closeModal;
+    q('#deGo').onclick = () => { const s = fromLocal(q('#deS').value), e = fromLocal(q('#deE').value), why = q('#deR').value.trim();
+      if(why.length < 3){ toast('Give the reason for the correction.', true); return; }
+      if(!s || (e && e <= s)){ toast('Clock off must be after clock on.', true); return; }
+      if(e && new Date(e) > new Date(Date.now() + 5 * 6e4)){ toast('Clock off cannot be in the future.', true); return; }
+      const ks = x.vehicleId ? N(q('#deKs').value) : 0, ke = x.vehicleId ? N(q('#deKe').value) : 0;
+      if(ke && ks && ke < ks){ toast('Odometer at clock off is lower than at clock on.', true); return; }
+      Store.put('fduty', Object.assign({}, x, {start:s, end:e || '', odoStart:ks, odoEnd:ke, breaks:(x.breaks || []).filter(b => b.s >= s && (!e || b.s <= e)), adjusted:true, adjustNote:why, adjustBy:(me && me.name) || 'manager', adjustAt:nowIso()}));
+      closeModal(); toast('Shift corrected.'); renderTeam(); };
+    if(q('#deDel')) q('#deDel').onclick = async () => { if(!(await askConfirm('Delete this shift of ' + x.driverName + '?'))) return; Store.remove('fduty', x.id); closeModal(); toast('Shift deleted.'); renderTeam(); };
+  }
+
+  /* ---------- Team tab ---------- */
+  renderTeam = function(){
+    const v = $('view-team'); if(!v) return;
+    const segs = [['clock', '⏱ Driver time clock']];
+    if(mode !== 'cloud' || can('cashier')) segs.push(['hours', 'Driver hours report']);
+    if(mode !== 'cloud' || can('admin')) segs.push(['users', 'Users & roles']);
+    if(!segs.some(s => s[0] === segState.team)) segState.team = 'clock';
+    const s = segState.team; let h = seg('team', segs, s);
+    if(s === 'clock') h += dutyHtml(); else if(s === 'hours') h += dutyHoursHtml(); else h += fleetUsersHtml();
+    v.innerHTML = h;
+    if(s === 'clock') bindDuty(v); else if(s === 'hours') bindHours(v); else if(mode === 'cloud') loadUsers();
+  };
+  function fleetUsersHtml(){
+    if(mode !== 'cloud') return wrap('USERS &amp; ROLES', '<p>Drivers and staff get their own logins once your fleet is on the <b>Robotik Fleet Cloud</b>. Go to <b>Setup → Robotik Fleet Cloud</b> to create your fleet account, then come back here to add your people.</p><p class="rf-note">Until then, drivers can still clock on and off on this phone under <b>Driver time clock</b> (with their driver PIN).</p>', true);
+    return wrap('USERS &amp; ROLES', '<p class="rf-note">Add each driver or staff member with <b>Create user</b>, then send them their email and password by WhatsApp. They open the fleet app and tap <b>Sign in</b>. Give drivers the same name (or email) here as under <b>Drivers</b>, so the time clock knows who they are.</p><div id="rfUsers"><div class="rf-empty">Loading…</div></div>', true);
+  }
+  Object.assign(window.RF = window.RF || {}, {dutyMin, dutyAlerts, openDuty});
+}
 
 })();
 </script>
