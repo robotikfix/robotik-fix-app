@@ -1,4 +1,4 @@
-const CACHE_NAME = 'robotik-fleet-v8-3';
+const CACHE_NAME = 'robotik-fleet-v8-5';
 // Each app (main, partner, garage, fleet) shares one web address, so each keeps its OWN caches:
 // a new version only deletes older caches with its own prefix, never another app's.
 const PREFIX = CACHE_NAME.replace(/v[\d-]+$/, '');
